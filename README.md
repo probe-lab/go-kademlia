@@ -1,17 +1,17 @@
-Repository Name
+go-kademlia
 =======================
 
-> Repository tagline
+> A Generic Go Kademlia Implementation
 
-A longer repository description.
+Generic Kademlia implementation in Go that can be used to build DHT Protocols.
 
 ## Documentation
 
-[Insert link to documentation]() or expand with Install, Build, Usage sections.
+[pkg.go.dev](https://pkg.go.dev/github.com/plprobelab/go-kademlia)
 
 ## Lead Maintainer
 
-[Your name](https://github.com/alinktoyourname)
+[Guillaume Michel](https://github.com/guillaumemichel)
 
 ## Contributing
 
