@@ -2,218 +2,80 @@
 
 Author: [Guillaume Michel](https://github.com/guillaumemichel)
 
-## DHT Interface
+## Design overview & rationale
+
+This Kademlia implementation allows a sequential execution, providing many benefits (such as stable testing, better debuggability, reproducible simulations, etc.). The Kademlia query process is most efficient when multiple requests are sent concurrently. In order to reach both sequential execution and concurrency, this implementation follows a same thread concurrency pattern. As much work as possible will be carried out by the single worker.
+
+In some cases, it is required that the implementation deals with multiple threads. For instance, callers may call this implementation from multiple threads. Some message endpoint implementations (such as [`libp2p`](../network/endpoint/libp2pendpoint/)), need to have a dedicated thread for sending a request and receiving an answer.
+
+In order to orchestrate the process, this implementation includes a [`scheduler`](../events/scheduler/), responsible for synchronizing the necessary threads with the single worker. The scheduler offer a thread safe interface to add [`actions`](../events/action/) to the event queue of the single worker to be run as soon as possible, or to schedule an action at a specific time. The actions are simply pointers on functions that are executed when the single worker picks them up.
+
+![alt text](./excalidraw/scheduler.png)
+
+### Query process
+
+For example, when a caller wants to perform a lookup request over libp2p, it will add an action to the scheduler to create a query for specific parameters (e.g `FIND_PEER` and target `peer.ID`). Once available, the single worker will create the associated request, and depending on the concurrency of this request, add `concurrency` `SendRequest` `actions` to the event queue.
+
+![alt text](./excalidraw/query-setup.png)
+
+It will then execute the `SendRequest` `actions` one by one. The `SendRequest` action consists in looking up for the closest known peer to the target Kademlia key that hasn't been queried yet, and send it a request over libp2p. As [go-libp2p](https://github.com/libp2p/go-libp2p) needs a dedicated go routine to send a receive message, the single worker creates a new go routine that will handle the network part. The single worker can then pick up the next action in the event queue.
+
+The libp2p message go routine, will (1) dial the remote peer, (2) send the IPFS Kademlia request, (3) schedule a timeout `action` to the `scheduler`, after the provided timeout value and (4) wait for an answer. If there is an error during this process, the go routine will add an error `action` in the event queue and die. If the go routine receives an answer before the timeout happens, it will add a `HandleResponse` event to the event queue, that will be picked up by the single worker once available, it will remove the scheduled timeout event and then the libp2p message go routine can die in peace. If the libp2p go routine receives a message after the timeout, it can also die in peace.
+
+If the timeout even is picked up by the single worker, it means that the remote peer has failed to answer on time. The single worker will update the query, and enqueue another `SendRequest` `action`.
+
+When a `HandleResponse` `action` is picked up by the single worker, it executes the `ResponseHandlerFn` (`func(context.Context, address.NodeID, message.MinKadResponseMessage) (bool, []address.NodeID)`) that was provided by the caller when creating the query. This function should return whether the query should terminate, and the list of useful peers to query next. Hence, the caller can keep a state for the query, and decide when it should terminate. If the query shouldn't terminate yet, the single worker updates the query state, and enqueues another `SendRequest` `action`.
+
+![alt text](./excalidraw/query-run.png)
+
+This makes the execution as sequential as possible, given that it depends on the network and remote peers.
+
+### Tests & Simulations
+
+It is also possible to run a single threaded simulation, for instance to perform tests. The single threaded simulation is strictly sequential, and can be controlled by the programmer. A [`simulation`](../events/simulator/) usually uses a [`fake message endpoint`](../network/endpoint/fakeendpoint/) to disptach messages from one simulated host to another. The simulation can for instance, continuously run one action in each node's scheduler, in a specific order, until they are no more actions to run. This allows accurate testing of the modules.
+
+### Keys & Addressing
+
+A [`Kademlia key`](../key/) is simply an slice of bytes of arbitrary length that can be defined by the user. The logic to build Kademlia keys from libp2p `peer.ID` is described in this [module](../key/sha256key256/).
+
+Node [`addressing`](../network/address/) is as generic as possible to enable multiple DHT implementations to build on top of this library. A `NodeID` should only implement a `Key()` function, mapping to its Kademlia key. 
+
+### Modules
+
+This repository is composed of modules that can easily be exchanged. For instance, the IPFS DHT implementation will not use all the same modules as a DHT simulation, even though they follow the same logic. Most of the code is reused, and only the addressing, networking part, event loop need to be changed. Another example is that it is very easy for a custom DHT implementation to change it routing table logic, while still taking part in the same DHT network.
+
+## IPFS DHT Interface
 
 ### Peer Routing
 
-- `FindPeers(PeerIDs)`
-- (`GetClosestPeers(key)`)
+- `FindPeers([]peer.ID) []peer.AddrInfo`: returns the `[]peer.AddrInfo` associated with the requested `[]peer.ID`
+- (`GetClosestPeers(key, n) []peer.AddrInfo`): find the n closest `peer.ID` to the fiven `key` and return their associated `peer.AddrInfo`
+
+Note that these functions can be sync or async. If they are sync, they block until we get the full result. If async, they return `peer.AddrInfo` as they are discovered.
+
+Note that the `FindPeers` will be called with a single `peer.ID` in most of the cases.
 
 ### Provider Records
 
 **Provide**
-- `StartProvide(CIDs)`
-- `StopProvide(CIDs)`
-- `ListProvide()`
+- `StartProvide([]cid.Cid)`: start providing the given CIDs, and keep republishing them
+- `StopProvide([]cid.Cid)`: stop republishing the given CIDs (if they were provided)
+- `ListProvide() []cid.Cid`: returns the list of CIDs being republished
 
 **Lookup**
-- `FindProvidersAsync(CID)`
-- `FindProviders(CID)`
+
+- `FindProviders([]cid.Cid) []peer.AddrInfo`: looks for the provider records associated with the requested `[]cid.Cid`, and return the `peer.AddrInfo` of the peers providing it.
+
+Note that this function can be sync or async. If sync, it blocks until we get the full result. If async, it returns provider records as they are discovered.
+
+Note that the `FindProviders` will be called with a single `cid.Cid` in most of the cases.
+
 
 ### IPNS
 
-- `PutValues(keys, values)`
-- `GetValues(keys)`
+- `PutValues([]key, []value)`: for all key-value pairs, store `value` in the DHT at the location `key`.
+- `GetValues([]key) []value`: for each `key`, retrieve the associated `value` and return it
 
 ### Others
 
-- (`GetPublicKey(PeerID)` ??)
-
-## State Machines
-
-### Event Loop
-
-![alt text](excalidraw/event-loop.png)
-
-### Query Process
-
-![alt text](excalidraw/query-process.png)
-
-
-### Single Thread Non Blocking High Level State Machine
-
-Even though the Kademlia implementation is single threaded, its callers may not be single threaded. Moreover, in the go-libp2p implementation, when a request is sent (by the Kademlia implementation) a new go routine is created and waits for a reply. Hence, it will be a go routine that resumes execution after a response is received. It may necessary to resume execution for IO, because Provider Records may be stored in blocking databases. The goal is to have at most one thread doing Kademlia operations at a time.
-
-For this reason, as multiple event may occur _simultanesouly_ (from multiple go routines), if Kademlia is already running, we need to have a priority queue for events.
-
-![alt text](excalidraw/single-thread-state-machine.png)
-
-### State that we need to keep track of
-
-![alt text](excalidraw/states.png)
-
-### First attempt at DHT Lookup State Machine
-
-```mermaid
----
-title: DHT Lookup State Machine
----
-stateDiagram-v2
-    direction LR
-    
-    Wait
-    
-    %% new lookup request
-    DefineQueue: Define empty peer queue</br>for the new request
-    FindClosestInRT: Find closest</br>peers in the RT
-    AddPeersToQueue: Add peers to queue
-    SendRequest: Send request to</br>first peer in queue
-    MarkPeerContacted: Mark this peer as contacted
-
-    WaitForResponses: Wait for responses
-    ProviderRecordFound: Provider record found?
-
-    ReturnResult: Return result to requester
-    AllRequestsAnswered: All requests answered?
-
-    Wait --> DefineQueue: new lookup</br>request
-    DefineQueue --> FindClosestInRT
-    FindClosestInRT --> AddPeersToQueue
-    AddPeersToQueue --> SendRequest
-    SendRequest --> MarkPeerContacted
-    MarkPeerContacted --> SendRequest: #inflight messages <</br>concurrency factor
-    MarkPeerContacted --> WaitForResponses: #inflight messages ==</br>concurrency factor
-    WaitForResponses --> ProviderRecordFound: got a response
-    WaitForResponses --> DefineQueue: new lookup</br>request
-    WaitForResponses --> SendRequest: request timed out
-    ProviderRecordFound --> AddPeersToQueue: No
-    ProviderRecordFound --> ReturnResult: Yes
-    ReturnResult --> AllRequestsAnswered
-    AllRequestsAnswered --> Wait: Yes
-    AllRequestsAnswered --> WaitForResponses: No
-
-    note left of DefineQueue
-        Maintain a list of ongoing requests
-        Each ongoing request has a peer queue
-    end note
-
-    note left of SendRequest
-        For this request, keep track of the peers
-        we have contacted, and the time
-    end note
-
-    note right of MarkPeerContacted
-        We don't want to contact the same peer twice
-        Remove from queue, but remember we are waiting for a response
-    end note
-
-    note right of ReturnResult
-        Remove request from ongoing requests list
-    end note
-```
-
-## Modules
-
-Major modules of the DHT. Additional modules can be added.
-
-```mermaid
----
-title: DHT Modules
----
-flowchart TD
-    K["<font size=5><b>Kubo</b></font>"] --> P["<font size=5><b>Provider</b></font><br>StartProvide()<br>StopProvide()<br>ProvideList()"]
-    K --> PS["<font size=5><b>Provider Store</b></font><br>Provider Records<br>Database<br>Cache (LRU)"]
-    P --> PS
-    P --> R
-    K --> R["<font size=5><b>Routing</b></font><br>FindClosestPeers()<br>GetValue()<br>FindPeer()"]
-    S["<font size=5><b>Server</b></font><br>Put()<br>Get()<br>FindClosestPeers()"] --> PS
-    R -.->|over network| S
-    S --> RT["<font size=5><b>Routing Table</b></font><br>LocalClosestPeers()"]
-    R --> RT
-```
-
-I.e `fullrt` only has a different `Routing Table` implementation (allowing to bypass some `Routing`).
-
-### Provider Store
-
-`Provider Store` is responsible for storing and serving provider records, either pinned locally or remotely. It defines a specific `Provider Record` format. The design of the `Provider Store` database is left to the module implementer.
-
-**Interface**
-
-Above:
-- `PUT(key, value)`
-- `GET(key) value`
-
-Below:
-- Database scheme?
-
-### Provider
-
-`Provider` is responsible for providing and reproviding content pinned through its interface (`StartProvide` and `StopProvide`). It writes pinned content to the `Provider Store`, and makes use of `Routing` to find the appropriate peers to allocate the provider records.
-
-**Interface**
-
-Above:
-- `StartProviding([]cid.Cid)`
-- `StopProviding([]cid.Cid)`
-- `ListProviding() []cid.Cid`
-
-Below:
-- Provider Store (to store pinned CIDs, and access the reprovide list)
-- Routing (to advertise pinned CIDs)
-
-### Routing Table
-
-`Routing Table` is a database of peer identities and multiaddresses. It must expose at least a `LocalClosestPeers` function returning the closest peers in XOR distance to a provided key. `Routing Table` is responsible for deciding how many peers, and which peers are recorded.
-
-**Interface**
-
-Above:
-- `TryAddPeer(peer.AddrInfo) bool` try to add a peer in the routing table
-- `RemovePeer(peer.id) bool` remove a peer from the routing table
-- `GetClosestPeers(KadId, n) []peer.id` finds the `n` closest peers from the Routing Table (local)
-
-Below:
-- add peers to libp2p peerstore (with specific TTL, and keep peers in peerstore even tough we may not be connected anymore)
-- remove peers from libp2p peerstore
-
-Note: need to check whether these operations are blocking.
-### Routing
-
-`Routing` is a large module, responsible for finding remote peers or values in the network. It needs `Routing Table` to keep track about the identity and multiaddresses of remote peers. `Routing` performs the iterative DHT query process.
-
-**Interface**
-
-Above:
-- `FindClosestPeers(KadId, n) []peer.id` finds the `n` closest peers globally
-- `FindProviders(KadId)` lookup stops once a matching provider record is found
-- `FindValue(KadId)` essentially the same as `FindProviders(KadId)`
-
-Below:
-- Routing Table
-- Server
-
-### Server
-
-`Server` is responsible for handling incoming requests. For `Put` and `Get` requests it must write to and read from the `Provider Store`. For `FindClosestPeers` requests, it needs the `Routing Table`'s `LocalClosestPeers` function. Actions in `Server` are usually triggered by the `Routing` modules from another peer across the network.
-
-**Interface**
-
-Above (remote nodes requests):
-- `Put/Provide(KadId, val)`
-- `Get/GetProviders(KadId)`
-- `FindClosestPeers(KadId)`
-
-Below:
-- Routing Table (`GetClosestPeers(KadId, n)`)
-- Provider Store (for content PUT/GET requests)
-
-### Network
-
-Use proto3 instead of custom data format.
-Use r := pbio.NewDelimitedReader(s, signedIDSize), as reader and similar writer.
-Use sync.Pool to avoid too much allocations.
-
-### Modularity
-
-Ideally no module should depend on a specific peer addressing (e.g peer.ID). All modules should support generic network addressing.
+- (`GetPublicKey(PeerID)` ??): this RPC should be dropped.

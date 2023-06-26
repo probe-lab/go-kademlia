@@ -22,3 +22,5 @@ type Scheduler interface {
 	RunOne(context.Context) bool
 }
 ```
+
+![alt text](../../design/excalidraw/scheduler.png)
