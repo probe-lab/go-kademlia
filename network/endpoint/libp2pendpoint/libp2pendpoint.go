@@ -138,8 +138,9 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 		ctx, span := util.StartSpan(context.Background(), "Libp2pEndpoint.SendRequestHandleResponse", trace.WithAttributes(
 			attribute.String("PeerID", n.String()),
 		))
-
 		defer span.End()
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
 
 		var err error
 
@@ -178,6 +179,7 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 		}
 		defer s.Close()
 
+		sendTime := time.Now()
 		err = WriteMsg(s, protoReq)
 		if err != nil {
 			span.RecordError(err, trace.WithAttributes(attribute.String("where", "write message")))
@@ -185,18 +187,13 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 			return
 		}
 
-		var timeoutOccured bool
-		var timeoutLock sync.Mutex
 		var timeoutEvent planner.PlannedAction
 		// handle timeout
 
 		if timeout != 0 {
 			timeoutEvent = scheduler.ScheduleActionIn(ctx, e.sched, timeout,
 				ba.BasicAction(func(ctx context.Context) {
-					timeoutLock.Lock()
-					timeoutOccured = true
-					timeoutLock.Unlock()
-
+					cancel()
 					responseHandlerFn(ctx, nil, endpoint.ErrTimeout)
 				}))
 		}
@@ -211,11 +208,7 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 			// remove timeout if not too late
 			e.sched.RemovePlannedAction(ctx, timeoutEvent)
 
-			timeoutLock.Lock()
-			tooLate := timeoutOccured
-			timeoutLock.Unlock()
-
-			if tooLate {
+			if sendTime.Add(timeout).Before(time.Now()) {
 				span.RecordError(fmt.Errorf("received response after timeout"))
 				return
 			}

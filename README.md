@@ -7,7 +7,11 @@ Generic Kademlia implementation in Go that can be used to build DHT Protocols.
 
 ## Documentation
 
-[pkg.go.dev](https://pkg.go.dev/github.com/plprobelab/go-kademlia)
+TBD
+
+## Design
+
+[`Design document`](./design/README.md)
 
 ## Lead Maintainer
 

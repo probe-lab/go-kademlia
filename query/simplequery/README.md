@@ -14,3 +14,12 @@ func NewSimpleQuery(ctx context.Context, kadid key.KadKey, proto address.Protoco
 	timeout time.Duration, msgEndpoint endpoint.Endpoint, rt routingtable.RoutingTable,
 	sched scheduler.Scheduler, handleResultFn HandleResultFn) *SimpleQuery
 ```
+
+### Query setup
+
+![alt text](../../design/excalidraw/query-setup.png)
+
+### Query execution
+
+![alt text](../../design/excalidraw/query-run.png)
+
