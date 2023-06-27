@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/libp2p/go-libp2p-kad-dht/events/action"
+	"github.com/plprobelab/go-kademlia/events/action"
 )
 
 // MaxTime is the maximum time.Time value

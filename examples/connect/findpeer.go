@@ -9,17 +9,17 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 
-	"github.com/libp2p/go-libp2p-kad-dht/events/scheduler/simplescheduler"
-	tutil "github.com/libp2p/go-libp2p-kad-dht/examples/util"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address/addrinfo"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address/peerid"
-	"github.com/libp2p/go-libp2p-kad-dht/network/endpoint/libp2pendpoint"
-	"github.com/libp2p/go-libp2p-kad-dht/network/message"
-	"github.com/libp2p/go-libp2p-kad-dht/network/message/ipfsv1"
-	"github.com/libp2p/go-libp2p-kad-dht/query/simplequery"
-	"github.com/libp2p/go-libp2p-kad-dht/routingtable/simplert"
-	"github.com/libp2p/go-libp2p-kad-dht/util"
+	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	tutil "github.com/plprobelab/go-kademlia/examples/util"
+	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
+	"github.com/plprobelab/go-kademlia/network/address/peerid"
+	"github.com/plprobelab/go-kademlia/network/endpoint/libp2pendpoint"
+	"github.com/plprobelab/go-kademlia/network/message"
+	"github.com/plprobelab/go-kademlia/network/message/ipfsv1"
+	"github.com/plprobelab/go-kademlia/query/simplequery"
+	"github.com/plprobelab/go-kademlia/routingtable/simplert"
+	"github.com/plprobelab/go-kademlia/util"
 )
 
 var (

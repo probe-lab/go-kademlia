@@ -3,8 +3,8 @@ package simmessage
 import (
 	"testing"
 
-	"github.com/libp2p/go-libp2p-kad-dht/network/address"
-	si "github.com/libp2p/go-libp2p-kad-dht/network/address/stringid"
+	"github.com/plprobelab/go-kademlia/network/address"
+	si "github.com/plprobelab/go-kademlia/network/address/stringid"
 	"github.com/stretchr/testify/require"
 )
 

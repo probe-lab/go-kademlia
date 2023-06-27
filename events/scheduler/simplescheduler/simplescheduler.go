@@ -5,12 +5,12 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/libp2p/go-libp2p-kad-dht/events/action"
-	"github.com/libp2p/go-libp2p-kad-dht/events/planner"
-	sp "github.com/libp2p/go-libp2p-kad-dht/events/planner/simpleplanner"
-	"github.com/libp2p/go-libp2p-kad-dht/events/queue"
-	"github.com/libp2p/go-libp2p-kad-dht/events/queue/chanqueue"
-	"github.com/libp2p/go-libp2p-kad-dht/events/scheduler"
+	"github.com/plprobelab/go-kademlia/events/action"
+	"github.com/plprobelab/go-kademlia/events/planner"
+	sp "github.com/plprobelab/go-kademlia/events/planner/simpleplanner"
+	"github.com/plprobelab/go-kademlia/events/queue"
+	"github.com/plprobelab/go-kademlia/events/queue/chanqueue"
+	"github.com/plprobelab/go-kademlia/events/scheduler"
 )
 
 const DefaultChanqueueCapacity = 1024

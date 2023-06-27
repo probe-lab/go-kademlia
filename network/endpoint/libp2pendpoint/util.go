@@ -1,12 +1,12 @@
 package libp2pendpoint
 
 import (
-	"github.com/libp2p/go-libp2p-kad-dht/network/address"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address/addrinfo"
-	"github.com/libp2p/go-libp2p-kad-dht/network/endpoint"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-msgio/pbio"
+	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
+	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 

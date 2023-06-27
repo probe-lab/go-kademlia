@@ -1,6 +1,6 @@
 package address
 
-import "github.com/libp2p/go-libp2p-kad-dht/key"
+import "github.com/plprobelab/go-kademlia/key"
 
 // NodeID is a generic node identifier. It is used to identify a node and can
 // also include extra information about the node, such as its network addresses.

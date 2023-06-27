@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/libp2p/go-libp2p-kad-dht/key"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address"
-	"github.com/libp2p/go-libp2p-kad-dht/network/message"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-kademlia/network/message"
 )
 
 // RequestHandlerFn defines a function that handles a request from a remote peer

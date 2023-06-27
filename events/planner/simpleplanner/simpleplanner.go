@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/libp2p/go-libp2p-kad-dht/events/action"
-	"github.com/libp2p/go-libp2p-kad-dht/events/planner"
+	"github.com/plprobelab/go-kademlia/events/action"
+	"github.com/plprobelab/go-kademlia/events/planner"
 )
 
 type SimplePlanner struct {

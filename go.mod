@@ -1,4 +1,4 @@
-module github.com/libp2p/go-libp2p-kad-dht
+module github.com/plprobelab/go-kademlia
 
 go 1.20
 

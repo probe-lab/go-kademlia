@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/libp2p/go-libp2p-kad-dht/events/action"
-	"github.com/libp2p/go-libp2p-kad-dht/events/planner"
+	"github.com/plprobelab/go-kademlia/events/action"
+	"github.com/plprobelab/go-kademlia/events/planner"
 )
 
 // Scheduler is an interface for scheduling actions to run as soon as possible

@@ -3,12 +3,12 @@ package ipfsv1
 import (
 	"errors"
 
-	"github.com/libp2p/go-libp2p-kad-dht/key"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address/addrinfo"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address/peerid"
-	"github.com/libp2p/go-libp2p-kad-dht/network/endpoint"
-	"github.com/libp2p/go-libp2p-kad-dht/network/message"
+	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
+	"github.com/plprobelab/go-kademlia/network/address/peerid"
+	"github.com/plprobelab/go-kademlia/network/endpoint"
+	"github.com/plprobelab/go-kademlia/network/message"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"

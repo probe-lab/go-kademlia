@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/libp2p/go-libp2p-kad-dht/key"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address/peerid"
-	si "github.com/libp2p/go-libp2p-kad-dht/network/address/stringid"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-kademlia/network/address/peerid"
+	si "github.com/plprobelab/go-kademlia/network/address/stringid"
 	"github.com/stretchr/testify/require"
 )
 

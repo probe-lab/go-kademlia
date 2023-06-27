@@ -1,10 +1,10 @@
 package addrinfo
 
 import (
-	"github.com/libp2p/go-libp2p-kad-dht/key"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address/peerid"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-kademlia/network/address/peerid"
 )
 
 type AddrInfo struct {

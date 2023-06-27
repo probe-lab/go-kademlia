@@ -3,7 +3,7 @@ package simulator
 import (
 	"context"
 
-	"github.com/libp2p/go-libp2p-kad-dht/events/scheduler"
+	"github.com/plprobelab/go-kademlia/events/scheduler"
 )
 
 // Simulator is an interface for simulating a set of schedulers.

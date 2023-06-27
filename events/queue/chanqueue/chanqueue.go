@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/libp2p/go-libp2p-kad-dht/events/action"
-	"github.com/libp2p/go-libp2p-kad-dht/events/queue"
-	"github.com/libp2p/go-libp2p-kad-dht/util"
+	"github.com/plprobelab/go-kademlia/events/action"
+	"github.com/plprobelab/go-kademlia/events/queue"
+	"github.com/plprobelab/go-kademlia/util"
 )
 
 // ChanQueue is a trivial queue implementation using a channel

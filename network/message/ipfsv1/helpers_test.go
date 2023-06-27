@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/libp2p/go-libp2p-kad-dht/network/address"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address/addrinfo"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address/peerid"
-	"github.com/libp2p/go-libp2p-kad-dht/network/endpoint/fakeendpoint"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
+	"github.com/plprobelab/go-kademlia/network/address/peerid"
+	"github.com/plprobelab/go-kademlia/network/endpoint/fakeendpoint"
 	"github.com/stretchr/testify/require"
 )
 

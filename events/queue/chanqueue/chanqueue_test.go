@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/libp2p/go-libp2p-kad-dht/events/action"
-	ta "github.com/libp2p/go-libp2p-kad-dht/events/action/testaction"
+	"github.com/plprobelab/go-kademlia/events/action"
+	ta "github.com/plprobelab/go-kademlia/events/action/testaction"
 	"github.com/stretchr/testify/require"
 )
 

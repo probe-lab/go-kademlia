@@ -3,11 +3,11 @@ package fakeendpoint
 import (
 	"context"
 
-	ba "github.com/libp2p/go-libp2p-kad-dht/events/action/basicaction"
-	"github.com/libp2p/go-libp2p-kad-dht/events/scheduler"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address"
-	"github.com/libp2p/go-libp2p-kad-dht/network/endpoint"
-	"github.com/libp2p/go-libp2p-kad-dht/network/message"
+	ba "github.com/plprobelab/go-kademlia/events/action/basicaction"
+	"github.com/plprobelab/go-kademlia/events/scheduler"
+	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-kademlia/network/endpoint"
+	"github.com/plprobelab/go-kademlia/network/message"
 )
 
 type FakeRouter struct {

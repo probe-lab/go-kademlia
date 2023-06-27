@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/libp2p/go-libp2p-kad-dht/events/planner"
-	"github.com/libp2p/go-libp2p-kad-dht/events/scheduler"
-	"github.com/libp2p/go-libp2p-kad-dht/events/simulator"
-	"github.com/libp2p/go-libp2p-kad-dht/util"
+	"github.com/plprobelab/go-kademlia/events/planner"
+	"github.com/plprobelab/go-kademlia/events/scheduler"
+	"github.com/plprobelab/go-kademlia/events/simulator"
+	"github.com/plprobelab/go-kademlia/util"
 )
 
 type LiteSimulator struct {

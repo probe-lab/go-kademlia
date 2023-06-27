@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/libp2p/go-libp2p-kad-dht/events/action/basicaction"
-	"github.com/libp2p/go-libp2p-kad-dht/events/scheduler"
-	"github.com/libp2p/go-libp2p-kad-dht/events/scheduler/simplescheduler"
-	"github.com/libp2p/go-libp2p-kad-dht/events/simulator"
+	"github.com/plprobelab/go-kademlia/events/action/basicaction"
+	"github.com/plprobelab/go-kademlia/events/scheduler"
+	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	"github.com/plprobelab/go-kademlia/events/simulator"
 	"github.com/stretchr/testify/require"
 )
 

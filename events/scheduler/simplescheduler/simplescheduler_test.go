@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	ta "github.com/libp2p/go-libp2p-kad-dht/events/action/testaction"
-	"github.com/libp2p/go-libp2p-kad-dht/events/planner"
-	"github.com/libp2p/go-libp2p-kad-dht/events/scheduler"
+	ta "github.com/plprobelab/go-kademlia/events/action/testaction"
+	"github.com/plprobelab/go-kademlia/events/planner"
+	"github.com/plprobelab/go-kademlia/events/scheduler"
 	"github.com/stretchr/testify/require"
 )
 
