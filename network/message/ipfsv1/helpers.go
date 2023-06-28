@@ -101,10 +101,14 @@ func NodeIDsToPbPeers(peers []address.NodeID, e endpoint.NetworkedEndpoint) []*M
 			pbAddrs[i] = a.Bytes()
 		}
 
+		connectedness, err := e.Connectedness(n)
+		if err != nil {
+			continue
+		}
 		pbPeers = append(pbPeers, &Message_Peer{
 			Id:         []byte(p.ID),
 			Addrs:      pbAddrs,
-			Connection: Message_ConnectionType(e.Connectedness(n)),
+			Connection: Message_ConnectionType(connectedness),
 		})
 	}
 	return pbPeers

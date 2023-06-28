@@ -58,8 +58,8 @@ func (s *SimpleScheduler) ScheduleAction(ctx context.Context, t time.Time,
 
 // RemovePlannedAction removes an action from the scheduler planned actions
 // (not from the queue), does nothing if the action is not in the planner
-func (s *SimpleScheduler) RemovePlannedAction(ctx context.Context, a planner.PlannedAction) {
-	s.planner.RemoveAction(ctx, a)
+func (s *SimpleScheduler) RemovePlannedAction(ctx context.Context, a planner.PlannedAction) bool {
+	return s.planner.RemoveAction(ctx, a)
 }
 
 // moveOverdueActions moves all overdue actions from the planner to the queue.

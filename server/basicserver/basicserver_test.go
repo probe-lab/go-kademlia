@@ -246,12 +246,15 @@ type invalidEndpoint struct{}
 
 var _ endpoint.Endpoint = (*invalidEndpoint)(nil)
 
-func (e *invalidEndpoint) MaybeAddToPeerstore(context.Context, address.NodeID, time.Duration) error {
+func (e *invalidEndpoint) MaybeAddToPeerstore(context.Context, address.NodeID,
+	time.Duration) error {
 	return nil
 }
 
-func (e *invalidEndpoint) SendRequestHandleResponse(context.Context, address.ProtocolID, address.NodeID,
-	message.MinKadMessage, message.MinKadMessage, time.Duration, endpoint.ResponseHandlerFn) {
+func (e *invalidEndpoint) SendRequestHandleResponse(context.Context,
+	address.ProtocolID, address.NodeID, message.MinKadMessage,
+	message.MinKadMessage, time.Duration, endpoint.ResponseHandlerFn) error {
+	return nil
 }
 
 func (e *invalidEndpoint) KadKey() key.KadKey {

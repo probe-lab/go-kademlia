@@ -97,7 +97,8 @@ func (e *FakeEndpoint) MaybeAddToPeerstore(ctx context.Context, id address.NodeI
 
 func (e *FakeEndpoint) SendRequestHandleResponse(ctx context.Context,
 	protoID address.ProtocolID, id address.NodeID, req message.MinKadMessage,
-	resp message.MinKadMessage, timeout time.Duration, handleResp endpoint.ResponseHandlerFn) {
+	resp message.MinKadMessage, timeout time.Duration,
+	handleResp endpoint.ResponseHandlerFn) error {
 
 	ctx, span := util.StartSpan(ctx, "SendRequestHandleResponse",
 		trace.WithAttributes(attribute.Stringer("id", id)),
@@ -107,7 +108,7 @@ func (e *FakeEndpoint) SendRequestHandleResponse(ctx context.Context,
 	if err := e.DialPeer(ctx, id); err != nil {
 		span.RecordError(err)
 		handleResp(ctx, nil, err)
-		return
+		return err
 	}
 
 	// send request
@@ -115,7 +116,7 @@ func (e *FakeEndpoint) SendRequestHandleResponse(ctx context.Context,
 	if err != nil {
 		span.RecordError(err)
 		handleResp(ctx, nil, err)
-		return
+		return err
 	}
 	e.streamFollowup[sid] = handleResp
 
@@ -138,14 +139,15 @@ func (e *FakeEndpoint) SendRequestHandleResponse(ctx context.Context,
 				handleFn(ctx, nil, endpoint.ErrTimeout)
 			}))
 	}
+	return nil
 }
 
 // Peerstore functions
-func (e *FakeEndpoint) Connectedness(id address.NodeID) network.Connectedness {
+func (e *FakeEndpoint) Connectedness(id address.NodeID) (network.Connectedness, error) {
 	if s, ok := e.connStatus[id.String()]; !ok {
-		return network.NotConnected
+		return network.NotConnected, nil
 	} else {
-		return s
+		return s, nil
 	}
 }
 
@@ -204,8 +206,9 @@ func (e *FakeEndpoint) HandleMessage(ctx context.Context, id address.NodeID,
 }
 
 func (e *FakeEndpoint) AddRequestHandler(protoID address.ProtocolID,
-	reqHandler endpoint.RequestHandlerFn) {
+	reqHandler endpoint.RequestHandlerFn, req message.MinKadMessage) error {
 	e.serverProtos[protoID] = reqHandler
+	return nil
 }
 
 func (e *FakeEndpoint) RemoveRequestHandler(protoID address.ProtocolID) {

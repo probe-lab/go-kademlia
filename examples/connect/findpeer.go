@@ -48,7 +48,7 @@ func FindPeer(ctx context.Context) {
 	// create a scheduler using real time
 	sched := simplescheduler.NewSimpleScheduler(clk)
 	// create a message endpoint is used to communicate with other peers
-	msgEndpoint := libp2pendpoint.NewMessageEndpoint(ctx, h, sched)
+	msgEndpoint := libp2pendpoint.NewLibp2pEndpoint(ctx, h, sched)
 
 	// friend is the first peer we know in the IPFS DHT network (bootstrap node)
 	friend, err := peer.Decode("12D3KooWGjgvfDkpuVAoNhd7PRRvMTEG4ZgzHBFURqDe1mqEzAMS")
@@ -69,7 +69,7 @@ func FindPeer(ctx context.Context) {
 	}
 	fmt.Println("connected to friend")
 
-	// target is the peer we want to find
+	// target is the peer we want to find QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb
 	target, err := peer.Decode("QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb")
 	if err != nil {
 		panic(err)

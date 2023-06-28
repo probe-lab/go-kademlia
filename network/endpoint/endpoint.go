@@ -26,7 +26,8 @@ type Endpoint interface {
 	// SendRequestHandleResponse sends a request to the given peer and handles
 	// the response with the given handler.
 	SendRequestHandleResponse(context.Context, address.ProtocolID, address.NodeID,
-		message.MinKadMessage, message.MinKadMessage, time.Duration, ResponseHandlerFn)
+		message.MinKadMessage, message.MinKadMessage, time.Duration,
+		ResponseHandlerFn) error
 
 	// KadKey returns the KadKey of the local node.
 	KadKey() key.KadKey
@@ -39,7 +40,7 @@ type Endpoint interface {
 type ServerEndpoint interface {
 	Endpoint
 	// AddRequestHandler registers a handler for a given protocol ID.
-	AddRequestHandler(address.ProtocolID, RequestHandlerFn)
+	AddRequestHandler(address.ProtocolID, RequestHandlerFn, message.MinKadMessage) error
 	// RemoveRequestHandler removes a handler for a given protocol ID.
 	RemoveRequestHandler(address.ProtocolID)
 }
@@ -49,7 +50,7 @@ type ServerEndpoint interface {
 type NetworkedEndpoint interface {
 	Endpoint
 	// Connectedness returns the connectedness of the given peer.
-	Connectedness(address.NodeID) network.Connectedness
+	Connectedness(address.NodeID) (network.Connectedness, error)
 }
 
 // StreamID is a unique identifier for a stream.

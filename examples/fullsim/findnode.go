@@ -81,7 +81,7 @@ func findNode(ctx context.Context) {
 		// create a server instance for the node
 		servers[i] = basicserver.NewBasicServer(rts[i], eps[i])
 		// add the server request handler for protoID to the endpoint
-		eps[i].AddRequestHandler(protoID, servers[i].HandleRequest)
+		eps[i].AddRequestHandler(protoID, servers[i].HandleRequest, nil)
 	}
 
 	// A connects to B
