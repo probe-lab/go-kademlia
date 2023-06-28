@@ -170,10 +170,10 @@ func TestLibp2pEndpoint(t *testing.T) {
 	require.NoError(t, err)
 
 	// send request from 0 to 1
-	var respHandlerRan bool
+	wg.Add(1)
 	responseHandler := func(ctx context.Context,
 		resp message.MinKadResponseMessage, err error) {
-		respHandlerRan = true
+		wg.Done()
 	}
 	req := ipfsv1.FindPeerRequest(ids[1])
 	resp := &ipfsv1.Message{}
@@ -185,7 +185,7 @@ func TestLibp2pEndpoint(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	require.False(t, scheds[1].RunOne(ctx)) // only 1 action should run on server
-	require.True(t, respHandlerRan)
+	wg.Wait()
 
 	// invalid response format (not protobuf)
 	err = endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], req,
@@ -229,7 +229,7 @@ func TestLibp2pEndpoint(t *testing.T) {
 	err = endpoints[1].AddRequestHandler(protoID, func(ctx context.Context,
 		id address.NodeID, req message.MinKadMessage) (message.MinKadMessage, error) {
 		// request handler wait 2ms before returning the received message
-		time.Sleep(2 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		return req, nil
 	}, &ipfsv1.Message{})
 	require.NoError(t, err)
@@ -242,7 +242,7 @@ func TestLibp2pEndpoint(t *testing.T) {
 	go func() {
 		// timeout is queued in the scheduler 0
 		for !scheds[0].RunOne(ctx) {
-			time.Sleep(500 * time.Nanosecond)
+			time.Sleep(time.Millisecond)
 		}
 		require.False(t, scheds[0].RunOne(ctx))
 		wg.Done()
@@ -260,11 +260,11 @@ func TestLibp2pEndpoint(t *testing.T) {
 	}, &ipfsv1.Message{})
 	require.NoError(t, err)
 	err = endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], req,
-		resp, time.Millisecond, responseHandler)
+		resp, 0, responseHandler)
 	require.NoError(t, err)
 	wg.Add(1)
 	for !scheds[1].RunOne(ctx) {
-		time.Sleep(500 * time.Nanosecond)
+		time.Sleep(time.Millisecond)
 	}
 	require.False(t, scheds[1].RunOne(ctx))
 	// no response to be handled by 0
@@ -278,11 +278,11 @@ func TestLibp2pEndpoint(t *testing.T) {
 	}, &ipfsv1.Message{})
 	require.NoError(t, err)
 	err = endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], req,
-		resp, time.Millisecond, responseHandler)
+		resp, 0, responseHandler)
 	require.NoError(t, err)
 	wg.Add(1)
 	for !scheds[1].RunOne(ctx) {
-		time.Sleep(500 * time.Nanosecond)
+		time.Sleep(time.Millisecond)
 	}
 	require.False(t, scheds[1].RunOne(ctx))
 	// no response to be handled by 0
