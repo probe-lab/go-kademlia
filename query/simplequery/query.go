@@ -6,14 +6,14 @@ import (
 	"strconv"
 	"time"
 
-	ba "github.com/libp2p/go-libp2p-kad-dht/events/action/basicaction"
-	"github.com/libp2p/go-libp2p-kad-dht/events/scheduler"
-	"github.com/libp2p/go-libp2p-kad-dht/key"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address"
-	"github.com/libp2p/go-libp2p-kad-dht/network/endpoint"
-	message "github.com/libp2p/go-libp2p-kad-dht/network/message"
-	"github.com/libp2p/go-libp2p-kad-dht/routingtable"
-	"github.com/libp2p/go-libp2p-kad-dht/util"
+	ba "github.com/plprobelab/go-kademlia/events/action/basicaction"
+	"github.com/plprobelab/go-kademlia/events/scheduler"
+	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-kademlia/network/endpoint"
+	message "github.com/plprobelab/go-kademlia/network/message"
+	"github.com/plprobelab/go-kademlia/routingtable"
+	"github.com/plprobelab/go-kademlia/util"
 
 	"github.com/libp2p/go-libp2p/core/peerstore"
 

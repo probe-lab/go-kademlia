@@ -2,20 +2,19 @@ package basicserver
 
 import (
 	"context"
-	"fmt"
 	"time"
 
-	"github.com/libp2p/go-libp2p-kad-dht/key"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address/peerid"
-	"github.com/libp2p/go-libp2p-kad-dht/network/endpoint"
-	"github.com/libp2p/go-libp2p-kad-dht/network/message"
-	"github.com/libp2p/go-libp2p-kad-dht/network/message/ipfsv1"
-	"github.com/libp2p/go-libp2p-kad-dht/network/message/simmessage"
-	"github.com/libp2p/go-libp2p-kad-dht/routingtable"
-	"github.com/libp2p/go-libp2p-kad-dht/server"
-	"github.com/libp2p/go-libp2p-kad-dht/util"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-kademlia/network/address/peerid"
+	"github.com/plprobelab/go-kademlia/network/endpoint"
+	"github.com/plprobelab/go-kademlia/network/message"
+	"github.com/plprobelab/go-kademlia/network/message/ipfsv1"
+	"github.com/plprobelab/go-kademlia/network/message/simmessage"
+	"github.com/plprobelab/go-kademlia/routingtable"
+	"github.com/plprobelab/go-kademlia/server"
+	"github.com/plprobelab/go-kademlia/util"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -56,10 +55,10 @@ func (s *BasicServer) HandleRequest(ctx context.Context, rpeer address.NodeID,
 		case ipfsv1.Message_FIND_NODE:
 			return s.HandleFindNodeRequest(ctx, rpeer, msg)
 		default:
-			return nil, fmt.Errorf("IpfsV1 Message unknown request type")
+			return nil, ErrIpfsV1InvalidRequest
 		}
 	default:
-		return nil, fmt.Errorf("unknown message format")
+		return nil, ErrUnknownMessageFormat
 	}
 }
 
@@ -73,20 +72,20 @@ func (s *BasicServer) HandleFindNodeRequest(ctx context.Context,
 		t := msg.Target()
 		if t == nil {
 			// invalid request (nil target), don't reply
-			return nil, fmt.Errorf("SimMessage target is nil")
+			return nil, ErrSimMessageNilTarget
 		}
 		target = *t
 	case *ipfsv1.Message:
 		p := peer.ID("")
 		if p.UnmarshalBinary(msg.GetKey()) != nil {
 			// invalid requested key (not a peer.ID)
-			return nil, fmt.Errorf("IpfsV1 Message contains invalid peer.ID")
+			return nil, ErrIpfsV1InvalidPeerID
 		}
 		t := peerid.NewPeerID(p)
 		target = t.Key()
 	default:
 		// invalid request, don't reply
-		return nil, fmt.Errorf("unknown message format")
+		return nil, ErrUnknownMessageFormat
 	}
 
 	s.endpoint.MaybeAddToPeerstore(ctx, rpeer, s.peerstoreTTL)
@@ -114,9 +113,8 @@ func (s *BasicServer) HandleFindNodeRequest(ctx context.Context,
 	case *ipfsv1.Message:
 		nEndpoint, ok := s.endpoint.(endpoint.NetworkedEndpoint)
 		if !ok {
-			err = fmt.Errorf("endpoint is not a NetworkedEndpoint")
-			span.RecordError(err)
-			return nil, err
+			span.RecordError(ErrNotNetworkedEndpoint)
+			return nil, ErrNotNetworkedEndpoint
 		}
 		resp = ipfsv1.FindPeerResponse(peers, nEndpoint)
 	}

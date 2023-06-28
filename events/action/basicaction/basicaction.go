@@ -3,7 +3,7 @@ package basicaction
 import (
 	"context"
 
-	"github.com/libp2p/go-libp2p-kad-dht/events/action"
+	"github.com/plprobelab/go-kademlia/events/action"
 )
 
 // BasicAction is a basic implementation of the Action interface

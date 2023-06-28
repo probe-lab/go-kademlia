@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/libp2p/go-libp2p-kad-dht/events/action"
-	"github.com/libp2p/go-libp2p-kad-dht/events/planner"
+	"github.com/plprobelab/go-kademlia/events/action"
+	"github.com/plprobelab/go-kademlia/events/planner"
 )
 
 type SimplePlanner struct {
@@ -62,31 +62,32 @@ func (p *SimplePlanner) ScheduleAction(ctx context.Context, t time.Time, a actio
 	return curr.next
 }
 
-func (p *SimplePlanner) RemoveAction(ctx context.Context, pa planner.PlannedAction) {
+func (p *SimplePlanner) RemoveAction(ctx context.Context, pa planner.PlannedAction) bool {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	a, ok := pa.(*simpleTimedAction)
 	if !ok {
-		return
+		return false
 	}
 
 	curr := p.NextAction
 	if curr == nil {
-		return
+		return false
 	}
 
 	if curr == a {
 		p.NextAction = curr.next
-		return
+		return true
 	}
 	for curr.next != nil {
 		if curr.next == a {
 			curr.next = curr.next.next
-			return
+			return true
 		}
 		curr = curr.next
 	}
+	return false
 }
 
 func (p *SimplePlanner) PopOverdueActions(ctx context.Context) []action.Action {

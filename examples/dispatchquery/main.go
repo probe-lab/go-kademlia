@@ -16,19 +16,19 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 
-	ss "github.com/libp2p/go-libp2p-kad-dht/events/scheduler/simplescheduler"
-	"github.com/libp2p/go-libp2p-kad-dht/events/simulator"
-	"github.com/libp2p/go-libp2p-kad-dht/events/simulator/litesimulator"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address/addrinfo"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address/peerid"
-	"github.com/libp2p/go-libp2p-kad-dht/network/endpoint/fakeendpoint"
-	"github.com/libp2p/go-libp2p-kad-dht/network/message"
-	"github.com/libp2p/go-libp2p-kad-dht/network/message/ipfsv1"
-	sq "github.com/libp2p/go-libp2p-kad-dht/query/simplequery"
-	"github.com/libp2p/go-libp2p-kad-dht/routingtable/simplert"
-	"github.com/libp2p/go-libp2p-kad-dht/server/basicserver"
-	"github.com/libp2p/go-libp2p-kad-dht/util"
+	ss "github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	"github.com/plprobelab/go-kademlia/events/simulator"
+	"github.com/plprobelab/go-kademlia/events/simulator/litesimulator"
+	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
+	"github.com/plprobelab/go-kademlia/network/address/peerid"
+	"github.com/plprobelab/go-kademlia/network/endpoint/fakeendpoint"
+	"github.com/plprobelab/go-kademlia/network/message"
+	"github.com/plprobelab/go-kademlia/network/message/ipfsv1"
+	sq "github.com/plprobelab/go-kademlia/query/simplequery"
+	"github.com/plprobelab/go-kademlia/routingtable/simplert"
+	"github.com/plprobelab/go-kademlia/server/basicserver"
+	"github.com/plprobelab/go-kademlia/util"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -63,7 +63,7 @@ func queryTest(ctx context.Context) {
 	schedA := ss.NewSimpleScheduler(clk)
 	endpointA := fakeendpoint.NewFakeEndpoint(selfA, schedA, router)
 	servA := basicserver.NewBasicServer(rtA, endpointA)
-	endpointA.AddRequestHandler(protoID, servA.HandleRequest)
+	endpointA.AddRequestHandler(protoID, servA.HandleRequest, nil)
 
 	// create peer B
 	pidB, err := peer.Decode("12BoooooBETA")
@@ -78,7 +78,7 @@ func queryTest(ctx context.Context) {
 	schedB := ss.NewSimpleScheduler(clk)
 	endpointB := fakeendpoint.NewFakeEndpoint(selfB, schedB, router)
 	servB := basicserver.NewBasicServer(rtB, endpointB)
-	endpointB.AddRequestHandler(protoID, servB.HandleRequest)
+	endpointB.AddRequestHandler(protoID, servB.HandleRequest, nil)
 
 	// create peer C
 	pidC, err := peer.Decode("12BooooGAMMA")
@@ -93,7 +93,7 @@ func queryTest(ctx context.Context) {
 	schedC := ss.NewSimpleScheduler(clk)
 	endpointC := fakeendpoint.NewFakeEndpoint(selfC, schedC, router)
 	servC := basicserver.NewBasicServer(rtC, endpointC)
-	endpointC.AddRequestHandler(protoID, servC.HandleRequest)
+	endpointC.AddRequestHandler(protoID, servC.HandleRequest, nil)
 
 	// connect peer A and B
 	endpointA.MaybeAddToPeerstore(ctx, naddrB, peerstoreTTL)

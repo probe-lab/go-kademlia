@@ -3,26 +3,25 @@ package libp2pendpoint
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"sync"
 	"time"
 
-	ba "github.com/libp2p/go-libp2p-kad-dht/events/action/basicaction"
-	"github.com/libp2p/go-libp2p-kad-dht/events/planner"
-	"github.com/libp2p/go-libp2p-kad-dht/events/scheduler"
-	"github.com/libp2p/go-libp2p-kad-dht/key"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address/addrinfo"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address/peerid"
-	"github.com/libp2p/go-libp2p-kad-dht/network/endpoint"
-	"github.com/libp2p/go-libp2p-kad-dht/network/message"
-	"github.com/libp2p/go-libp2p-kad-dht/util"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-msgio/pbio"
+	ba "github.com/plprobelab/go-kademlia/events/action/basicaction"
+	"github.com/plprobelab/go-kademlia/events/planner"
+	"github.com/plprobelab/go-kademlia/events/scheduler"
+	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
+	"github.com/plprobelab/go-kademlia/network/address/peerid"
+	"github.com/plprobelab/go-kademlia/network/endpoint"
+	"github.com/plprobelab/go-kademlia/network/message"
+	"github.com/plprobelab/go-kademlia/util"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -45,7 +44,7 @@ type Libp2pEndpoint struct {
 var _ endpoint.NetworkedEndpoint = (*Libp2pEndpoint)(nil)
 var _ endpoint.ServerEndpoint = (*Libp2pEndpoint)(nil)
 
-func NewMessageEndpoint(ctx context.Context, host host.Host,
+func NewLibp2pEndpoint(ctx context.Context, host host.Host,
 	sched scheduler.Scheduler) *Libp2pEndpoint {
 	return &Libp2pEndpoint{
 		ctx:     ctx,
@@ -56,23 +55,33 @@ func NewMessageEndpoint(ctx context.Context, host host.Host,
 	}
 }
 
-func getPeerID(id address.NodeID) peerid.PeerID {
-	if p, ok := id.(peerid.PeerID); ok {
-		return p
+func getPeerID(id address.NodeID) (*peerid.PeerID, error) {
+	if p, ok := id.(*peerid.PeerID); ok {
+		return p, nil
 	}
-	panic("invalid peer id")
+	return nil, endpoint.ErrInvalidPeer
 }
 
-func (msgEndpoint *Libp2pEndpoint) AsyncDialAndReport(ctx context.Context,
-	id address.NodeID, reportFn DialReportFn) {
-	p := getPeerID(id)
+func (e *Libp2pEndpoint) AsyncDialAndReport(ctx context.Context,
+	id address.NodeID, reportFn DialReportFn) error {
+	p, err := getPeerID(id)
+	if err != nil {
+		return err
+	}
+	if e.host.Network().Connectedness(p.ID) == network.Connected {
+		// if peer is already connected, no need to dial
+		if reportFn != nil {
+			reportFn(ctx, true)
+		}
+		return nil
+	}
 	go func() {
 		ctx, span := util.StartSpan(ctx, "Libp2pEndpoint.AsyncDialAndReport",
 			trace.WithAttributes(attribute.String("PeerID", p.String())))
 		defer span.End()
 
 		success := true
-		if err := msgEndpoint.DialPeer(ctx, p); err != nil {
+		if err := e.DialPeer(ctx, p); err != nil {
 			span.AddEvent("dial failed", trace.WithAttributes(
 				attribute.String("Error", err.Error()),
 			))
@@ -81,26 +90,32 @@ func (msgEndpoint *Libp2pEndpoint) AsyncDialAndReport(ctx context.Context,
 			span.AddEvent("dial successful")
 		}
 
-		// report dial result where it is needed
-		reportFn(ctx, success)
+		if reportFn != nil {
+			// report dial result where it is needed
+			reportFn(ctx, success)
+		}
 	}()
+	return nil
 }
 
-func (msgEndpoint *Libp2pEndpoint) DialPeer(ctx context.Context, id address.NodeID) error {
-	p := getPeerID(id)
+func (e *Libp2pEndpoint) DialPeer(ctx context.Context, id address.NodeID) error {
+	p, err := getPeerID(id)
+	if err != nil {
+		return err
+	}
 
 	_, span := util.StartSpan(ctx, "Libp2pEndpoint.DialPeer", trace.WithAttributes(
 		attribute.String("PeerID", p.String()),
 	))
 	defer span.End()
 
-	if msgEndpoint.host.Network().Connectedness(p.ID) == network.Connected {
+	if e.host.Network().Connectedness(p.ID) == network.Connected {
 		span.AddEvent("Already connected")
 		return nil
 	}
 
 	pi := peer.AddrInfo{ID: p.ID}
-	if err := msgEndpoint.host.Connect(ctx, pi); err != nil {
+	if err := e.host.Connect(ctx, pi); err != nil {
 		span.AddEvent("Connection failed", trace.WithAttributes(
 			attribute.String("Error", err.Error()),
 		))
@@ -110,7 +125,7 @@ func (msgEndpoint *Libp2pEndpoint) DialPeer(ctx context.Context, id address.Node
 	return nil
 }
 
-func (msgEndpoint *Libp2pEndpoint) MaybeAddToPeerstore(ctx context.Context,
+func (e *Libp2pEndpoint) MaybeAddToPeerstore(ctx context.Context,
 	id address.NodeID, ttl time.Duration) error {
 	_, span := util.StartSpan(ctx, "Libp2pEndpoint.MaybeAddToPeerstore",
 		trace.WithAttributes(attribute.String("PeerID", id.String())))
@@ -122,53 +137,59 @@ func (msgEndpoint *Libp2pEndpoint) MaybeAddToPeerstore(ctx context.Context,
 	}
 
 	// Don't add addresses for self or our connected peers. We have better ones.
-	if ai.ID == msgEndpoint.host.ID() ||
-		msgEndpoint.host.Network().Connectedness(ai.ID) == network.Connected {
+	if ai.ID == e.host.ID() ||
+		e.host.Network().Connectedness(ai.ID) == network.Connected {
 		return nil
 	}
-	msgEndpoint.host.Peerstore().AddAddrs(ai.ID, ai.Addrs, ttl)
+	e.host.Peerstore().AddAddrs(ai.ID, ai.Addrs, ttl)
 	return nil
 }
 
 func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 	protoID address.ProtocolID, n address.NodeID, req message.MinKadMessage,
 	resp message.MinKadMessage, timeout time.Duration,
-	responseHandlerFn endpoint.ResponseHandlerFn) {
-	go func() {
-		ctx, span := util.StartSpan(context.Background(), "Libp2pEndpoint.SendRequestHandleResponse", trace.WithAttributes(
+	responseHandlerFn endpoint.ResponseHandlerFn) error {
+
+	_, span := util.StartSpan(context.Background(),
+		"Libp2pEndpoint.SendRequestHandleResponse", trace.WithAttributes(
 			attribute.String("PeerID", n.String()),
 		))
+	defer span.End()
+
+	protoResp, ok := resp.(message.ProtoKadResponseMessage)
+	if !ok {
+		span.RecordError(ErrRequireProtoKadResponse)
+		return ErrRequireProtoKadResponse
+	}
+
+	protoReq, ok := req.(message.ProtoKadMessage)
+	if !ok {
+		span.RecordError(ErrRequireProtoKadMessage)
+		return ErrRequireProtoKadMessage
+	}
+
+	p, ok := n.(*peerid.PeerID)
+	if !ok {
+		span.RecordError(ErrRequirePeerID)
+		return ErrRequirePeerID
+	}
+
+	if responseHandlerFn == nil {
+		span.RecordError(endpoint.ErrNilResponseHandler)
+		return endpoint.ErrNilResponseHandler
+	}
+
+	go func() {
+		ctx, span := util.StartSpan(context.Background(),
+			"Libp2pEndpoint.SendRequestHandleResponse libp2p go routine",
+			trace.WithAttributes(
+				attribute.String("PeerID", n.String()),
+			))
 		defer span.End()
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
 		var err error
-
-		protoResp, ok := resp.(message.ProtoKadResponseMessage)
-		if !ok {
-			err = errors.New("Libp2pEndpoint requires ProtoKadResponseMessage")
-			span.RecordError(err)
-			responseHandlerFn(ctx, nil, err)
-			return
-		}
-
-		protoReq, ok := req.(message.ProtoKadMessage)
-		if !ok {
-			err = errors.New("Libp2pEndpoint requires ProtoKadMessage")
-			span.RecordError(err)
-			responseHandlerFn(ctx, nil, err)
-			return
-		}
-
-		p, ok := n.(*peerid.PeerID)
-		if !ok {
-			err = fmt.Errorf("Libp2pEndpoint requires peer.ID, %T", n)
-			fmt.Printf("Libp2pEndpoint requires peer.ID, %T", n)
-
-			span.RecordError(err)
-			responseHandlerFn(ctx, nil, err)
-			return
-		}
 
 		var s network.Stream
 		s, err = e.host.NewStream(ctx, p.ID, protocol.ID(protoID))
@@ -179,7 +200,6 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 		}
 		defer s.Close()
 
-		sendTime := time.Now()
 		err = WriteMsg(s, protoReq)
 		if err != nil {
 			span.RecordError(err, trace.WithAttributes(attribute.String("where", "write message")))
@@ -199,75 +219,40 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 		}
 
 		err = ReadMsg(s, protoResp)
+		if timeout != 0 {
+			// remove timeout if not too late
+			if !e.sched.RemovePlannedAction(ctx, timeoutEvent) {
+				span.RecordError(endpoint.ErrResponseReceivedAfterTimeout)
+				// don't run responseHandlerFn if timeout was already triggered
+				return
+			}
+		}
 		if err != nil {
 			span.RecordError(err, trace.WithAttributes(attribute.String("where", "read message")))
 			responseHandlerFn(ctx, protoResp, err)
 			return
 		}
-		if timeout != 0 {
-			// remove timeout if not too late
-			e.sched.RemovePlannedAction(ctx, timeoutEvent)
-
-			if sendTime.Add(timeout).Before(time.Now()) {
-				span.RecordError(fmt.Errorf("received response after timeout"))
-				return
-			}
-		}
 
 		span.AddEvent("response received")
 		responseHandlerFn(ctx, protoResp, err)
 	}()
-}
-
-func (msgEndpoint *Libp2pEndpoint) SendRequest(ctx context.Context,
-	protoID address.ProtocolID, id address.NodeID, req message.MinKadMessage,
-	resp message.MinKadMessage) error {
-
-	protoReq, ok := req.(message.ProtoKadRequestMessage)
-	if !ok {
-		panic("Libp2pEndpoint requires ProtoKadRequestMessage")
-	}
-	protoResp, ok := resp.(message.ProtoKadResponseMessage)
-	if !ok {
-		panic("Libp2pEndpoint requires ProtoKadResponseMessage")
-	}
-
-	p := getPeerID(id)
-
-	ctx, span := util.StartSpan(ctx, "Libp2pEndpoint.SendRequest", trace.WithAttributes(
-		attribute.String("PeerID", p.String()),
-	))
-	defer span.End()
-
-	s, err := msgEndpoint.host.NewStream(ctx, p.ID, protocol.ID(protoID))
-	if err != nil {
-		span.RecordError(err, trace.WithAttributes(attribute.String("where", "stream creation")))
-		return err
-	}
-	defer s.Close()
-
-	err = WriteMsg(s, protoReq)
-	if err != nil {
-		span.RecordError(err, trace.WithAttributes(attribute.String("where", "write message")))
-		return err
-	}
-
-	err = ReadMsg(s, protoResp)
-	if err != nil {
-		span.RecordError(err, trace.WithAttributes(attribute.String("where", "read message")))
-		return err
-	}
 	return nil
 }
 
-func (msgEndpoint *Libp2pEndpoint) Connectedness(id address.NodeID) network.Connectedness {
-	p := getPeerID(id)
-	return msgEndpoint.host.Network().Connectedness(p.ID)
+func (e *Libp2pEndpoint) Connectedness(id address.NodeID) (network.Connectedness, error) {
+	p, err := getPeerID(id)
+	if err != nil {
+		return network.NotConnected, err
+	}
+	return e.host.Network().Connectedness(p.ID), nil
 }
 
-func (msgEndpoint *Libp2pEndpoint) PeerInfo(id address.NodeID) peer.AddrInfo {
-	p := getPeerID(id)
-	return msgEndpoint.host.Peerstore().PeerInfo(p.ID)
+func (e *Libp2pEndpoint) PeerInfo(id address.NodeID) (peer.AddrInfo, error) {
+	p, err := getPeerID(id)
+	if err != nil {
+		return peer.AddrInfo{}, err
+	}
+	return e.host.Peerstore().PeerInfo(p.ID), nil
 }
 
 func (e *Libp2pEndpoint) KadKey() key.KadKey {
@@ -275,16 +260,20 @@ func (e *Libp2pEndpoint) KadKey() key.KadKey {
 }
 
 func (e *Libp2pEndpoint) NetworkAddress(n address.NodeID) (address.NodeID, error) {
-	p, ok := n.(peerid.PeerID)
-	if !ok {
-		return nil, errors.New("invalid peer.ID")
+	ai, err := e.PeerInfo(n)
+	if err != nil {
+		return nil, err
 	}
-	return &addrinfo.AddrInfo{AddrInfo: e.host.Peerstore().PeerInfo(p.ID)}, nil
+	return addrinfo.NewAddrInfo(ai), nil
 }
 
 func (e *Libp2pEndpoint) AddRequestHandler(protoID address.ProtocolID,
-	reqHandler endpoint.RequestHandlerFn) {
+	reqHandler endpoint.RequestHandlerFn, req message.MinKadMessage) error {
 
+	protoReq, ok := req.(message.ProtoKadMessage)
+	if !ok {
+		return ErrRequireProtoKadMessage
+	}
 	// when a new request comes in, we need to queue it
 	streamHandler := func(s network.Stream) {
 		e.sched.EnqueueAction(e.ctx, ba.BasicAction(func(ctx context.Context) {
@@ -301,8 +290,7 @@ func (e *Libp2pEndpoint) AddRequestHandler(protoID address.ProtocolID,
 
 			for {
 				// read a message from the stream
-				var req message.ProtoKadMessage
-				err := r.ReadMsg(req)
+				err := r.ReadMsg(protoReq)
 				if err != nil {
 					if err == io.EOF {
 						// stream EOF, all done
@@ -337,6 +325,7 @@ func (e *Libp2pEndpoint) AddRequestHandler(protoID address.ProtocolID,
 
 	}
 	e.host.SetStreamHandler(protocol.ID(protoID), streamHandler)
+	return nil
 }
 
 func (e *Libp2pEndpoint) RemoveRequestHandler(protoID address.ProtocolID) {

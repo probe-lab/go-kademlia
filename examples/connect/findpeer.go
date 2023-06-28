@@ -9,16 +9,17 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 
-	"github.com/libp2p/go-libp2p-kad-dht/events/scheduler/simplescheduler"
-	tutil "github.com/libp2p/go-libp2p-kad-dht/examples/util"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address/peerid"
-	"github.com/libp2p/go-libp2p-kad-dht/network/endpoint/libp2pendpoint"
-	"github.com/libp2p/go-libp2p-kad-dht/network/message"
-	"github.com/libp2p/go-libp2p-kad-dht/network/message/ipfsv1"
-	"github.com/libp2p/go-libp2p-kad-dht/query/simplequery"
-	"github.com/libp2p/go-libp2p-kad-dht/routingtable/simplert"
-	"github.com/libp2p/go-libp2p-kad-dht/util"
+	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	tutil "github.com/plprobelab/go-kademlia/examples/util"
+	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
+	"github.com/plprobelab/go-kademlia/network/address/peerid"
+	"github.com/plprobelab/go-kademlia/network/endpoint/libp2pendpoint"
+	"github.com/plprobelab/go-kademlia/network/message"
+	"github.com/plprobelab/go-kademlia/network/message/ipfsv1"
+	"github.com/plprobelab/go-kademlia/query/simplequery"
+	"github.com/plprobelab/go-kademlia/routingtable/simplert"
+	"github.com/plprobelab/go-kademlia/util"
 )
 
 var (
@@ -47,7 +48,7 @@ func FindPeer(ctx context.Context) {
 	// create a scheduler using real time
 	sched := simplescheduler.NewSimpleScheduler(clk)
 	// create a message endpoint is used to communicate with other peers
-	msgEndpoint := libp2pendpoint.NewMessageEndpoint(ctx, h, sched)
+	msgEndpoint := libp2pendpoint.NewLibp2pEndpoint(ctx, h, sched)
 
 	// friend is the first peer we know in the IPFS DHT network (bootstrap node)
 	friend, err := peer.Decode("12D3KooWGjgvfDkpuVAoNhd7PRRvMTEG4ZgzHBFURqDe1mqEzAMS")
@@ -68,8 +69,8 @@ func FindPeer(ctx context.Context) {
 	}
 	fmt.Println("connected to friend")
 
-	// target is the peer we want to find
-	target, err := peer.Decode("QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa")
+	// target is the peer we want to find QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb
+	target, err := peer.Decode("QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb")
 	if err != nil {
 		panic(err)
 	}
@@ -96,21 +97,23 @@ func FindPeer(ctx context.Context) {
 			fmt.Println("invalid response!")
 			return false, nil
 		}
+		var targetAddrs *addrinfo.AddrInfo
 		peers := make([]address.NodeID, 0, len(msg.CloserPeers))
 		for _, p := range msg.CloserPeers {
-			pid := peer.ID("")
-			if pid.UnmarshalBinary(p.Id) != nil {
-				fmt.Println("invalid peer id format")
+			addrInfo, err := ipfsv1.PBPeerToPeerInfo(p)
+			if err != nil {
+				fmt.Println("invalid peer info format")
 				continue
 			}
-			peers = append(peers, peerid.NewPeerID(pid))
-			if pid == target {
+			peers = append(peers, addrInfo.PeerID())
+			if addrInfo.PeerID().ID == target {
 				endCond = true
+				targetAddrs = addrInfo
 			}
 		}
 		fmt.Println("---\nResponse from", id, "with", peers)
 		if endCond {
-			fmt.Println("  - target found!", target)
+			fmt.Println("\n  - target found!", target, targetAddrs.Addrs)
 		}
 		// return peers and not msg.CloserPeers because we want to return the
 		// PeerIDs and not AddrInfos. The returned NodeID is used to update the

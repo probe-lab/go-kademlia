@@ -3,7 +3,7 @@ package queue
 import (
 	"context"
 
-	"github.com/libp2p/go-libp2p-kad-dht/events/action"
+	"github.com/plprobelab/go-kademlia/events/action"
 )
 
 type EventQueue interface {

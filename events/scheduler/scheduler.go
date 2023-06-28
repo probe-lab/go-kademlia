@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/libp2p/go-libp2p-kad-dht/events/action"
-	"github.com/libp2p/go-libp2p-kad-dht/events/planner"
+	"github.com/plprobelab/go-kademlia/events/action"
+	"github.com/plprobelab/go-kademlia/events/planner"
 )
 
 // Scheduler is an interface for scheduling actions to run as soon as possible
@@ -20,7 +20,7 @@ type Scheduler interface {
 	ScheduleAction(context.Context, time.Time, action.Action) planner.PlannedAction
 	// RemovePlannedAction removes an action from the scheduler planned actions
 	// (not from the queue), does nothing if the action is not in the planner
-	RemovePlannedAction(context.Context, planner.PlannedAction)
+	RemovePlannedAction(context.Context, planner.PlannedAction) bool
 
 	// RunOne runs one action from the scheduler's queue, returning true if an
 	// action was run, false if the queue was empty

@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/benbjohnson/clock"
-	ss "github.com/libp2p/go-libp2p-kad-dht/events/scheduler/simplescheduler"
-	si "github.com/libp2p/go-libp2p-kad-dht/network/address/stringid"
+	ss "github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	si "github.com/plprobelab/go-kademlia/network/address/stringid"
 )
 
 func TestTrivialQuery(t *testing.T) {

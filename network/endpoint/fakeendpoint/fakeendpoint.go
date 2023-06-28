@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"time"
 
-	ba "github.com/libp2p/go-libp2p-kad-dht/events/action/basicaction"
-	"github.com/libp2p/go-libp2p-kad-dht/events/planner"
-	"github.com/libp2p/go-libp2p-kad-dht/events/scheduler"
-	"github.com/libp2p/go-libp2p-kad-dht/key"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address"
-	"github.com/libp2p/go-libp2p-kad-dht/network/endpoint"
-	"github.com/libp2p/go-libp2p-kad-dht/network/message"
-	"github.com/libp2p/go-libp2p-kad-dht/util"
+	ba "github.com/plprobelab/go-kademlia/events/action/basicaction"
+	"github.com/plprobelab/go-kademlia/events/planner"
+	"github.com/plprobelab/go-kademlia/events/scheduler"
+	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-kademlia/network/endpoint"
+	"github.com/plprobelab/go-kademlia/network/message"
+	"github.com/plprobelab/go-kademlia/util"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
@@ -97,22 +97,18 @@ func (e *FakeEndpoint) MaybeAddToPeerstore(ctx context.Context, id address.NodeI
 
 func (e *FakeEndpoint) SendRequestHandleResponse(ctx context.Context,
 	protoID address.ProtocolID, id address.NodeID, req message.MinKadMessage,
-	resp message.MinKadMessage, timeout time.Duration, handleResp endpoint.ResponseHandlerFn) {
+	resp message.MinKadMessage, timeout time.Duration,
+	handleResp endpoint.ResponseHandlerFn) error {
 
 	ctx, span := util.StartSpan(ctx, "SendRequestHandleResponse",
 		trace.WithAttributes(attribute.Stringer("id", id)),
 	)
 	defer span.End()
 
-	if handleResp == nil {
-		span.RecordError(fmt.Errorf("handleResp is nil"))
-		return
-	}
-
 	if err := e.DialPeer(ctx, id); err != nil {
 		span.RecordError(err)
 		handleResp(ctx, nil, err)
-		return
+		return err
 	}
 
 	// send request
@@ -120,7 +116,7 @@ func (e *FakeEndpoint) SendRequestHandleResponse(ctx context.Context,
 	if err != nil {
 		span.RecordError(err)
 		handleResp(ctx, nil, err)
-		return
+		return err
 	}
 	e.streamFollowup[sid] = handleResp
 
@@ -136,21 +132,22 @@ func (e *FakeEndpoint) SendRequestHandleResponse(ctx context.Context,
 				handleFn, ok := e.streamFollowup[sid]
 				delete(e.streamFollowup, sid)
 				delete(e.streamTimeout, sid)
-				if !ok {
+				if !ok || handleFn == nil {
 					span.RecordError(fmt.Errorf("no followup for stream %d", sid))
 					return
 				}
 				handleFn(ctx, nil, endpoint.ErrTimeout)
 			}))
 	}
+	return nil
 }
 
 // Peerstore functions
-func (e *FakeEndpoint) Connectedness(id address.NodeID) network.Connectedness {
+func (e *FakeEndpoint) Connectedness(id address.NodeID) (network.Connectedness, error) {
 	if s, ok := e.connStatus[id.String()]; !ok {
-		return network.NotConnected
+		return network.NotConnected, nil
 	} else {
-		return s
+		return s, nil
 	}
 }
 
@@ -187,11 +184,13 @@ func (e *FakeEndpoint) HandleMessage(ctx context.Context, id address.NodeID,
 		resp, ok := msg.(message.MinKadResponseMessage)
 		var err error
 		if !ok {
-			err = fmt.Errorf("expected response message, got %T", msg)
+			err = ErrInvalidResponseType
 		}
-		e.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
-			followup(ctx, resp, err)
-		}))
+		if followup != nil {
+			e.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
+				followup(ctx, resp, err)
+			}))
+		}
 		return
 	}
 
@@ -207,8 +206,9 @@ func (e *FakeEndpoint) HandleMessage(ctx context.Context, id address.NodeID,
 }
 
 func (e *FakeEndpoint) AddRequestHandler(protoID address.ProtocolID,
-	reqHandler endpoint.RequestHandlerFn) {
+	reqHandler endpoint.RequestHandlerFn, req message.MinKadMessage) error {
 	e.serverProtos[protoID] = reqHandler
+	return nil
 }
 
 func (e *FakeEndpoint) RemoveRequestHandler(protoID address.ProtocolID) {

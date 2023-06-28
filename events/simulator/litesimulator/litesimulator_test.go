@@ -1,46 +1,79 @@
 package litesimulator
 
 import (
-	"strconv"
+	"context"
 	"testing"
+	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/libp2p/go-libp2p-kad-dht/events/scheduler"
-	"github.com/libp2p/go-libp2p-kad-dht/events/scheduler/simplescheduler"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address"
-	sid "github.com/libp2p/go-libp2p-kad-dht/network/address/stringid"
-	"github.com/libp2p/go-libp2p-kad-dht/network/endpoint"
-	"github.com/libp2p/go-libp2p-kad-dht/network/endpoint/fakeendpoint"
-	"github.com/libp2p/go-libp2p-kad-dht/routingtable"
-	"github.com/libp2p/go-libp2p-kad-dht/routingtable/simplert"
-	"github.com/libp2p/go-libp2p-kad-dht/server"
-	"github.com/libp2p/go-libp2p-kad-dht/server/basicserver"
-)
-
-var (
-	bucketSize                    = 2
-	protoID    address.ProtocolID = "/test/1.0.0"
+	"github.com/plprobelab/go-kademlia/events/action/basicaction"
+	"github.com/plprobelab/go-kademlia/events/scheduler"
+	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	"github.com/plprobelab/go-kademlia/events/simulator"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLiteSimulator(t *testing.T) {
-	//ctx := context.Background()
+	ctx := context.Background()
 	clk := clock.NewMock()
 
-	router := fakeendpoint.NewFakeRouter()
-
-	nNodes := 6
-	nodes := make([]address.NodeID, nNodes)
+	nNodes := 7
 	scheds := make([]scheduler.AwareScheduler, nNodes)
-	rts := make([]routingtable.RoutingTable, nNodes)
-	endpoints := make([]endpoint.SimEndpoint, nNodes)
-	servers := make([]server.Server, nNodes)
 
 	for i := 0; i < nNodes; i++ {
-		nodes[i] = sid.NewStringID("node" + strconv.Itoa(i))
 		scheds[i] = simplescheduler.NewSimpleScheduler(clk)
-		rts[i] = simplert.NewSimpleRT(nodes[i].Key(), bucketSize)
-		endpoints[i] = fakeendpoint.NewFakeEndpoint(nodes[i], scheds[i], router)
-		servers[i] = basicserver.NewBasicServer(rts[i], endpoints[i], basicserver.WithNumberOfCloserPeersToSend(bucketSize))
-		endpoints[i].AddRequestHandler(protoID, servers[i].HandleRequest)
 	}
+
+	sim := NewLiteSimulator(clk)
+	simulator.AddPeers(sim, scheds...)
+
+	simulator.RemovePeers(sim, scheds[0], scheds[3], scheds[6])
+	require.Equal(t, []scheduler.AwareScheduler{scheds[1], scheds[2],
+		scheds[4], scheds[5]}, sim.schedulers)
+
+	sim.Run(ctx)
+
+	order := []int{}
+	// enqueue an action on 4 (that will be executed after action enqueue on 2)
+	// this action will enqueue a new action on 1 (that will be executed later)
+	scheds[4].EnqueueAction(ctx, basicaction.BasicAction(func(context.Context) {
+		order = append(order, 1)
+		scheds[1].EnqueueAction(ctx, basicaction.BasicAction(func(context.Context) {
+			order = append(order, 2)
+		}))
+	}))
+	scheds[2].EnqueueAction(ctx, basicaction.BasicAction(func(context.Context) {
+		order = append(order, 0)
+	}))
+
+	sim.Run(ctx)
+
+	require.Len(t, order, 3)
+	for i, e := range order {
+		require.Equal(t, i, e)
+	}
+
+	order = []int{}
+	scheduler.ScheduleActionIn(ctx, scheds[1], time.Minute,
+		basicaction.BasicAction(func(context.Context) {
+			order = append(order, 3)
+		}))
+	scheduler.ScheduleActionIn(ctx, scheds[2], time.Second,
+		basicaction.BasicAction(func(context.Context) {
+			order = append(order, 1)
+			scheds[1].EnqueueAction(ctx, basicaction.BasicAction(func(context.Context) {
+				order = append(order, 2)
+			}))
+		}))
+	scheds[4].EnqueueAction(ctx, basicaction.BasicAction(func(context.Context) {
+		order = append(order, 0)
+	}))
+
+	sim.Run(ctx)
+
+	require.Len(t, order, 4)
+	for i, e := range order {
+		require.Equal(t, i, e)
+	}
+
 }

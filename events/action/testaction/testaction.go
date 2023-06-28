@@ -3,7 +3,7 @@ package testaction
 import (
 	"context"
 
-	"github.com/libp2p/go-libp2p-kad-dht/events/action"
+	"github.com/plprobelab/go-kademlia/events/action"
 )
 
 // IntAction is an action that does nothing but is used to test the scheduler.

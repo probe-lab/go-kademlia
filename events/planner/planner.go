@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/libp2p/go-libp2p-kad-dht/events/action"
+	"github.com/plprobelab/go-kademlia/events/action"
 )
 
 // MaxTime is the maximum time.Time value
@@ -24,7 +24,7 @@ type ActionPlanner interface {
 	// ScheduleAction schedules an action to run at a specific time
 	ScheduleAction(context.Context, time.Time, action.Action) PlannedAction
 	// RemoveAction removes an action from the planner
-	RemoveAction(context.Context, PlannedAction)
+	RemoveAction(context.Context, PlannedAction) bool
 
 	// PopOverdueActions returns all actions that are overdue and removes them
 	// from the planner

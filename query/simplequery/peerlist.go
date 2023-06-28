@@ -3,8 +3,8 @@ package simplequery
 import (
 	"sort"
 
-	"github.com/libp2p/go-libp2p-kad-dht/key"
-	"github.com/libp2p/go-libp2p-kad-dht/network/address"
+	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/network/address"
 )
 
 type peerStatus uint8

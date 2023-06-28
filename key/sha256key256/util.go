@@ -3,9 +3,9 @@ package sha256key256
 import (
 	"crypto/sha256"
 
-	"github.com/libp2p/go-libp2p-kad-dht/key"
 	mh "github.com/multiformats/go-multihash"
 	mhreg "github.com/multiformats/go-multihash/core"
+	"github.com/plprobelab/go-kademlia/key"
 )
 
 const (

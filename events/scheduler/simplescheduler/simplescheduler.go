@@ -5,12 +5,12 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/libp2p/go-libp2p-kad-dht/events/action"
-	"github.com/libp2p/go-libp2p-kad-dht/events/planner"
-	sp "github.com/libp2p/go-libp2p-kad-dht/events/planner/simpleplanner"
-	"github.com/libp2p/go-libp2p-kad-dht/events/queue"
-	"github.com/libp2p/go-libp2p-kad-dht/events/queue/chanqueue"
-	"github.com/libp2p/go-libp2p-kad-dht/events/scheduler"
+	"github.com/plprobelab/go-kademlia/events/action"
+	"github.com/plprobelab/go-kademlia/events/planner"
+	sp "github.com/plprobelab/go-kademlia/events/planner/simpleplanner"
+	"github.com/plprobelab/go-kademlia/events/queue"
+	"github.com/plprobelab/go-kademlia/events/queue/chanqueue"
+	"github.com/plprobelab/go-kademlia/events/scheduler"
 )
 
 const DefaultChanqueueCapacity = 1024
@@ -58,8 +58,8 @@ func (s *SimpleScheduler) ScheduleAction(ctx context.Context, t time.Time,
 
 // RemovePlannedAction removes an action from the scheduler planned actions
 // (not from the queue), does nothing if the action is not in the planner
-func (s *SimpleScheduler) RemovePlannedAction(ctx context.Context, a planner.PlannedAction) {
-	s.planner.RemoveAction(ctx, a)
+func (s *SimpleScheduler) RemovePlannedAction(ctx context.Context, a planner.PlannedAction) bool {
+	return s.planner.RemoveAction(ctx, a)
 }
 
 // moveOverdueActions moves all overdue actions from the planner to the queue.
