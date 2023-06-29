@@ -111,7 +111,6 @@ func queryTest(ctx context.Context) {
 	_, bin, _ := multibase.Decode(targetBytesID)
 	target := peerid.NewPeerID(peer.ID(bin))
 	req := ipfsv1.FindPeerRequest(target)
-	resp := &ipfsv1.Message{}
 
 	// dummy parameters
 	handleResp := func(ctx context.Context, _ address.NodeID,
@@ -123,8 +122,17 @@ func queryTest(ctx context.Context) {
 		}
 		return false, peerids
 	}
-	sq.NewSimpleQuery(ctx, target.Key(), protoID, req, resp, 1, time.Second, endpointA,
-		rtA, schedA, handleResp)
+
+	queryOpts := []sq.Option{
+		sq.WithProtocolID(protoID),
+		sq.WithConcurrency(1),
+		sq.WithRequestTimeout(5 * time.Second),
+		sq.WithHandleResultsFunc(handleResp),
+		sq.WithRoutingTable(rtA),
+		sq.WithEndpoint(endpointA),
+		sq.WithScheduler(schedA),
+	}
+	sq.NewSimpleQuery(ctx, req, queryOpts...)
 
 	// create simulator
 	sim := litesimulator.NewLiteSimulator(clk)

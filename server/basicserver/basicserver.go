@@ -40,7 +40,7 @@ func NewBasicServer(rt routingtable.RoutingTable, endpoint endpoint.Endpoint,
 		rt:                        rt,
 		endpoint:                  endpoint,
 		peerstoreTTL:              cfg.PeerstoreTTL,
-		numberOfCloserPeersToSend: cfg.NumberOfCloserPeersToSend,
+		numberOfCloserPeersToSend: cfg.NumberUsefulCloserPeers,
 	}
 }
 
@@ -69,12 +69,11 @@ func (s *BasicServer) HandleFindNodeRequest(ctx context.Context,
 
 	switch msg := msg.(type) {
 	case *simmessage.SimMessage:
-		t := msg.Target()
-		if t == nil {
+		target = msg.Target()
+		if target == nil {
 			// invalid request (nil target), don't reply
 			return nil, ErrSimMessageNilTarget
 		}
-		target = *t
 	case *ipfsv1.Message:
 		p := peer.ID("")
 		if p.UnmarshalBinary(msg.GetKey()) != nil {

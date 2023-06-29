@@ -62,7 +62,7 @@ func TestSimMessageHandling(t *testing.T) {
 	}
 
 	s0 := NewBasicServer(rt, fakeEndpoint, WithPeerstoreTTL(peerstoreTTL),
-		WithNumberOfCloserPeersToSend(numberOfCloserPeersToSend))
+		WithNumberUsefulCloserPeers(numberOfCloserPeersToSend))
 
 	requester := kadid.KadID{KadKey: []byte{0b00000001}} // 0000 0001
 
@@ -96,7 +96,7 @@ func TestSimMessageHandling(t *testing.T) {
 	}
 
 	numberOfCloserPeersToSend = 3
-	s1 := NewBasicServer(rt, fakeEndpoint, WithNumberOfCloserPeersToSend(3))
+	s1 := NewBasicServer(rt, fakeEndpoint, WithNumberUsefulCloserPeers(3))
 
 	req2 := simmessage.NewSimRequest([]byte{0b01100000})
 	msg, err = s1.HandleRequest(ctx, requester, req2)
@@ -217,7 +217,7 @@ func TestIPFSv1Handling(t *testing.T) {
 	// peerids[5]: 00ca8d64555add66790c4fb3e62075911a02a3577622fa69279731e82c135b8a (bucket 0)
 
 	s0 := NewBasicServer(rt, fakeEndpoint, WithPeerstoreTTL(peerstoreTTL),
-		WithNumberOfCloserPeersToSend(numberOfCloserPeersToSend))
+		WithNumberUsefulCloserPeers(numberOfCloserPeersToSend))
 
 	requesterPid, err := peer.Decode("1WoooREQUESTER")
 	require.NoError(t, err)
@@ -303,7 +303,7 @@ func TestInvalidIpfsv1Requests(t *testing.T) {
 	}
 
 	s0 := NewBasicServer(rt, invalidEP, WithPeerstoreTTL(peerstoreTTL),
-		WithNumberOfCloserPeersToSend(numberOfCloserPeersToSend))
+		WithNumberUsefulCloserPeers(numberOfCloserPeersToSend))
 
 	requesterPid, err := peer.Decode("1WoooREQUESTER")
 	require.NoError(t, err)

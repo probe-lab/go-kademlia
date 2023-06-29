@@ -8,40 +8,27 @@ import (
 
 	ba "github.com/plprobelab/go-kademlia/events/action/basicaction"
 	"github.com/plprobelab/go-kademlia/events/scheduler"
-	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	message "github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/routingtable"
 	"github.com/plprobelab/go-kademlia/util"
 
-	"github.com/libp2p/go-libp2p/core/peerstore"
-
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
-var (
-	// MAGIC: takes the default value from the DHT constants
-	NClosestPeers = 20
-
-	// MAGIC: default peerstore TTL for newly discovered peers
-	QueuedPeersPeerstoreTTL = peerstore.TempAddrTTL
-)
-
-// TODO: Options: NClosestPeers, QueuedPeersPeerstoreTTL, concurrency int, timeout time.Duration
-
-type HandleResultFn func(context.Context, address.NodeID, message.MinKadResponseMessage) (bool, []address.NodeID)
+type HandleResultFn func(context.Context, address.NodeID,
+	message.MinKadResponseMessage) (bool, []address.NodeID)
 
 type SimpleQuery struct {
-	ctx         context.Context
-	done        bool
-	kadid       key.KadKey
-	protoID     address.ProtocolID
-	req         message.MinKadMessage
-	resp        message.MinKadResponseMessage
-	concurrency int
-	timeout     time.Duration
+	ctx          context.Context
+	done         bool
+	protoID      address.ProtocolID
+	req          message.MinKadRequestMessage
+	concurrency  int
+	peerstoreTTL time.Duration
+	timeout      time.Duration
 
 	msgEndpoint endpoint.Endpoint
 	rt          routingtable.RoutingTable
@@ -61,43 +48,47 @@ type SimpleQuery struct {
 // reader, and the parameters to these events are determined by the query's
 // parameters. The query keeps track of the closest known peers to the target
 // key, and the peers that have been queried so far.
-func NewSimpleQuery(ctx context.Context, kadid key.KadKey, proto address.ProtocolID,
-	req message.MinKadMessage, resp message.MinKadResponseMessage, concurrency int,
-	timeout time.Duration, msgEndpoint endpoint.Endpoint, rt routingtable.RoutingTable,
-	sched scheduler.Scheduler, handleResultFn HandleResultFn) *SimpleQuery {
+func NewSimpleQuery(ctx context.Context, req message.MinKadRequestMessage,
+	opts ...Option) *SimpleQuery {
 
 	ctx, span := util.StartSpan(ctx, "SimpleQuery.NewSimpleQuery",
-		trace.WithAttributes(attribute.String("Target", kadid.Hex())))
+		trace.WithAttributes(attribute.String("Target", req.Target().Hex())))
 	defer span.End()
 
-	closestPeers, err := rt.NearestPeers(ctx, kadid, NClosestPeers)
+	// apply options
+	var cfg Config
+	if err := cfg.Apply(append([]Option{DefaultConfig}, opts...)...); err != nil {
+		span.RecordError(err)
+		return nil
+	}
+
+	closestPeers, err := cfg.RoutingTable.NearestPeers(ctx, req.Target(),
+		cfg.NumberUsefulCloserPeers)
 	if err != nil {
 		span.RecordError(err)
 		return nil
 	}
 
-	pl := newPeerList(kadid)
+	pl := newPeerList(req.Target())
 	pl.addToPeerlist(closestPeers)
 
 	q := &SimpleQuery{
-		ctx:              ctx,
-		req:              req,
-		resp:             resp,
-		kadid:            kadid,
-		protoID:          proto,
-		concurrency:      concurrency,
-		timeout:          timeout,
-		msgEndpoint:      msgEndpoint,
-		rt:               rt,
-		inflightRequests: 0,
-		peerlist:         pl,
-		sched:            sched,
-		handleResultFn:   handleResultFn,
+		ctx:            ctx,
+		req:            req,
+		protoID:        cfg.ProtocolID,
+		concurrency:    cfg.Concurrency,
+		timeout:        cfg.RequestTimeout,
+		peerstoreTTL:   cfg.PeerstoreTTL,
+		rt:             cfg.RoutingTable,
+		msgEndpoint:    cfg.Endpoint,
+		sched:          cfg.Scheduler,
+		handleResultFn: cfg.HandleResultsFunc,
+		peerlist:       pl,
 	}
 
 	// we don't want more pending requests than the number of peers we can query
-	requestsEvents := concurrency
-	if len(closestPeers) < concurrency {
+	requestsEvents := q.concurrency
+	if len(closestPeers) < q.concurrency {
 		requestsEvents = len(closestPeers)
 	}
 	for i := 0; i < requestsEvents; i++ {
@@ -168,12 +159,12 @@ func (q *SimpleQuery) newRequest(ctx context.Context) {
 	}
 
 	// send request
-	q.msgEndpoint.SendRequestHandleResponse(ctx, q.protoID, id, q.req, q.resp, q.timeout, handleResp)
+	q.msgEndpoint.SendRequestHandleResponse(ctx, q.protoID, id, q.req, q.req.EmptyResponse(), q.timeout, handleResp)
 }
 
 func (q *SimpleQuery) handleResponse(ctx context.Context, id address.NodeID, resp message.MinKadResponseMessage) {
 	ctx, span := util.StartSpan(ctx, "SimpleQuery.handleResponse",
-		trace.WithAttributes(attribute.String("Target", q.kadid.Hex()), attribute.String("From Peer", id.String())))
+		trace.WithAttributes(attribute.String("Target", q.req.Target().Hex()), attribute.String("From Peer", id.String())))
 	defer span.End()
 
 	if err := q.checkIfDone(); err != nil {
@@ -207,7 +198,7 @@ func (q *SimpleQuery) handleResponse(ctx context.Context, id address.NodeID, res
 			continue
 		}
 
-		q.msgEndpoint.MaybeAddToPeerstore(ctx, id, QueuedPeersPeerstoreTTL)
+		q.msgEndpoint.MaybeAddToPeerstore(ctx, id, q.peerstoreTTL)
 	}
 
 	stop, usefulNodeID := q.handleResultFn(ctx, id, resp)

@@ -97,7 +97,6 @@ func findNode(ctx context.Context) {
 	// A will first ask B, B will reply with C's address (and A's address)
 	// A will then ask C, C will reply with D's address (and B's address)
 	req := simmessage.NewSimRequest(ids[3].Key())
-	resp := &simmessage.SimMessage{}
 
 	// handleResFn is called when a response is received during the query process
 	handleResFn := func(_ context.Context, id address.NodeID,
@@ -123,8 +122,16 @@ func findNode(ctx context.Context) {
 	// concurrency of 1, a timeout of 1 second, and handleResFn as the response
 	// handler. The query doesn't run yet, it is added to A's event queue
 	// through A's scheduler.
-	sq.NewSimpleQuery(ctx, ids[3].Key(), protoID, req, resp, 1, time.Second,
-		eps[0], rts[0], schedulers[0], handleResFn)
+	queryOpts := []sq.Option{
+		sq.WithProtocolID(protoID),
+		sq.WithConcurrency(1),
+		sq.WithRequestTimeout(5 * time.Second),
+		sq.WithHandleResultsFunc(handleResFn),
+		sq.WithRoutingTable(rts[0]),
+		sq.WithEndpoint(eps[0]),
+		sq.WithScheduler(schedulers[0]),
+	}
+	sq.NewSimpleQuery(ctx, req, queryOpts...)
 
 	// create a simulator, simulating [A, B, C, D]'s simulators
 	sim := litesimulator.NewLiteSimulator(clk)

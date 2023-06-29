@@ -18,6 +18,7 @@ var (
 	ErrNoValidAddresses = errors.New("no valid addresses")
 )
 
+var _ message.ProtoKadRequestMessage = (*Message)(nil)
 var _ message.ProtoKadResponseMessage = (*Message)(nil)
 
 func FindPeerRequest(p *peerid.PeerID) *Message {
@@ -41,6 +42,10 @@ func (msg *Message) Target() key.KadKey {
 		return nil
 	}
 	return peerid.PeerID{ID: p}.Key()
+}
+
+func (msg *Message) EmptyResponse() message.MinKadResponseMessage {
+	return &Message{}
 }
 
 func (msg *Message) CloserNodes() []address.NodeID {
