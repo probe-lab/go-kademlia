@@ -12,7 +12,7 @@ import (
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	message "github.com/plprobelab/go-kademlia/network/message"
-	"github.com/plprobelab/go-kademlia/routingtable"
+	"github.com/plprobelab/go-kademlia/routing"
 	"github.com/plprobelab/go-kademlia/util"
 
 	"github.com/libp2p/go-libp2p/core/peerstore"
@@ -44,7 +44,7 @@ type SimpleQuery struct {
 	timeout     time.Duration
 
 	msgEndpoint endpoint.Endpoint
-	rt          routingtable.RoutingTable
+	rt          routing.Table
 	sched       scheduler.Scheduler
 
 	inflightRequests int // requests that are either in flight or scheduled
@@ -63,9 +63,9 @@ type SimpleQuery struct {
 // key, and the peers that have been queried so far.
 func NewSimpleQuery(ctx context.Context, kadid key.KadKey, proto address.ProtocolID,
 	req message.MinKadMessage, resp message.MinKadResponseMessage, concurrency int,
-	timeout time.Duration, msgEndpoint endpoint.Endpoint, rt routingtable.RoutingTable,
-	sched scheduler.Scheduler, handleResultFn HandleResultFn) *SimpleQuery {
-
+	timeout time.Duration, msgEndpoint endpoint.Endpoint, rt routing.Table,
+	sched scheduler.Scheduler, handleResultFn HandleResultFn,
+) *SimpleQuery {
 	ctx, span := util.StartSpan(ctx, "SimpleQuery.NewSimpleQuery",
 		trace.WithAttributes(attribute.String("Target", kadid.Hex())))
 	defer span.End()
@@ -231,12 +231,10 @@ func (q *SimpleQuery) handleResponse(ctx context.Context, id address.NodeID, res
 	for i := 0; i < newRequestsToSend; i++ {
 		// add new pending request(s) for this query to eventqueue
 		q.sched.EnqueueAction(ctx, ba.BasicAction(q.newRequest))
-
 	}
 	q.inflightRequests += newRequestsToSend
 	span.AddEvent("Enqueued " + strconv.Itoa(newRequestsToSend) +
 		" SimpleQuery.newRequest")
-
 }
 
 func (q *SimpleQuery) requestError(ctx context.Context, id address.NodeID, err error) {

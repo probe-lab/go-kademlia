@@ -38,7 +38,7 @@ var (
 
 func TestBasic(t *testing.T) {
 	bucketSize := 100
-	rt := NewSimpleRT(key0, bucketSize)
+	rt := New(key0, bucketSize)
 	require.Equal(t, bucketSize, rt.BucketSize())
 
 	require.Equal(t, key0, rt.Self())
@@ -49,7 +49,7 @@ func TestAddPeer(t *testing.T) {
 
 	p := peerid.PeerID{ID: peer.ID("")}
 
-	rt := NewSimpleRT(key0, 2)
+	rt := New(key0, 2)
 
 	require.Equal(t, 0, rt.SizeOfBucket(0))
 
@@ -139,7 +139,7 @@ func TestRemovePeer(t *testing.T) {
 	ctx := context.Background()
 	p := peerid.PeerID{ID: peer.ID("")}
 
-	rt := NewSimpleRT(key0, 2)
+	rt := New(key0, 2)
 	rt.addPeer(ctx, key1, p)
 	success, err := rt.RemoveKey(ctx, key2)
 	require.NoError(t, err)
@@ -153,7 +153,7 @@ func TestFindPeer(t *testing.T) {
 	ctx := context.Background()
 	p := peerid.PeerID{ID: peer.ID("QmPeer")}
 
-	rt := NewSimpleRT(key0, 2)
+	rt := New(key0, 2)
 	success, err := rt.addPeer(ctx, key1, p)
 	require.NoError(t, err)
 	require.True(t, success)
@@ -185,7 +185,7 @@ func TestNearestPeers(t *testing.T) {
 
 	bucketSize := 5
 
-	rt := NewSimpleRT(key0, bucketSize)
+	rt := New(key0, bucketSize)
 	rt.addPeer(ctx, key1, peerIds[1])
 	rt.addPeer(ctx, key2, peerIds[2])
 	rt.addPeer(ctx, key3, peerIds[3])
@@ -212,7 +212,7 @@ func TestNearestPeers(t *testing.T) {
 
 	// create routing table with a single duplicate peer
 	// useful to test peers sorting with duplicate (even tough it should never happen)
-	rt2 := NewSimpleRT(key0, 2)
+	rt2 := New(key0, 2)
 	rt2.buckets[0] = append(rt2.buckets[0], peerInfo{peerIds[1], key1})
 	rt2.buckets[0] = append(rt2.buckets[0], peerInfo{peerIds[1], key1})
 	peers, err = rt2.NearestPeers(ctx, key0, 10)
@@ -225,7 +225,7 @@ func TestInvalidKeys(t *testing.T) {
 	dummyNodeId := si.StringID("dummy")
 	invalidKey := key.KadKey(zeroBytes(4)) // key is shorter (4 bytes only)
 
-	rt := NewSimpleRT(key0, 2)
+	rt := New(key0, 2)
 	success, err := rt.addPeer(ctx, invalidKey, dummyNodeId)
 	require.Equal(t, err, key.ErrInvalidKey(32))
 	require.False(t, success)

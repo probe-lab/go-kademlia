@@ -15,13 +15,15 @@ import (
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/network/message/simmessage"
-	"github.com/plprobelab/go-kademlia/routingtable/simplert"
+	"github.com/plprobelab/go-kademlia/routing/simplert"
 	"github.com/plprobelab/go-kademlia/server/basicserver"
 	"github.com/stretchr/testify/require"
 )
 
-var protoID = address.ProtocolID("/test/1.0.0")
-var peerstoreTTL = time.Minute
+var (
+	protoID      = address.ProtocolID("/test/1.0.0")
+	peerstoreTTL = time.Minute
+)
 
 func TestFakeEndpoint(t *testing.T) {
 	ctx := context.Background()
@@ -76,7 +78,7 @@ func TestFakeEndpoint(t *testing.T) {
 
 	sched0 := simplescheduler.NewSimpleScheduler(clk)
 	fakeEndpoint0 := NewFakeEndpoint(node0, sched0, router)
-	rt0 := simplert.NewSimpleRT(node0.Key(), 2)
+	rt0 := simplert.New(node0.Key(), 2)
 	serv0 := basicserver.NewBasicServer(rt0, fakeEndpoint0)
 	fakeEndpoint0.AddRequestHandler(protoID, serv0.HandleRequest, nil)
 	// remove a request handler that doesn't exist
@@ -103,7 +105,8 @@ func TestFakeEndpoint(t *testing.T) {
 	// test response to a sent request that is not a valid MinKadResponseMessage
 	var sid endpoint.StreamID = 1000
 	fakeEndpoint.streamFollowup[sid] = func(ctx context.Context,
-		msg message.MinKadResponseMessage, err error) {
+		msg message.MinKadResponseMessage, err error,
+	) {
 		require.Equal(t, ErrInvalidResponseType, err)
 	}
 	var msg message.MinKadMessage
@@ -114,7 +117,8 @@ func TestFakeEndpoint(t *testing.T) {
 
 	// test request whose handler returns an error
 	errHandler := func(ctx context.Context, id address.NodeID,
-		req message.MinKadMessage) (message.MinKadMessage, error) {
+		req message.MinKadMessage,
+	) (message.MinKadMessage, error) {
 		return nil, endpoint.ErrUnknownPeer
 	}
 	errProtoID := address.ProtocolID("/err/0.0.1")
@@ -151,7 +155,8 @@ func TestRequestTimeout(t *testing.T) {
 	var timeoutExecuted bool
 	// fakeEndpoints[1]'s request handler will not respond
 	dropRequestHandler := func(ctx context.Context, id address.NodeID,
-		req message.MinKadMessage) (message.MinKadMessage, error) {
+		req message.MinKadMessage,
+	) (message.MinKadMessage, error) {
 		return nil, endpoint.ErrUnknownPeer
 	}
 	fakeEndpoints[1].AddRequestHandler(protoID, dropRequestHandler, nil)
@@ -159,7 +164,8 @@ func TestRequestTimeout(t *testing.T) {
 	// will timeout (because fakeEndpoints[1] will not respond)
 	fakeEndpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], nil, nil,
 		time.Second, func(ctx context.Context,
-			msg message.MinKadResponseMessage, err error) {
+			msg message.MinKadResponseMessage, err error,
+		) {
 			timeoutExecuted = true
 		})
 
@@ -194,7 +200,8 @@ func TestRequestTimeout(t *testing.T) {
 	// response coming back before timeout
 	var handlerHasResponded bool
 	dumbResponseHandler := func(ctx context.Context, id address.NodeID,
-		req message.MinKadMessage) (message.MinKadMessage, error) {
+		req message.MinKadMessage,
+	) (message.MinKadMessage, error) {
 		clk.Sleep(100 * time.Millisecond)
 		return req, nil
 	}
@@ -204,7 +211,8 @@ func TestRequestTimeout(t *testing.T) {
 	fakeEndpoints[1].AddRequestHandler(protoID, dumbResponseHandler, nil)
 	fakeEndpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], msg, nil,
 		time.Second, func(ctx context.Context,
-			msg message.MinKadResponseMessage, err error) {
+			msg message.MinKadResponseMessage, err error,
+		) {
 			require.NoError(t, err)
 		})
 

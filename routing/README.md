@@ -1,10 +1,10 @@
 # Routing Table
 
-`RoutingTable` defines a generic Kademlia routing table interface.
+`Table` defines a generic Kademlia routing table interface.
 
 ```go
-// RoutingTable is the interface for Kademlia Routing Tables
-type RoutingTable interface {
+// Table is the interface for Kademlia Routing Tables
+type Table interface {
 	// Self returns the local node's Kademlia key
 	Self() key.KadKey
 	// AddPeer tries to add a peer to the routing table
