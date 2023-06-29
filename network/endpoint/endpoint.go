@@ -40,7 +40,7 @@ type Endpoint interface {
 type ServerEndpoint interface {
 	Endpoint
 	// AddRequestHandler registers a handler for a given protocol ID.
-	AddRequestHandler(address.ProtocolID, RequestHandlerFn, message.MinKadMessage) error
+	AddRequestHandler(address.ProtocolID, message.MinKadMessage, RequestHandlerFn) error
 	// RemoveRequestHandler removes a handler for a given protocol ID.
 	RemoveRequestHandler(address.ProtocolID)
 }

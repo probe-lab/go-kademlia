@@ -78,7 +78,7 @@ func TestFakeEndpoint(t *testing.T) {
 	fakeEndpoint0 := NewFakeEndpoint(node0, sched0, router)
 	rt0 := simplert.NewSimpleRT(node0.Key(), 2)
 	serv0 := basicserver.NewBasicServer(rt0, fakeEndpoint0)
-	fakeEndpoint0.AddRequestHandler(protoID, serv0.HandleRequest, nil)
+	fakeEndpoint0.AddRequestHandler(protoID, nil, serv0.HandleRequest)
 	// remove a request handler that doesn't exist
 	fakeEndpoint0.RemoveRequestHandler("/test/0.0.1")
 
@@ -118,7 +118,7 @@ func TestFakeEndpoint(t *testing.T) {
 		return nil, endpoint.ErrUnknownPeer
 	}
 	errProtoID := address.ProtocolID("/err/0.0.1")
-	fakeEndpoint.AddRequestHandler(errProtoID, errHandler, nil)
+	fakeEndpoint.AddRequestHandler(errProtoID, nil, errHandler)
 	fakeEndpoint.HandleMessage(ctx, node0, errProtoID, 1001, msg)
 	// no message should have been sent to node0, so nothing to run
 	require.False(t, sched0.RunOne(ctx))
@@ -154,7 +154,7 @@ func TestRequestTimeout(t *testing.T) {
 		req message.MinKadMessage) (message.MinKadMessage, error) {
 		return nil, endpoint.ErrUnknownPeer
 	}
-	fakeEndpoints[1].AddRequestHandler(protoID, dropRequestHandler, nil)
+	fakeEndpoints[1].AddRequestHandler(protoID, nil, dropRequestHandler)
 	// fakeEndpoints[0] will send a request to fakeEndpoints[1], but the request
 	// will timeout (because fakeEndpoints[1] will not respond)
 	fakeEndpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], nil, nil,
@@ -201,7 +201,7 @@ func TestRequestTimeout(t *testing.T) {
 	// create valid message
 	msg := simmessage.NewSimResponse(make([]address.NodeID, 0))
 	// overwrite request handler
-	fakeEndpoints[1].AddRequestHandler(protoID, dumbResponseHandler, nil)
+	fakeEndpoints[1].AddRequestHandler(protoID, nil, dumbResponseHandler)
 	fakeEndpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], msg, nil,
 		time.Second, func(ctx context.Context,
 			msg message.MinKadResponseMessage, err error) {

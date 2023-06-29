@@ -125,7 +125,7 @@ func findNode(ctx context.Context) {
 	queryOpts := []sq.Option{
 		sq.WithProtocolID(protoID),
 		sq.WithConcurrency(1),
-		sq.WithRequestTimeout(5 * time.Second),
+		sq.WithRequestTimeout(time.Second),
 		sq.WithHandleResultsFunc(handleResFn),
 		sq.WithRoutingTable(rts[0]),
 		sq.WithEndpoint(eps[0]),

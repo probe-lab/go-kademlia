@@ -78,6 +78,8 @@ func TestCornerCases(t *testing.T) {
 	require.Nil(t, resp.Target())
 	require.Equal(t, 0, len(resp.CloserNodes()))
 
+	require.Equal(t, &Message{}, resp.EmptyResponse())
+
 	ids := make([]address.NodeID, 0)
 	resp = FindPeerResponse(ids, nil)
 

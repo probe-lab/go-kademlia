@@ -206,7 +206,7 @@ func (e *FakeEndpoint) HandleMessage(ctx context.Context, id address.NodeID,
 }
 
 func (e *FakeEndpoint) AddRequestHandler(protoID address.ProtocolID,
-	reqHandler endpoint.RequestHandlerFn, req message.MinKadMessage) error {
+	req message.MinKadMessage, reqHandler endpoint.RequestHandlerFn) error {
 	e.serverProtos[protoID] = reqHandler
 	return nil
 }

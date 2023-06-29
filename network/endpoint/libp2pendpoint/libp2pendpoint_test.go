@@ -166,7 +166,7 @@ func TestLibp2pEndpoint(t *testing.T) {
 		// request handler returning the received message
 		return req, nil
 	}
-	err = endpoints[1].AddRequestHandler(protoID, requestHandler, &ipfsv1.Message{})
+	err = endpoints[1].AddRequestHandler(protoID, &ipfsv1.Message{}, requestHandler)
 	require.NoError(t, err)
 
 	// send request from 0 to 1
@@ -226,12 +226,12 @@ func TestLibp2pEndpoint(t *testing.T) {
 	wg.Wait()
 
 	// test timeout
-	err = endpoints[1].AddRequestHandler(protoID, func(ctx context.Context,
+	err = endpoints[1].AddRequestHandler(protoID, &ipfsv1.Message{}, func(ctx context.Context,
 		id address.NodeID, req message.MinKadMessage) (message.MinKadMessage, error) {
 		// request handler wait 2ms before returning the received message
 		time.Sleep(10 * time.Millisecond)
 		return req, nil
-	}, &ipfsv1.Message{})
+	})
 	require.NoError(t, err)
 	wg.Add(1)
 	// timeout after 1 ms
@@ -253,11 +253,11 @@ func TestLibp2pEndpoint(t *testing.T) {
 	require.False(t, scheds[1].RunOne(ctx))
 
 	// server request handler error
-	err = endpoints[1].AddRequestHandler(protoID, func(ctx context.Context,
+	err = endpoints[1].AddRequestHandler(protoID, &ipfsv1.Message{}, func(ctx context.Context,
 		id address.NodeID, req message.MinKadMessage) (message.MinKadMessage, error) {
 		// request handler returns error
 		return nil, errors.New("server error")
-	}, &ipfsv1.Message{})
+	})
 	require.NoError(t, err)
 	err = endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], req,
 		resp, 0, responseHandler)
@@ -271,11 +271,11 @@ func TestLibp2pEndpoint(t *testing.T) {
 	require.False(t, scheds[0].RunOne(ctx))
 
 	// server request handler returns wrong message type
-	err = endpoints[1].AddRequestHandler(protoID, func(ctx context.Context,
+	err = endpoints[1].AddRequestHandler(protoID, &ipfsv1.Message{}, func(ctx context.Context,
 		id address.NodeID, req message.MinKadMessage) (message.MinKadMessage, error) {
 		// request handler returns error
 		return &simmessage.SimMessage{}, nil
-	}, &ipfsv1.Message{})
+	})
 	require.NoError(t, err)
 	err = endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], req,
 		resp, 0, responseHandler)
@@ -289,7 +289,7 @@ func TestLibp2pEndpoint(t *testing.T) {
 	require.False(t, scheds[0].RunOne(ctx))
 
 	// invalid message format for handler
-	err = endpoints[0].AddRequestHandler("/fail/1.0.0", requestHandler, &simmessage.SimMessage{})
+	err = endpoints[0].AddRequestHandler("/fail/1.0.0", &simmessage.SimMessage{}, requestHandler)
 	require.Equal(t, ErrRequireProtoKadMessage, err)
 
 	// remove request handler

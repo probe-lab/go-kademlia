@@ -268,7 +268,7 @@ func (e *Libp2pEndpoint) NetworkAddress(n address.NodeID) (address.NodeID, error
 }
 
 func (e *Libp2pEndpoint) AddRequestHandler(protoID address.ProtocolID,
-	reqHandler endpoint.RequestHandlerFn, req message.MinKadMessage) error {
+	req message.MinKadMessage, reqHandler endpoint.RequestHandlerFn) error {
 
 	protoReq, ok := req.(message.ProtoKadMessage)
 	if !ok {
