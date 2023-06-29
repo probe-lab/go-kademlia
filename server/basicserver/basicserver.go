@@ -12,7 +12,7 @@ import (
 	"github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/network/message/ipfsv1"
 	"github.com/plprobelab/go-kademlia/network/message/simmessage"
-	"github.com/plprobelab/go-kademlia/routingtable"
+	"github.com/plprobelab/go-kademlia/routing"
 	"github.com/plprobelab/go-kademlia/server"
 	"github.com/plprobelab/go-kademlia/util"
 	"go.opentelemetry.io/otel/attribute"
@@ -20,7 +20,7 @@ import (
 )
 
 type BasicServer struct {
-	rt       routingtable.RoutingTable
+	rt       routing.Table
 	endpoint endpoint.Endpoint
 
 	peerstoreTTL              time.Duration
@@ -29,8 +29,9 @@ type BasicServer struct {
 
 var _ server.Server = (*BasicServer)(nil)
 
-func NewBasicServer(rt routingtable.RoutingTable, endpoint endpoint.Endpoint,
-	options ...Option) *BasicServer {
+func NewBasicServer(rt routing.Table, endpoint endpoint.Endpoint,
+	options ...Option,
+) *BasicServer {
 	var cfg Config
 	if err := cfg.Apply(append([]Option{DefaultConfig}, options...)...); err != nil {
 		return nil
@@ -45,8 +46,8 @@ func NewBasicServer(rt routingtable.RoutingTable, endpoint endpoint.Endpoint,
 }
 
 func (s *BasicServer) HandleRequest(ctx context.Context, rpeer address.NodeID,
-	msg message.MinKadMessage) (message.MinKadMessage, error) {
-
+	msg message.MinKadMessage,
+) (message.MinKadMessage, error) {
 	switch msg := msg.(type) {
 	case *simmessage.SimMessage:
 		return s.HandleFindNodeRequest(ctx, rpeer, msg)
@@ -63,8 +64,8 @@ func (s *BasicServer) HandleRequest(ctx context.Context, rpeer address.NodeID,
 }
 
 func (s *BasicServer) HandleFindNodeRequest(ctx context.Context,
-	rpeer address.NodeID, msg message.MinKadMessage) (message.MinKadMessage, error) {
-
+	rpeer address.NodeID, msg message.MinKadMessage,
+) (message.MinKadMessage, error) {
 	var target key.KadKey
 
 	switch msg := msg.(type) {

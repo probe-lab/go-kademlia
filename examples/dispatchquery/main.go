@@ -26,7 +26,7 @@ import (
 	"github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/network/message/ipfsv1"
 	sq "github.com/plprobelab/go-kademlia/query/simplequery"
-	"github.com/plprobelab/go-kademlia/routingtable/simplert"
+	"github.com/plprobelab/go-kademlia/routing/simplert"
 	"github.com/plprobelab/go-kademlia/server/basicserver"
 	"github.com/plprobelab/go-kademlia/util"
 
@@ -38,9 +38,7 @@ const (
 	protoID      = "/ipfs/kad/1.0.0"
 )
 
-var (
-	targetBytesID = "mACQIARIgp9PBu+JuU8aicuW8xT+Oa08OntMyqdLbfQtOplAHlME"
-)
+var targetBytesID = "mACQIARIgp9PBu+JuU8aicuW8xT+Oa08OntMyqdLbfQtOplAHlME"
 
 func queryTest(ctx context.Context) {
 	ctx, span := util.StartSpan(ctx, "queryTest")
@@ -57,9 +55,11 @@ func queryTest(ctx context.Context) {
 	}
 	selfA := &peerid.PeerID{ID: pidA} // peer.ID is necessary for ipfskadv1 message format
 	addrA := multiaddr.StringCast("/ip4/1.1.1.1/tcp/4001/")
-	var naddrA address.NodeID = addrinfo.NewAddrInfo(peer.AddrInfo{ID: selfA.ID,
-		Addrs: []multiaddr.Multiaddr{addrA}})
-	rtA := simplert.NewSimpleRT(selfA.Key(), 2)
+	var naddrA address.NodeID = addrinfo.NewAddrInfo(peer.AddrInfo{
+		ID:    selfA.ID,
+		Addrs: []multiaddr.Multiaddr{addrA},
+	})
+	rtA := simplert.New(selfA.Key(), 2)
 	schedA := ss.NewSimpleScheduler(clk)
 	endpointA := fakeendpoint.NewFakeEndpoint(selfA, schedA, router)
 	servA := basicserver.NewBasicServer(rtA, endpointA)
@@ -72,9 +72,11 @@ func queryTest(ctx context.Context) {
 	}
 	selfB := &peerid.PeerID{ID: pidB}
 	addrB := multiaddr.StringCast("/ip4/2.2.2.2/tcp/4001/")
-	var naddrB address.NodeID = addrinfo.NewAddrInfo(peer.AddrInfo{ID: selfB.ID,
-		Addrs: []multiaddr.Multiaddr{addrB}})
-	rtB := simplert.NewSimpleRT(selfB.Key(), 2)
+	var naddrB address.NodeID = addrinfo.NewAddrInfo(peer.AddrInfo{
+		ID:    selfB.ID,
+		Addrs: []multiaddr.Multiaddr{addrB},
+	})
+	rtB := simplert.New(selfB.Key(), 2)
 	schedB := ss.NewSimpleScheduler(clk)
 	endpointB := fakeendpoint.NewFakeEndpoint(selfB, schedB, router)
 	servB := basicserver.NewBasicServer(rtB, endpointB)
@@ -87,9 +89,11 @@ func queryTest(ctx context.Context) {
 	}
 	selfC := &peerid.PeerID{ID: pidC}
 	addrC := multiaddr.StringCast("/ip4/3.3.3.3/tcp/4001/")
-	var naddrC address.NodeID = addrinfo.NewAddrInfo(peer.AddrInfo{ID: selfC.ID,
-		Addrs: []multiaddr.Multiaddr{addrC}})
-	rtC := simplert.NewSimpleRT(selfC.Key(), 2)
+	var naddrC address.NodeID = addrinfo.NewAddrInfo(peer.AddrInfo{
+		ID:    selfC.ID,
+		Addrs: []multiaddr.Multiaddr{addrC},
+	})
+	rtC := simplert.New(selfC.Key(), 2)
 	schedC := ss.NewSimpleScheduler(clk)
 	endpointC := fakeendpoint.NewFakeEndpoint(selfC, schedC, router)
 	servC := basicserver.NewBasicServer(rtC, endpointC)
@@ -115,7 +119,8 @@ func queryTest(ctx context.Context) {
 
 	// dummy parameters
 	handleResp := func(ctx context.Context, _ address.NodeID,
-		resp message.MinKadResponseMessage) (bool, []address.NodeID) {
+		resp message.MinKadResponseMessage,
+	) (bool, []address.NodeID) {
 		fmt.Println(resp.CloserNodes())
 		peerids := make([]address.NodeID, len(resp.CloserNodes()))
 		for i, p := range resp.CloserNodes() {

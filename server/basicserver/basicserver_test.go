@@ -21,7 +21,7 @@ import (
 	"github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/network/message/ipfsv1"
 	"github.com/plprobelab/go-kademlia/network/message/simmessage"
-	"github.com/plprobelab/go-kademlia/routingtable/simplert"
+	"github.com/plprobelab/go-kademlia/routing/simplert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,12 +45,12 @@ func TestSimMessageHandling(t *testing.T) {
 	peerstoreTTL := time.Second // doesn't matter as we use fakeendpoint
 	numberOfCloserPeersToSend := 4
 
-	var self = kadid.KadID{KadKey: []byte{0x00}} // 0000 0000
+	self := kadid.KadID{KadKey: []byte{0x00}} // 0000 0000
 
 	router := fakeendpoint.NewFakeRouter()
 	sched := simplescheduler.NewSimpleScheduler(clk)
 	fakeEndpoint := fakeendpoint.NewFakeEndpoint(self, sched, router)
-	rt := simplert.NewSimpleRT(self.Key(), 2)
+	rt := simplert.New(self.Key(), 2)
 
 	// add peers to routing table and peerstore
 	for _, p := range kadRemotePeers {
@@ -75,8 +75,10 @@ func TestSimMessageHandling(t *testing.T) {
 	require.Len(t, resp.CloserNodes(), numberOfCloserPeersToSend)
 	// closer peers should be ordered by distance to 0000 0000
 	// [8] 0000 1000, [7] 0001 0001, [6] 0001 1111, [4] 0010 1110
-	order := []*kadid.KadID{kadRemotePeers[8], kadRemotePeers[7],
-		kadRemotePeers[6], kadRemotePeers[4]}
+	order := []*kadid.KadID{
+		kadRemotePeers[8], kadRemotePeers[7],
+		kadRemotePeers[6], kadRemotePeers[4],
+	}
 	for i, p := range resp.CloserNodes() {
 		require.Equal(t, order[i], p)
 	}
@@ -89,8 +91,10 @@ func TestSimMessageHandling(t *testing.T) {
 	require.Len(t, resp.CloserNodes(), numberOfCloserPeersToSend)
 	// closer peers should be ordered by distance to 1111 1111
 	// [1] 1101 0010, [0] 1000 1000, [3] 0101 0011, [2] 0100 1011
-	order = []*kadid.KadID{kadRemotePeers[1], kadRemotePeers[0],
-		kadRemotePeers[3], kadRemotePeers[2]}
+	order = []*kadid.KadID{
+		kadRemotePeers[1], kadRemotePeers[0],
+		kadRemotePeers[3], kadRemotePeers[2],
+	}
 	for i, p := range resp.CloserNodes() {
 		require.Equal(t, order[i], p)
 	}
@@ -125,12 +129,12 @@ func TestInvalidSimRequests(t *testing.T) {
 	clk := clock.New()
 	router := fakeendpoint.NewFakeRouter()
 
-	var self = kadid.KadID{KadKey: []byte{0x00}} // 0000 0000
+	self := kadid.KadID{KadKey: []byte{0x00}} // 0000 0000
 
 	// create a valid server
 	sched := simplescheduler.NewSimpleScheduler(clk)
 	fakeEndpoint := fakeendpoint.NewFakeEndpoint(self, sched, router)
-	rt := simplert.NewSimpleRT(self.Key(), 2)
+	rt := simplert.New(self.Key(), 2)
 
 	// add peers to routing table and peerstore
 	for _, p := range kadRemotePeers {
@@ -174,7 +178,7 @@ func TestIPFSv1Handling(t *testing.T) {
 	router := fakeendpoint.NewFakeRouter()
 	sched := simplescheduler.NewSimpleScheduler(clk)
 	fakeEndpoint := fakeendpoint.NewFakeEndpoint(self, sched, router)
-	rt := simplert.NewSimpleRT(self.Key(), 4)
+	rt := simplert.New(self.Key(), 4)
 
 	nPeers := 6
 	peerids := make([]address.NodeID, nPeers)
@@ -247,13 +251,15 @@ type invalidEndpoint struct{}
 var _ endpoint.Endpoint = (*invalidEndpoint)(nil)
 
 func (e *invalidEndpoint) MaybeAddToPeerstore(context.Context, address.NodeID,
-	time.Duration) error {
+	time.Duration,
+) error {
 	return nil
 }
 
 func (e *invalidEndpoint) SendRequestHandleResponse(context.Context,
 	address.ProtocolID, address.NodeID, message.MinKadMessage,
-	message.MinKadMessage, time.Duration, endpoint.ResponseHandlerFn) error {
+	message.MinKadMessage, time.Duration, endpoint.ResponseHandlerFn,
+) error {
 	return nil
 }
 
@@ -276,7 +282,7 @@ func TestInvalidIpfsv1Requests(t *testing.T) {
 	self := peerid.NewPeerID(selfPid)
 
 	invalidEP := &invalidEndpoint{}
-	rt := simplert.NewSimpleRT(self.Key(), 4)
+	rt := simplert.New(self.Key(), 4)
 
 	nPeers := 6
 	peerids := make([]address.NodeID, nPeers)

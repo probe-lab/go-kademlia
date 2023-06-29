@@ -8,7 +8,7 @@ import (
 
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/routingtable"
+	"github.com/plprobelab/go-kademlia/routing"
 	"github.com/plprobelab/go-kademlia/util"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -25,9 +25,9 @@ type SimpleRT struct {
 	bucketSize int
 }
 
-var _ routingtable.RoutingTable = (*SimpleRT)(nil)
+var _ routing.Table = (*SimpleRT)(nil)
 
-func NewSimpleRT(self key.KadKey, bucketSize int) *SimpleRT {
+func New(self key.KadKey, bucketSize int) *SimpleRT {
 	rt := SimpleRT{
 		self:       self,
 		buckets:    make([][]peerInfo, 0),
@@ -78,7 +78,7 @@ func (rt *SimpleRT) AddPeer(ctx context.Context, id address.NodeID) (bool, error
 }
 
 func (rt *SimpleRT) addPeer(ctx context.Context, kadId key.KadKey, id address.NodeID) (bool, error) {
-	_, span := util.StartSpan(ctx, "simplert.addPeer", trace.WithAttributes(
+	_, span := util.StartSpan(ctx, "routing.simple.addPeer", trace.WithAttributes(
 		attribute.String("KadID", kadId.String()),
 		attribute.Stringer("PeerID", id),
 	))
@@ -170,7 +170,7 @@ func (rt *SimpleRT) alreadyInBucket(kadId key.KadKey, bucketId int) bool {
 }
 
 func (rt *SimpleRT) RemoveKey(ctx context.Context, kadId key.KadKey) (bool, error) {
-	_, span := util.StartSpan(ctx, "simplert.removePeer", trace.WithAttributes(
+	_, span := util.StartSpan(ctx, "routing.simple.removeKey", trace.WithAttributes(
 		attribute.String("KadID", kadId.String()),
 	))
 	defer span.End()
@@ -198,7 +198,7 @@ func (rt *SimpleRT) RemoveKey(ctx context.Context, kadId key.KadKey) (bool, erro
 }
 
 func (rt *SimpleRT) Find(ctx context.Context, kadId key.KadKey) (address.NodeID, error) {
-	_, span := util.StartSpan(ctx, "simplert.removePeer", trace.WithAttributes(
+	_, span := util.StartSpan(ctx, "routing.simple.find", trace.WithAttributes(
 		attribute.String("KadID", kadId.String()),
 	))
 	defer span.End()
@@ -221,7 +221,7 @@ func (rt *SimpleRT) Find(ctx context.Context, kadId key.KadKey) (address.NodeID,
 // TODO: not exactly working as expected
 // returns min(n, bucketSize) peers from the bucket matching the given key
 func (rt *SimpleRT) NearestPeers(ctx context.Context, kadId key.KadKey, n int) ([]address.NodeID, error) {
-	_, span := util.StartSpan(ctx, "simplert.nearestPeers", trace.WithAttributes(
+	_, span := util.StartSpan(ctx, "routing.simple.nearestPeers", trace.WithAttributes(
 		attribute.String("KadID", kadId.String()),
 		attribute.Int("n", int(n)),
 	))
