@@ -78,7 +78,10 @@ func TestFakeEndpoint(t *testing.T) {
 	fakeEndpoint0 := NewFakeEndpoint(node0, sched0, router)
 	rt0 := simplert.NewSimpleRT(node0.Key(), 2)
 	serv0 := basicserver.NewBasicServer(rt0, fakeEndpoint0)
-	fakeEndpoint0.AddRequestHandler(protoID, nil, serv0.HandleRequest)
+	err = fakeEndpoint0.AddRequestHandler(protoID, nil, serv0.HandleRequest)
+	require.NoError(t, err)
+	err = fakeEndpoint0.AddRequestHandler(protoID, nil, nil)
+	require.Equal(t, endpoint.ErrNilRequestHandler, err)
 	// remove a request handler that doesn't exist
 	fakeEndpoint0.RemoveRequestHandler("/test/0.0.1")
 

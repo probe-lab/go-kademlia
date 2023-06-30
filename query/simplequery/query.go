@@ -18,8 +18,15 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// note that the returned []address.NodeID are expected to be of the same type
+// as the type returned by the routing table's NearestPeers method. the
+// address.NodeID returned by resp.CloserNodes() is not necessarily of the same
+// type as the one returned by the routing table's NearestPeers method. so
+// address.NodeID s may need to be converted in this function.
 type HandleResultFn func(context.Context, address.NodeID,
 	message.MinKadResponseMessage) (bool, []address.NodeID)
+
+type NotifyFailureFn func(context.Context)
 
 type SimpleQuery struct {
 	ctx          context.Context
@@ -37,8 +44,10 @@ type SimpleQuery struct {
 	inflightRequests int // requests that are either in flight or scheduled
 	peerlist         *peerList
 
-	// success condition
+	// response handling
 	handleResultFn HandleResultFn
+	// failure callback
+	notifyFailureFn NotifyFailureFn
 }
 
 // NewSimpleQuery creates a new SimpleQuery. It initializes the query by adding
@@ -49,7 +58,7 @@ type SimpleQuery struct {
 // parameters. The query keeps track of the closest known peers to the target
 // key, and the peers that have been queried so far.
 func NewSimpleQuery(ctx context.Context, req message.MinKadRequestMessage,
-	opts ...Option) *SimpleQuery {
+	opts ...Option) (*SimpleQuery, error) {
 
 	ctx, span := util.StartSpan(ctx, "SimpleQuery.NewSimpleQuery",
 		trace.WithAttributes(attribute.String("Target", req.Target().Hex())))
@@ -59,46 +68,68 @@ func NewSimpleQuery(ctx context.Context, req message.MinKadRequestMessage,
 	var cfg Config
 	if err := cfg.Apply(append([]Option{DefaultConfig}, opts...)...); err != nil {
 		span.RecordError(err)
-		return nil
+		return nil, err
 	}
 
 	closestPeers, err := cfg.RoutingTable.NearestPeers(ctx, req.Target(),
 		cfg.NumberUsefulCloserPeers)
 	if err != nil {
 		span.RecordError(err)
-		return nil
+		return nil, err
 	}
 
 	pl := newPeerList(req.Target())
 	pl.addToPeerlist(closestPeers)
 
 	q := &SimpleQuery{
-		ctx:            ctx,
-		req:            req,
-		protoID:        cfg.ProtocolID,
-		concurrency:    cfg.Concurrency,
-		timeout:        cfg.RequestTimeout,
-		peerstoreTTL:   cfg.PeerstoreTTL,
-		rt:             cfg.RoutingTable,
-		msgEndpoint:    cfg.Endpoint,
-		sched:          cfg.Scheduler,
-		handleResultFn: cfg.HandleResultsFunc,
-		peerlist:       pl,
+		ctx:             ctx,
+		req:             req,
+		protoID:         cfg.ProtocolID,
+		concurrency:     cfg.Concurrency,
+		timeout:         cfg.RequestTimeout,
+		peerstoreTTL:    cfg.PeerstoreTTL,
+		rt:              cfg.RoutingTable,
+		msgEndpoint:     cfg.Endpoint,
+		sched:           cfg.Scheduler,
+		handleResultFn:  cfg.HandleResultsFunc,
+		notifyFailureFn: cfg.NotifyFailureFunc,
+		peerlist:        pl,
 	}
 
-	// we don't want more pending requests than the number of peers we can query
-	requestsEvents := q.concurrency
-	if len(closestPeers) < q.concurrency {
-		requestsEvents = len(closestPeers)
+	q.enqueueNewRequests(ctx)
+
+	return q, nil
+}
+
+func (q *SimpleQuery) enqueueNewRequests(ctx context.Context) {
+	ctx, span := util.StartSpan(ctx, "SimpleQuery.enqueueNewRequests")
+	defer span.End()
+
+	// we always want to have the maximal number of requests in flight
+	newRequestsToSend := q.concurrency - q.inflightRequests
+	if q.peerlist.queuedCount < newRequestsToSend {
+		newRequestsToSend = q.peerlist.queuedCount
 	}
-	for i := 0; i < requestsEvents; i++ {
-		// add concurrency requests to the event queue
+
+	if newRequestsToSend == 0 && q.inflightRequests == 0 {
+		// no more requests to send and no requests in flight, query has failed
+		// and is done
+		q.done = true
+		span.AddEvent("all peers queried")
+		q.notifyFailureFn(ctx)
+	}
+
+	span.AddEvent("newRequestsToSend: " + strconv.Itoa(newRequestsToSend) +
+		" q.inflightRequests: " + strconv.Itoa(q.inflightRequests))
+
+	for i := 0; i < newRequestsToSend; i++ {
+		// add new pending request(s) for this query to eventqueue
 		q.sched.EnqueueAction(ctx, ba.BasicAction(q.newRequest))
-	}
-	span.AddEvent("Enqueued " + strconv.Itoa(requestsEvents) + " SimpleQuery.newRequest")
-	q.inflightRequests = requestsEvents
 
-	return q
+	}
+	q.inflightRequests += newRequestsToSend
+	span.AddEvent("Enqueued " + strconv.Itoa(newRequestsToSend) +
+		" SimpleQuery.newRequest")
 }
 
 func (q *SimpleQuery) checkIfDone() error {
@@ -131,10 +162,12 @@ func (q *SimpleQuery) newRequest(ctx context.Context) {
 	}
 
 	id := q.peerlist.popClosestQueued()
-	if id == nil || id.String() == "" {
-		// TODO: handle this case
+	if id == nil {
+		// TODO: should never happen
+		q.done = true
 		span.AddEvent("all peers queried")
 		q.inflightRequests--
+		q.notifyFailureFn(ctx)
 		return
 	}
 	span.AddEvent("peer selected: " + id.String())
@@ -211,23 +244,7 @@ func (q *SimpleQuery) handleResponse(ctx context.Context, id address.NodeID, res
 
 	q.peerlist.addToPeerlist(usefulNodeID)
 
-	// we always want to have the maximal number of requests in flight
-	newRequestsToSend := q.concurrency - q.inflightRequests
-	if q.peerlist.queuedCount < newRequestsToSend {
-		newRequestsToSend = q.peerlist.queuedCount
-	}
-
-	span.AddEvent("newRequestsToSend: " + strconv.Itoa(newRequestsToSend) + " q.inflightRequests: " + strconv.Itoa(q.inflightRequests))
-
-	for i := 0; i < newRequestsToSend; i++ {
-		// add new pending request(s) for this query to eventqueue
-		q.sched.EnqueueAction(ctx, ba.BasicAction(q.newRequest))
-
-	}
-	q.inflightRequests += newRequestsToSend
-	span.AddEvent("Enqueued " + strconv.Itoa(newRequestsToSend) +
-		" SimpleQuery.newRequest")
-
+	q.enqueueNewRequests(ctx)
 }
 
 func (q *SimpleQuery) requestError(ctx context.Context, id address.NodeID, err error) {
@@ -250,6 +267,5 @@ func (q *SimpleQuery) requestError(ctx context.Context, id address.NodeID, err e
 
 	q.peerlist.updatePeerStatusInPeerlist(id, unreachable)
 
-	// add pending request for this query to eventqueue
-	q.sched.EnqueueAction(ctx, ba.BasicAction(q.newRequest))
+	q.enqueueNewRequests(ctx)
 }

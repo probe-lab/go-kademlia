@@ -143,6 +143,13 @@ func TestLibp2pEndpoint(t *testing.T) {
 		wg.Done()
 	})
 	require.NoError(t, err)
+	go func() {
+		// AsyncDialAndReport adds the dial action to the event queue, so we
+		// need to run the scheduler
+		for !scheds[0].RunOne(ctx) {
+			time.Sleep(time.Millisecond)
+		}
+	}()
 	wg.Wait()
 	// test async dial and report from 0 to 1 (already connected)
 	err = endpoints[0].AsyncDialAndReport(ctx, ids[1], func(ctx context.Context, success bool) {
@@ -155,6 +162,13 @@ func TestLibp2pEndpoint(t *testing.T) {
 		require.False(t, success)
 		wg.Done()
 	})
+	go func() {
+		// AsyncDialAndReport adds the dial action to the event queue, so we
+		// need to run the scheduler
+		for !scheds[0].RunOne(ctx) {
+			time.Sleep(time.Millisecond)
+		}
+	}()
 	wg.Wait()
 	// test asyc dial with invalid peerid
 	err = endpoints[0].AsyncDialAndReport(ctx, invalidID, nil)
@@ -168,6 +182,8 @@ func TestLibp2pEndpoint(t *testing.T) {
 	}
 	err = endpoints[1].AddRequestHandler(protoID, &ipfsv1.Message{}, requestHandler)
 	require.NoError(t, err)
+	err = endpoints[1].AddRequestHandler(protoID, &ipfsv1.Message{}, nil)
+	require.Equal(t, endpoint.ErrNilRequestHandler, err)
 
 	// send request from 0 to 1
 	wg.Add(1)

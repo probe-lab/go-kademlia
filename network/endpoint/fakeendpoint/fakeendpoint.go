@@ -194,9 +194,9 @@ func (e *FakeEndpoint) HandleMessage(ctx context.Context, id address.NodeID,
 		return
 	}
 
-	if _, ok := e.serverProtos[protoID]; ok {
+	if handler, ok := e.serverProtos[protoID]; ok && handler != nil {
 		// it isn't a response, so treat it as a request
-		resp, err := e.serverProtos[protoID](ctx, id, msg)
+		resp, err := handler(ctx, id, msg)
 		if err != nil {
 			span.RecordError(err)
 			return
@@ -207,6 +207,9 @@ func (e *FakeEndpoint) HandleMessage(ctx context.Context, id address.NodeID,
 
 func (e *FakeEndpoint) AddRequestHandler(protoID address.ProtocolID,
 	req message.MinKadMessage, reqHandler endpoint.RequestHandlerFn) error {
+	if reqHandler == nil {
+		return endpoint.ErrNilRequestHandler
+	}
 	e.serverProtos[protoID] = reqHandler
 	return nil
 }

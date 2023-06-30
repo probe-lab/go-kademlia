@@ -33,6 +33,9 @@ type Config struct {
 	// for a request. It is used to determine whether the query should be
 	// stopped and whether the peerlist should be updated.
 	HandleResultsFunc HandleResultFn
+	// NotifyFailureFn is a function that is called when the query fails. It is
+	// used to notify the user that the query failed.
+	NotifyFailureFunc NotifyFailureFn
 
 	// RoutingTable is the routing table used to find closer peers. It is
 	// updated with newly discovered peers.
@@ -79,6 +82,7 @@ var DefaultConfig = func(cfg *Config) error {
 		resp message.MinKadResponseMessage) (bool, []address.NodeID) {
 		return false, resp.CloserNodes()
 	}
+	cfg.NotifyFailureFunc = func(context.Context) {}
 
 	return nil
 }
@@ -130,6 +134,16 @@ func WithHandleResultsFunc(fn HandleResultFn) Option {
 			return fmt.Errorf("HandleResultsFunc cannot be nil")
 		}
 		cfg.HandleResultsFunc = fn
+		return nil
+	}
+}
+
+func WithNotifyFailureFunc(fn NotifyFailureFn) Option {
+	return func(cfg *Config) error {
+		if fn == nil {
+			return fmt.Errorf("NotifyFailureFunc cannot be nil")
+		}
+		cfg.NotifyFailureFunc = fn
 		return nil
 	}
 }

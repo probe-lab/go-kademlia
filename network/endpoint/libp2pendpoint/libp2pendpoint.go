@@ -92,7 +92,9 @@ func (e *Libp2pEndpoint) AsyncDialAndReport(ctx context.Context,
 
 		if reportFn != nil {
 			// report dial result where it is needed
-			reportFn(ctx, success)
+			e.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
+				reportFn(ctx, success)
+			}))
 		}
 	}()
 	return nil
@@ -273,6 +275,9 @@ func (e *Libp2pEndpoint) AddRequestHandler(protoID address.ProtocolID,
 	protoReq, ok := req.(message.ProtoKadMessage)
 	if !ok {
 		return ErrRequireProtoKadMessage
+	}
+	if reqHandler == nil {
+		return endpoint.ErrNilRequestHandler
 	}
 	// when a new request comes in, we need to queue it
 	streamHandler := func(s network.Stream) {

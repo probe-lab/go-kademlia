@@ -63,7 +63,10 @@ func queryTest(ctx context.Context) {
 	schedA := ss.NewSimpleScheduler(clk)
 	endpointA := fakeendpoint.NewFakeEndpoint(selfA, schedA, router)
 	servA := basicserver.NewBasicServer(rtA, endpointA)
-	endpointA.AddRequestHandler(protoID, servA.HandleRequest, nil)
+	err = endpointA.AddRequestHandler(protoID, nil, servA.HandleRequest)
+	if err != nil {
+		panic(err)
+	}
 
 	// create peer B
 	pidB, err := peer.Decode("12BoooooBETA")
@@ -78,7 +81,10 @@ func queryTest(ctx context.Context) {
 	schedB := ss.NewSimpleScheduler(clk)
 	endpointB := fakeendpoint.NewFakeEndpoint(selfB, schedB, router)
 	servB := basicserver.NewBasicServer(rtB, endpointB)
-	endpointB.AddRequestHandler(protoID, servB.HandleRequest, nil)
+	err = endpointB.AddRequestHandler(protoID, nil, servB.HandleRequest)
+	if err != nil {
+		panic(err)
+	}
 
 	// create peer C
 	pidC, err := peer.Decode("12BooooGAMMA")
@@ -93,7 +99,10 @@ func queryTest(ctx context.Context) {
 	schedC := ss.NewSimpleScheduler(clk)
 	endpointC := fakeendpoint.NewFakeEndpoint(selfC, schedC, router)
 	servC := basicserver.NewBasicServer(rtC, endpointC)
-	endpointC.AddRequestHandler(protoID, servC.HandleRequest, nil)
+	err = endpointC.AddRequestHandler(protoID, nil, servC.HandleRequest)
+	if err != nil {
+		panic(err)
+	}
 
 	// connect peer A and B
 	endpointA.MaybeAddToPeerstore(ctx, naddrB, peerstoreTTL)
