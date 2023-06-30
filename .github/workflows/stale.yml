@@ -1,9 +1,0 @@
-name: Close and mark stale issue
-
-on:
-  schedule:
-  - cron: '0 0 * * *'
-
-jobs:
-  stale:
-    uses: pl-strflt/.github/.github/workflows/reusable-stale-issue.yml@v0.3
