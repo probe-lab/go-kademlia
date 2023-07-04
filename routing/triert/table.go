@@ -18,7 +18,7 @@ import (
 var ErrKeyWrongLength = errors.New("key has wrong length")
 
 // TrieRT is a routing table backed by a Xor Trie which offers good scalablity and performance
-// for large networks
+// for large networks. All exported methods are safe for concurrent use.
 type TrieRT struct {
 	self key.KadKey
 
