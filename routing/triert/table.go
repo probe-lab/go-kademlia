@@ -73,7 +73,7 @@ func (rt *TrieRT) AddPeer(ctx context.Context, node address.NodeID) (bool, error
 	for k, v := range keyNodes {
 		keyNodesNext[k] = v
 	}
-	keyNodesNext[kk.Hex()] = node
+	keyNodesNext[string(kk)] = node
 
 	rt.keyNodes.Store(keyNodesNext)
 	rt.keys.Store(keysNext)
@@ -100,10 +100,10 @@ func (rt *TrieRT) RemoveKey(ctx context.Context, kk key.KadKey) (bool, error) {
 	// make a copy of keyNodes without removed key
 	// could avoid this if we held key/nodeid tuple in the trie
 	keyNodes := rt.keyNodes.Load().(map[string]address.NodeID)
-	if _, exists := keyNodes[kk.Hex()]; exists {
+	if _, exists := keyNodes[string(kk)]; exists {
 		keyNodesNext := make(map[string]address.NodeID, len(keyNodes))
 		for k, v := range keyNodes {
-			if k == kk.Hex() {
+			if k == string(kk) {
 				continue
 			}
 			keyNodesNext[k] = v
@@ -130,7 +130,7 @@ func (rt *TrieRT) NearestPeers(ctx context.Context, kk key.KadKey, n int) ([]add
 
 	nodes := make([]address.NodeID, 0, len(closestKeys))
 	for _, c := range closestKeys {
-		if id, ok := keyNodes[string(key.KadKey(c).Hex())]; ok {
+		if id, ok := keyNodes[string(key.KadKey(c))]; ok {
 			nodes = append(nodes, id)
 		}
 	}
@@ -182,7 +182,7 @@ func (rt *TrieRT) Find(ctx context.Context, kk key.KadKey) (address.NodeID, erro
 
 	keyNodes := rt.keyNodes.Load().(map[string]address.NodeID)
 
-	if id, ok := keyNodes[string(key.KadKey(kk).Hex())]; ok {
+	if id, ok := keyNodes[string(key.KadKey(kk))]; ok {
 		return id, nil
 	}
 
