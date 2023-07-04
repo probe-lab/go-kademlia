@@ -67,3 +67,11 @@ func (a KadKey) Equal(b KadKey) (bool, error) {
 	cmp, err := a.Compare(b)
 	return cmp == 0, err
 }
+
+func (k KadKey) BitAt(offset int) int {
+	if k[offset/8]&(byte(1)<<(7-offset%8)) == 0 {
+		return 0
+	} else {
+		return 1
+	}
+}

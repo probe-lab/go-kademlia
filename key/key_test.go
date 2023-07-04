@@ -107,3 +107,17 @@ func TestCompare(t *testing.T) {
 	_, err := keys[0].Compare(invalidKey)
 	require.Equal(t, ErrInvalidKey(4), err)
 }
+
+func TestBitAt(t *testing.T) {
+	kk := KadKey([]byte{0b10010011, 0b11110100})
+	require.Equal(t, 1, kk.BitAt(0))
+	require.Equal(t, 0, kk.BitAt(1))
+	require.Equal(t, 0, kk.BitAt(2))
+	require.Equal(t, 1, kk.BitAt(3))
+	require.Equal(t, 0, kk.BitAt(4))
+	require.Equal(t, 0, kk.BitAt(5))
+	require.Equal(t, 1, kk.BitAt(6))
+	require.Equal(t, 1, kk.BitAt(7))
+	require.Equal(t, 1, kk.BitAt(8))
+	require.Equal(t, 0, kk.BitAt(15))
+}
