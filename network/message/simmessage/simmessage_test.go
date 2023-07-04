@@ -23,7 +23,7 @@ func TestSimRequest(t *testing.T) {
 }
 
 func TestSimResponse(t *testing.T) {
-	closerPeers := []address.NodeID{si.StringID("peer1"), si.StringID("peer2")}
+	closerPeers := []address.NodeAddr{si.StringID("peer1"), si.StringID("peer2")}
 	msg := NewSimResponse(closerPeers)
 
 	require.Nil(t, msg.Target())

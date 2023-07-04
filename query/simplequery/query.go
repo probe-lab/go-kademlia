@@ -78,7 +78,7 @@ func NewSimpleQuery(ctx context.Context, req message.MinKadRequestMessage,
 		return nil, err
 	}
 
-	pl := newPeerList(req.Target())
+	pl := newPeerList(req.Target(), cfg.Endpoint)
 	pl.addToPeerlist(closestPeers)
 
 	q := &SimpleQuery{
@@ -163,11 +163,7 @@ func (q *SimpleQuery) newRequest(ctx context.Context) {
 
 	id := q.peerlist.popClosestQueued()
 	if id == nil {
-		// TODO: should never happen
-		q.done = true
-		span.AddEvent("all peers queried")
 		q.inflightRequests--
-		q.notifyFailureFn(ctx)
 		return
 	}
 	span.AddEvent("peer selected: " + id.String())
@@ -220,11 +216,16 @@ func (q *SimpleQuery) handleResponse(ctx context.Context, id address.NodeID, res
 		q.rt.AddPeer(ctx, id)
 	}
 
-	q.peerlist.updatePeerStatusInPeerlist(id, queried)
+	q.peerlist.queriedPeer(id)
 
 	for i, id := range closerPeers {
-		c, err := id.Key().Compare(q.rt.Self())
-		if err == nil && c == 0 {
+		c, err := id.NodeID().Key().Compare(q.rt.Self())
+		if err != nil {
+			// wrong format of kad key, skip
+			span.AddEvent("remote peer provided wrong format of kad key")
+			continue
+		}
+		if c == 0 {
 			// don't add self to queries or routing table
 			span.AddEvent("remote peer provided self as closer peer")
 			closerPeers = append(closerPeers[:i], closerPeers[i+1:]...)
@@ -234,7 +235,7 @@ func (q *SimpleQuery) handleResponse(ctx context.Context, id address.NodeID, res
 		q.msgEndpoint.MaybeAddToPeerstore(ctx, id, q.peerstoreTTL)
 	}
 
-	stop, usefulNodeID := q.handleResultFn(ctx, id, resp)
+	stop, usefulNodeIDs := q.handleResultFn(ctx, id, resp)
 	if stop {
 		// query is done, don't send any more requests
 		span.AddEvent("query over")
@@ -242,7 +243,19 @@ func (q *SimpleQuery) handleResponse(ctx context.Context, id address.NodeID, res
 		return
 	}
 
-	q.peerlist.addToPeerlist(usefulNodeID)
+	// remove q.self from usefulNodeIDs
+	writeIndex := 0
+	// Iterate over the slice and copy elements that do not match the value
+	for _, id := range usefulNodeIDs {
+		if c, err := q.rt.Self().Compare(id.Key()); err == nil && c != 0 {
+			// id is valid and isn't self
+			usefulNodeIDs[writeIndex] = id
+			writeIndex++
+		}
+	}
+	usefulNodeIDs = usefulNodeIDs[:writeIndex]
+
+	q.peerlist.addToPeerlist(usefulNodeIDs)
 
 	q.enqueueNewRequests(ctx)
 }
@@ -265,7 +278,7 @@ func (q *SimpleQuery) requestError(ctx context.Context, id address.NodeID, err e
 		return
 	}
 
-	q.peerlist.updatePeerStatusInPeerlist(id, unreachable)
+	q.peerlist.unreachablePeer(id)
 
 	q.enqueueNewRequests(ctx)
 }

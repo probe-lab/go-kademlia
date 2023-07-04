@@ -56,7 +56,7 @@ func TestFindPeerResponse(t *testing.T) {
 	fakeEndpoint := fakeendpoint.NewFakeEndpoint(selfAddr, nil, nil)
 
 	nPeers := 5
-	closerPeers := make([]address.NodeID, nPeers)
+	closerPeers := make([]address.NodeAddr, nPeers)
 	closerIds := make([]address.NodeID, nPeers)
 	for i := 0; i < nPeers; i++ {
 		s := strconv.Itoa(2 + i)
@@ -86,7 +86,7 @@ func TestCornerCases(t *testing.T) {
 	require.Nil(t, resp.Target())
 	require.Equal(t, 0, len(resp.CloserNodes()))
 
-	fakeEndpoint := fakeendpoint.NewFakeEndpoint(peerid.PeerID{}, nil, nil)
+	fakeEndpoint := fakeendpoint.NewFakeEndpoint(addrinfo.AddrInfo{}, nil, nil)
 	n0, err := peer.Decode("1D3oooUnknownPeer")
 	require.NoError(t, err)
 	ids = append(ids, &peerid.PeerID{ID: n0})

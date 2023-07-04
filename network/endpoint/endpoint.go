@@ -22,7 +22,7 @@ type ResponseHandlerFn func(context.Context, message.MinKadResponseMessage, erro
 type Endpoint interface {
 	// MaybeAddToPeerstore adds the given address to the peerstore if it is
 	// valid and if it is not already there.
-	MaybeAddToPeerstore(context.Context, address.NodeID, time.Duration) error
+	MaybeAddToPeerstore(context.Context, address.NodeAddr, time.Duration) error
 	// SendRequestHandleResponse sends a request to the given peer and handles
 	// the response with the given handler.
 	SendRequestHandleResponse(context.Context, address.ProtocolID, address.NodeID,
@@ -32,7 +32,7 @@ type Endpoint interface {
 	// KadKey returns the KadKey of the local node.
 	KadKey() key.KadKey
 	// NetworkAddress returns the network address of the given peer (if known).
-	NetworkAddress(address.NodeID) (address.NodeID, error)
+	NetworkAddress(address.NodeID) (address.NodeAddr, error)
 }
 
 // ServerEndpoint is a Kademlia endpoint that can handle requests from remote

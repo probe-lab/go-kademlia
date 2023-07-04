@@ -1,254 +1,298 @@
 package simplequery
 
 import (
+	"context"
 	"testing"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-kademlia/network/address/kadaddr"
+	"github.com/plprobelab/go-kademlia/network/address/kadid"
 	"github.com/plprobelab/go-kademlia/network/address/peerid"
+	"github.com/plprobelab/go-kademlia/network/endpoint/fakeendpoint"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAddPeers(t *testing.T) {
+	target := kadid.NewKadID([]byte{0x00})
+
 	// create empty peer list
-	pl := newPeerList(make([]byte, 32))
+	pl := newPeerList(target.Key(), nil)
 
 	require.Nil(t, pl.closest)
 	require.Nil(t, pl.closestQueued)
 
-	// add initial peers
-	nPeers := 3
-	peerids := make([]address.NodeID, nPeers+1)
-	for i := 0; i < nPeers; i++ {
-		peerids[i] = peerid.PeerID{ID: peer.ID(byte(i))}
+	initialIds := []address.NodeID{
+		kadid.NewKadID([]byte{0xa0}),
+		kadid.NewKadID([]byte{0x08}),
+		kadid.NewKadID([]byte{0x20}),
+		kadid.NewKadID([]byte{0xa0}), // duplicate with initialIds[0]
 	}
-	peerids[nPeers] = peerid.PeerID{ID: peer.ID(byte(0))} // duplicate with peerids[0]
-
-	// distances
-	// peerids[0]: 6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d
-	// peerids[1]: 4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a
-	// peerids[2]: dbc1b4c900ffe48d575b5da5c638040125f65db0fe3e24494b76ea986457d986
-	// peerids[3]: 6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d
 
 	// add 4 peers (incl. 1 duplicate)
-	pl.addToPeerlist(peerids)
-
-	require.Equal(t, nPeers, pl.queuedCount)
+	pl.addToPeerlist(initialIds)
+	require.Equal(t, len(initialIds)-1, pl.queuedCount)
 
 	curr := pl.closest
-	// verify that closest peer is peerids[1]
-	require.Equal(t, peerids[1], curr.id)
+	// verify that closest peer is initialIds[1]
+	require.Equal(t, initialIds[1], curr.id)
+	// verify that closestQueued peer is initialIds[1]
+	require.Equal(t, initialIds[1], pl.closestQueued.id)
 	curr = curr.next
-	// second closest peer should be peerids[0]
-	require.Equal(t, peerids[0], curr.id)
+	// verify that next peer is initialIds[2]
+	require.Equal(t, initialIds[2], curr.id)
 	curr = curr.next
-	// third closest peer should be peerids[2]
-	require.Equal(t, peerids[2], curr.id)
-
+	// verify that next peer is initialIds[0]
+	require.Equal(t, initialIds[0], curr.id)
 	// end of the list
 	require.Nil(t, curr.next)
 
-	// verify that closestQueued peer is peerids[0]
-	require.Equal(t, peerids[1], pl.closestQueued.id)
-
-	// add more peers
-	nPeers = 5
-	newPeerids := make([]address.NodeID, nPeers+2)
-	for i := 0; i < nPeers; i++ {
-		newPeerids[i] = peerid.PeerID{ID: peer.ID(byte(10 + i))}
+	additionalIds := []address.NodeID{
+		kadid.NewKadID([]byte{0x40}),
+		kadid.NewKadID([]byte{0x20}), // duplicate with initialIds[2]
+		kadid.NewKadID([]byte{0x60}),
+		kadid.NewKadID([]byte{0x80}),
+		kadid.NewKadID([]byte{0x60}), // duplicate additionalIds[2]
+		kadid.NewKadID([]byte{0x18}),
+		kadid.NewKadID([]byte{0xf0}),
 	}
-	newPeerids[nPeers] = peerid.PeerID{ID: peer.ID(byte(10))}  // duplicate with newPeerids[0]
-	newPeerids[nPeers+1] = peerid.PeerID{ID: peer.ID(byte(1))} // duplicate with peerids[1]
 
-	// distances
-	// newPeerids[0]: 01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
-	// newPeerids[1]: e7cf46a078fed4fafd0b5e3aff144802b853f8ae459a4f0c14add3314b7cc3a6
-	// newPeerids[2]: ef6cbd2161eaea7943ce8693b9824d23d1793ffb1c0fca05b600d3899b44c977
-	// newPeerids[3]: 9d1e0e2d9459d06523ad13e28a4093c2316baafe7aec5b25f30eba2e113599c4
-	// newPeerids[4]: 4d7b3ef7300acf70c892d8327db8272f54434adbc61a4e130a563cb59a0d0f47
-	// newPeerids[5]: 01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b
-	// newPeerids[6]: 4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a
-
-	// add 7 peers (incl. 2 duplicates)
-	pl.addToPeerlist(newPeerids)
-
-	require.Equal(t, 8, pl.queuedCount)
-
-	// order is now as follows:
-	order := []address.NodeID{newPeerids[0], peerids[1], newPeerids[4], peerids[0], newPeerids[3],
-		peerids[2], newPeerids[1], newPeerids[2]}
+	// add 7 more peers (incl. 2 duplicates)
+	pl.addToPeerlist(additionalIds)
+	require.Equal(t, len(initialIds)-1+len(additionalIds)-2, pl.queuedCount)
 
 	curr = pl.closest
-	for _, p := range order {
-		require.Equal(t, p, curr.id)
-		curr = curr.next
-	}
-	require.Nil(t, curr)
+	// verify that closest peer is initialIds[1] 0x08
+	require.Equal(t, initialIds[1], curr.id)
+	// verify that closestQueued peer is initialIds[1] 0x08
+	require.Equal(t, initialIds[1], pl.closestQueued.id)
+	curr = curr.next
+	// verify that next peer is additionalIds[5] 0x18
+	require.Equal(t, additionalIds[5], curr.id)
+	curr = curr.next
+	// verify that next peer is initialIds[2] 0x20
+	require.Equal(t, initialIds[2], curr.id)
+	curr = curr.next
+	// verify that next peer is additionalIds[0] 0x40
+	require.Equal(t, additionalIds[0], curr.id)
+	curr = curr.next
+	// verify that next peer is additionalIds[2] 0x60
+	require.Equal(t, additionalIds[2], curr.id)
+	curr = curr.next
+	// verify that next peer is additionalIds[3] 0x80
+	require.Equal(t, additionalIds[3], curr.id)
+	curr = curr.next
+	// verify that next peer is initialIds[0] 0xa0
+	require.Equal(t, initialIds[0], curr.id)
+	curr = curr.next
+	// verify that next peer is additionalIds[6] 0xf0
+	require.Equal(t, additionalIds[6], curr.id)
+	// end of the list
+	require.Nil(t, curr.next)
 
-	// verify that closestQueued peer is peerids[0]
-	require.Equal(t, newPeerids[0], pl.closestQueued.id)
+	// add 1 more peer, the closest to target
+	newId := kadid.NewKadID([]byte{0x00})
+	pl.addToPeerlist([]address.NodeID{newId})
+	require.Equal(t, len(initialIds)-1+len(additionalIds)-2+1, pl.queuedCount)
 
-	// add a single peer that isn't the closest one
-	newPeer := peerid.PeerID{ID: peer.ID(byte(20))}
+	// it must be the closest peer
+	require.Equal(t, newId, pl.closest.id)
+	require.Equal(t, newId, pl.closestQueued.id)
 
-	pl.addToPeerlist([]address.NodeID{newPeer})
-	order = append(order[:5], order[4:]...)
-	order[4] = newPeer
+	// add empty list
+	pl.addToPeerlist([]address.NodeID{})
+	require.Equal(t, len(initialIds)-1+len(additionalIds)-2+1, pl.queuedCount)
 
-	curr = pl.closest
-	for _, p := range order {
-		require.Equal(t, p, curr.id)
-		curr = curr.next
-	}
-
-	require.Nil(t, curr)
+	// add list containing nil element
+	pl.addToPeerlist([]address.NodeID{nil})
+	require.Equal(t, len(initialIds)-1+len(additionalIds)-2+1, pl.queuedCount)
 }
 
-func TestPeerlistCornerCases(t *testing.T) {
-	// different empty peerid lists
-	emptyPeeridLists := [][]address.NodeID{
-		{},
-		{peerid.PeerID{ID: peer.ID("")}},
-		make([]address.NodeID, 3),
-	}
+func TestChangeStatus(t *testing.T) {
+	target := kadid.NewKadID([]byte{0x00})
 
-	for _, peerids := range emptyPeeridLists {
-		// adding them to a peerlist should result in an empty list
-		require.Nil(t, sliceToPeerInfos(make([]byte, 32), peerids))
-
-		pl := newPeerList(make([]byte, 32))
-		pl.addToPeerlist(peerids)
-		require.Nil(t, pl.closest)
-		require.Nil(t, pl.closestQueued)
-		require.Equal(t, 0, pl.queuedCount)
-	}
-
-	pl := newPeerList(make([]byte, 32))
-
-	singlePeerList0 := []address.NodeID{peerid.PeerID{ID: peer.ID(byte(0))}}
-	// 6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d
-	pl.addToPeerlist(singlePeerList0)
-	require.Equal(t, singlePeerList0[0], pl.closest.id)
-	require.Equal(t, singlePeerList0[0], pl.closestQueued.id)
-	require.Equal(t, 1, pl.queuedCount)
-
-	singlePeerList1 := []address.NodeID{peerid.PeerID{ID: peer.ID(byte(1))}}
-	// 4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a
-	pl.addToPeerlist(singlePeerList1)
-	require.Equal(t, singlePeerList1[0], pl.closest.id)
-	require.Equal(t, singlePeerList1[0], pl.closest.id)
-	require.Equal(t, 2, pl.queuedCount)
-
-	singlePeerList2 := []address.NodeID{peerid.PeerID{ID: peer.ID(byte(2))}}
-	// dbc1b4c900ffe48d575b5da5c638040125f65db0fe3e24494b76ea986457d986
-	pl.addToPeerlist(singlePeerList2)
-	require.Equal(t, 3, pl.queuedCount)
-
-	curr := pl.closest
-	require.Equal(t, singlePeerList1[0], curr.id)
-	curr = curr.next
-	require.Equal(t, singlePeerList0[0], curr.id)
-	curr = curr.next
-	require.Equal(t, singlePeerList2[0], curr.id)
-	curr = curr.next
-	require.Nil(t, curr)
-}
-
-func TestUpdatePeerStatusInPeerlist(t *testing.T) {
 	// create empty peer list
-	pl := newPeerList(make([]byte, 32))
+	pl := newPeerList(target.Key(), nil)
 
-	// add initial peers
-	nPeers := 3
-	peerids := make([]address.NodeID, nPeers)
-	for i := 0; i < nPeers; i++ {
-		peerids[i] = peerid.PeerID{ID: peer.ID(byte(i))}
-	}
-
-	pl.addToPeerlist(peerids)
-
-	require.Equal(t, 3, pl.queuedCount)
-
-	// initial queue state
-	// peerids[1], queued, 4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a
-	// peerids[0], queued, 6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d
-	// peerids[2], queued, dbc1b4c900ffe48d575b5da5c638040125f65db0fe3e24494b76ea986457d986
-
-	pl.updatePeerStatusInPeerlist(peerids[0], waiting)
-	require.Equal(t, 2, pl.queuedCount)
-	pl.updatePeerStatusInPeerlist(peerids[1], unreachable)
-	require.Equal(t, 1, pl.queuedCount)
-
-	curr := pl.closest
-	require.Equal(t, curr.status, unreachable)
-	curr = curr.next
-	require.Equal(t, curr.status, waiting)
-	curr = curr.next
-	require.Equal(t, curr.status, queued)
-	curr = curr.next
-	require.Nil(t, curr)
-}
-
-func TestPopClosestQueued(t *testing.T) {
-	// create empty peer list
-	pl := newPeerList(make([]byte, 32))
-
-	// add initial peers
-	nPeers := 3
-	peerids := make([]address.NodeID, nPeers)
-	for i := 0; i < nPeers; i++ {
-		peerids[i] = peerid.PeerID{ID: peer.ID(byte(i))}
-	}
-
-	pl.addToPeerlist(peerids)
-	require.Equal(t, 3, pl.queuedCount)
-
-	// initial queue state
-	// peerids[1], queued, 4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a
-	// peerids[0], queued, 6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d
-	// peerids[2], queued, dbc1b4c900ffe48d575b5da5c638040125f65db0fe3e24494b76ea986457d986
-
-	require.Equal(t, peerids[1], pl.popClosestQueued())
-	require.Equal(t, peerids[1], pl.closest.id)
-	require.Equal(t, peerids[0], pl.closestQueued.id)
-	require.Equal(t, 2, pl.queuedCount)
-	require.Equal(t, peerids[0], pl.popClosestQueued())
-	require.Equal(t, peerids[1], pl.closest.id)
-	require.Equal(t, peerids[2], pl.closestQueued.id)
-	require.Equal(t, 1, pl.queuedCount)
-	require.Equal(t, peerids[2], pl.popClosestQueued())
-	require.Equal(t, 0, pl.queuedCount)
-	require.Equal(t, nil, pl.popClosestQueued())
-	require.Equal(t, 0, pl.queuedCount)
-
-	pl = newPeerList(make([]byte, 32))
-
-	pl.addToPeerlist(peerids)
-	require.Equal(t, 3, pl.queuedCount)
-
-	// mark second item (peerids[0]) as waiting
-	pl.updatePeerStatusInPeerlist(peerids[0], waiting)
-	require.Equal(t, peerids[1], pl.closest.id)
-	require.Equal(t, peerids[1], pl.closestQueued.id)
-	require.Equal(t, 2, pl.queuedCount)
-
-	// pop closest queued (peerids[1])
-	require.Equal(t, peerids[1], pl.popClosestQueued())
-	require.Equal(t, peerids[1], pl.closest.id)
-	// peerids[2] is now closestQueued
-	require.Equal(t, peerids[2], pl.closestQueued.id)
-	require.Equal(t, 1, pl.queuedCount)
-
-	pl.updatePeerStatusInPeerlist(peerids[2], unreachable)
-	require.Equal(t, peerids[1], pl.closest.id)
-	require.Equal(t, 0, pl.queuedCount)
+	require.Nil(t, pl.closest)
 	require.Nil(t, pl.closestQueued)
-	require.Equal(t, 0, pl.queuedCount)
+	require.Nil(t, pl.popClosestQueued())
 
-	pl.updatePeerStatusInPeerlist(peerids[1], queued)
-	require.Equal(t, peerids[1], pl.closestQueued.id)
-	require.Equal(t, 1, pl.queuedCount)
-	pl.updatePeerStatusInPeerlist(peerids[2], queued)
-	require.Equal(t, peerids[1], pl.closestQueued.id)
-	require.Equal(t, 2, pl.queuedCount)
+	nPeers := 32
+	ids := make([]address.NodeID, nPeers)
+	for i := 0; i < nPeers; i++ {
+		ids[i] = kadid.NewKadID([]byte{byte(4 * i)})
+	}
+
+	// add peers
+	pl.addToPeerlist(ids)
+	require.Equal(t, nPeers, pl.queuedCount)
+
+	require.Equal(t, ids[0], pl.closest.id)
+	require.Equal(t, ids[0], pl.closestQueued.id)
+
+	var popCounter int
+	// change status of the closest peer
+	require.Equal(t, ids[popCounter], pl.popClosestQueued())
+	popCounter++
+	// ids[0] is still the closest
+	require.Equal(t, ids[0], pl.closest.id)
+	// ids[1] is now the closestQueued
+	require.Equal(t, ids[popCounter], pl.closestQueued.id)
+	require.Equal(t, ids[popCounter], pl.popClosestQueued())
+	popCounter++
+	// ids[2] is now the closestQueued
+	require.Equal(t, ids[popCounter], pl.closestQueued.id)
+
+	// mark ids[1] as queried
+	pl.queriedPeer(ids[1])
+	require.Equal(t, waiting, pl.closest.status)
+	require.Equal(t, queried, pl.closest.next.status)
+
+	// ids[2] cannot be set as unreachable (hasn't been waiting yet)
+	pl.unreachablePeer(ids[2])
+	require.Equal(t, queued, pl.closest.next.next.status)
+	// set ids[2] as waiting
+	require.Equal(t, ids[popCounter], pl.popClosestQueued())
+	popCounter++
+	require.Equal(t, waiting, pl.closest.next.next.status)
+	// set ids[2] as unreachable
+	pl.unreachablePeer(ids[2])
+	require.Equal(t, unreachable, pl.closest.next.next.status)
+
+	// inserting a new peer that isn't the absolute closest, but is now the
+	// closest queued peer
+	newID := kadid.NewKadID([]byte{0x05})
+	pl.addToPeerlist([]address.NodeID{newID})
+	require.Equal(t, newID, pl.closestQueued.id)
+	require.Equal(t, ids[0], pl.closest.id)
+}
+
+func TestMultiAddrs(t *testing.T) {
+	ctx := context.Background()
+	keylen := 32
+	self := kadid.NewKadID(append([]byte{0x80}, make([]byte, keylen-1)...))
+	ep := fakeendpoint.NewFakeEndpoint(self, nil, nil)
+
+	// create empty peer list
+	pl := newPeerList(make([]byte, keylen), ep)
+
+	require.Nil(t, pl.closest)
+	require.Nil(t, pl.closestQueued)
+
+	// create initial peers
+	nPeers := 5
+	ids := make([]address.NodeID, nPeers)
+	addrs := make([]*kadaddr.KadAddr, nPeers)
+	for i := 0; i < nPeers; i++ {
+		id := kadid.NewKadID(append([]byte{byte(16 * i)}, make([]byte, keylen-1)...))
+		ids[i] = id
+		addrs[i] = kadaddr.NewKadAddr(id, []string{})
+		ep.MaybeAddToPeerstore(ctx, addrs[i], 1)
+	}
+
+	// ids[0]: 0000...
+	// ids[1]: 1000...
+	// ids[2]: 2000...
+	// etc.
+
+	// add peers
+	pl.addToPeerlist(ids)
+	require.Equal(t, nPeers, pl.queuedCount)
+
+	var popCounter int
+	// change status of the closest peer
+	require.Equal(t, ids[popCounter], pl.popClosestQueued())
+	popCounter++
+	require.Equal(t, ids[popCounter], pl.popClosestQueued())
+	popCounter++
+
+	// change ids[1] from waiting to unreachable
+	require.Equal(t, waiting, pl.closest.next.status)
+	pl.unreachablePeer(ids[1])
+	require.Equal(t, unreachable, pl.closest.next.status)
+
+	// ids[1] is added again, with the same address, it should be ignored
+	pl.addToPeerlist([]address.NodeID{ids[1]})
+	require.Equal(t, unreachable, pl.closest.next.status)
+
+	// ids[1] added again, with a different address, its status should be queued
+	addrs[1].AddAddr("0")
+	ep.MaybeAddToPeerstore(ctx, addrs[1], 1)
+	pl.addToPeerlist([]address.NodeID{ids[1]})
+	require.Equal(t, queued, pl.closest.next.status)
+
+	// change ids[1] to waiting again
+	require.Equal(t, ids[1], pl.popClosestQueued())
+
+	// mark ids[1] as unreachable again
+	pl.unreachablePeer(ids[1])
+	require.Equal(t, unreachable, pl.closest.next.status)
+
+	// ids[1] added again with same address as before, should remain unreachable
+	pl.addToPeerlist([]address.NodeID{ids[1]})
+	require.Equal(t, unreachable, pl.closest.next.status)
+
+	// add new addr to ids[1]
+	addrs[1].AddAddr("1")
+	ep.MaybeAddToPeerstore(ctx, addrs[1], 1)
+	// add ids[1] again to peerlist, this time it should be queued
+	pl.addToPeerlist([]address.NodeID{ids[1]})
+	require.Equal(t, queued, pl.closest.next.status)
+	require.Equal(t, ids[1], pl.popClosestQueued())
+
+	// ids[0] is still waiting
+	addrs[0].AddAddr("0")
+	ep.MaybeAddToPeerstore(ctx, addrs[0], 1)
+	// add ids[0] new address to peerlist
+	pl.addToPeerlist([]address.NodeID{ids[0]})
+	require.Equal(t, waiting, pl.closest.status)
+	require.True(t, pl.closest.tryAgainOnFailure)
+
+	// ids[0] is now unreachable (on the tried address)
+	pl.unreachablePeer(ids[0])
+	require.Equal(t, queued, pl.closest.status)
+
+	// set ids[0] as waiting again
+	require.Equal(t, ids[0], pl.popClosestQueued())
+	// set ids[2] as waiting
+	require.Equal(t, ids[popCounter], pl.popClosestQueued())
+	popCounter++ // popCounter = 3
+	require.Equal(t, waiting, pl.closest.next.next.status)
+	require.Equal(t, ids[popCounter], pl.popClosestQueued())
+	popCounter++ // popCounter = 4
+
+	parsed, err := peer.Decode("1D3oooUnknownPeer")
+	// key: 32eeb6aa672800824eb16d8ba5814cd9acc20203f656e78431154a17ce17e5ad
+	require.NoError(t, err)
+	pid := peerid.NewPeerID(parsed)
+
+	// add unknown peer, this peer doesn't have any address (and the peerlist
+	// has an endpoint configured). Hence, it can never be queried, when
+	// "popped" it should be set as unreachable
+	pl.addToPeerlist([]address.NodeID{pid})
+	require.Equal(t, nPeers-popCounter+1, pl.queuedCount) // 4 peers have been poped so far
+	require.Equal(t, pid, pl.closestQueued.id)
+
+	// popClosestQueued should set pid as unreachable and return ids[4]
+	require.Equal(t, ids[popCounter], pl.popClosestQueued())
+	popCounter++ // popCounter = 5
+	// element between ids[3] and ids[4], that is pid
+	require.Equal(t, unreachable, pl.closest.next.next.next.next.status)
+	require.Equal(t, waiting, pl.closest.next.next.next.next.next.status) // ids[4]
+	require.Nil(t, pl.closestQueued)
+
+	parsed, err = peer.Decode("1DoooUnknownPeer2")
+	// key: c28defd90aea579236cc5553fcedf59c7fa8a1daa2e7b350c28fbabf94867ddc
+	require.NoError(t, err)
+	pid2 := peerid.NewPeerID(parsed)
+
+	// add unknown peer 2, same as before, but there is no successor to pid2
+	pl.addToPeerlist([]address.NodeID{pid2})
+	require.Equal(t, nPeers-popCounter+1, pl.queuedCount)
+	require.Equal(t, pid2, pl.closestQueued.id)
+	// 5 peers have been poped so far, pid is not counted because unreachable
+	require.Nil(t, pl.popClosestQueued())
+	// pid is set as unreachable, even though it was not popped
+	require.Equal(t, unreachable, pl.closest.next.next.next.next.next.next.status)
 }

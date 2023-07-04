@@ -183,7 +183,7 @@ func TestElementaryQuery(t *testing.T) {
 	router := fe.NewFakeRouter()
 
 	nPeers := 32
-	ids := make([]address.NodeID, nPeers)
+	ids := make([]address.NodeAddr, nPeers)
 	scheds := make([]scheduler.AwareScheduler, nPeers)
 	fendpoints := make([]endpoint.SimEndpoint, nPeers)
 	rts := make([]routingtable.RoutingTable, nPeers)
@@ -191,8 +191,8 @@ func TestElementaryQuery(t *testing.T) {
 	for i := 0; i < nPeers; i++ {
 		scheds[i] = ss.NewSimpleScheduler(clk)
 		ids[i] = kadid.NewKadID([]byte{byte(i * 8)})
-		fendpoints[i] = fe.NewFakeEndpoint(ids[i], scheds[i], router)
-		rts[i] = simplert.NewSimpleRT(ids[i].Key(), bucketSize)
+		fendpoints[i] = fe.NewFakeEndpoint(ids[i].NodeID(), scheds[i], router)
+		rts[i] = simplert.NewSimpleRT(ids[i].NodeID().Key(), bucketSize)
 		servers[i] = basicserver.NewBasicServer(rts[i], fendpoints[i],
 			basicserver.WithNumberUsefulCloserPeers(bucketSize))
 		fendpoints[i].AddRequestHandler(protoID, &sm.SimMessage{}, servers[i].HandleRequest)
@@ -211,14 +211,14 @@ func TestElementaryQuery(t *testing.T) {
 			require.NoError(t, err)
 			// we don't require the the peer is added to the routing table,
 			// because the bucket might be full already and it is fine
-			_, err = rts[i].AddPeer(ctx, ids[j])
+			_, err = rts[i].AddPeer(ctx, ids[j].NodeID())
 			require.NoError(t, err)
 		}
 	}
 
 	// smallest peer is looking for biggest peer (which is the most far away
 	// in hop numbers, given the routing table configuration)
-	req := sm.NewSimRequest(ids[len(ids)-1].Key())
+	req := sm.NewSimRequest(ids[len(ids)-1].NodeID().Key())
 
 	// generic query options to be used by all peers
 	defaultQueryOpts := []Option{
@@ -245,7 +245,11 @@ func TestElementaryQuery(t *testing.T) {
 	handleResultsFnInfinity := func(ctx context.Context, id address.NodeID,
 		resp message.MinKadResponseMessage) (bool, []address.NodeID) {
 		// TODO: test that the responses are the expected ones
-		return false, resp.CloserNodes()
+		ids := make([]address.NodeID, len(resp.CloserNodes()))
+		for i, n := range resp.CloserNodes() {
+			ids[i] = n.NodeID()
+		}
+		return false, ids
 	}
 
 	// the request will eventually fail because handleResultsFnInfinity always

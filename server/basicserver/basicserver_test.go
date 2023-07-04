@@ -65,6 +65,7 @@ func TestSimMessageHandling(t *testing.T) {
 		WithNumberUsefulCloserPeers(numberOfCloserPeersToSend))
 
 	requester := kadid.KadID{KadKey: []byte{0b00000001}} // 0000 0001
+	fakeEndpoint.MaybeAddToPeerstore(ctx, requester, peerstoreTTL)
 
 	req0 := simmessage.NewSimRequest([]byte{0b00000000})
 	msg, err := s0.HandleRequest(ctx, requester, req0)
@@ -222,6 +223,10 @@ func TestIPFSv1Handling(t *testing.T) {
 	requesterPid, err := peer.Decode("1WoooREQUESTER")
 	require.NoError(t, err)
 	requester := peerid.NewPeerID(requesterPid)
+	fakeEndpoint.MaybeAddToPeerstore(ctx, addrinfo.NewAddrInfo(peer.AddrInfo{
+		ID:    requesterPid,
+		Addrs: nil,
+	}), peerstoreTTL)
 
 	req0 := ipfsv1.FindPeerRequest(self)
 	msg, err := s0.HandleRequest(ctx, requester, req0)
@@ -246,7 +251,7 @@ type invalidEndpoint struct{}
 
 var _ endpoint.Endpoint = (*invalidEndpoint)(nil)
 
-func (e *invalidEndpoint) MaybeAddToPeerstore(context.Context, address.NodeID,
+func (e *invalidEndpoint) MaybeAddToPeerstore(context.Context, address.NodeAddr,
 	time.Duration) error {
 	return nil
 }
@@ -261,7 +266,7 @@ func (e *invalidEndpoint) KadKey() key.KadKey {
 	return make([]byte, 0)
 }
 
-func (e *invalidEndpoint) NetworkAddress(address.NodeID) (address.NodeID, error) {
+func (e *invalidEndpoint) NetworkAddress(address.NodeID) (address.NodeAddr, error) {
 	return nil, nil
 }
 

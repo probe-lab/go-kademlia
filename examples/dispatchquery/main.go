@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -57,7 +56,7 @@ func queryTest(ctx context.Context) {
 	}
 	selfA := &peerid.PeerID{ID: pidA} // peer.ID is necessary for ipfskadv1 message format
 	addrA := multiaddr.StringCast("/ip4/1.1.1.1/tcp/4001/")
-	var naddrA address.NodeID = addrinfo.NewAddrInfo(peer.AddrInfo{ID: selfA.ID,
+	var naddrA address.NodeAddr = addrinfo.NewAddrInfo(peer.AddrInfo{ID: selfA.ID,
 		Addrs: []multiaddr.Multiaddr{addrA}})
 	rtA := simplert.NewSimpleRT(selfA.Key(), 2)
 	schedA := ss.NewSimpleScheduler(clk)
@@ -75,7 +74,7 @@ func queryTest(ctx context.Context) {
 	}
 	selfB := &peerid.PeerID{ID: pidB}
 	addrB := multiaddr.StringCast("/ip4/2.2.2.2/tcp/4001/")
-	var naddrB address.NodeID = addrinfo.NewAddrInfo(peer.AddrInfo{ID: selfB.ID,
+	var naddrB address.NodeAddr = addrinfo.NewAddrInfo(peer.AddrInfo{ID: selfB.ID,
 		Addrs: []multiaddr.Multiaddr{addrB}})
 	rtB := simplert.NewSimpleRT(selfB.Key(), 2)
 	schedB := ss.NewSimpleScheduler(clk)
@@ -93,7 +92,7 @@ func queryTest(ctx context.Context) {
 	}
 	selfC := &peerid.PeerID{ID: pidC}
 	addrC := multiaddr.StringCast("/ip4/3.3.3.3/tcp/4001/")
-	var naddrC address.NodeID = addrinfo.NewAddrInfo(peer.AddrInfo{ID: selfC.ID,
+	var naddrC address.NodeAddr = addrinfo.NewAddrInfo(peer.AddrInfo{ID: selfC.ID,
 		Addrs: []multiaddr.Multiaddr{addrC}})
 	rtC := simplert.NewSimpleRT(selfC.Key(), 2)
 	schedC := ss.NewSimpleScheduler(clk)
@@ -124,7 +123,6 @@ func queryTest(ctx context.Context) {
 	// dummy parameters
 	handleResp := func(ctx context.Context, _ address.NodeID,
 		resp message.MinKadResponseMessage) (bool, []address.NodeID) {
-		fmt.Println(resp.CloserNodes())
 		peerids := make([]address.NodeID, len(resp.CloserNodes()))
 		for i, p := range resp.CloserNodes() {
 			peerids[i] = p.(*addrinfo.AddrInfo).PeerID()

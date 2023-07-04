@@ -128,9 +128,9 @@ func (e *Libp2pEndpoint) DialPeer(ctx context.Context, id address.NodeID) error 
 }
 
 func (e *Libp2pEndpoint) MaybeAddToPeerstore(ctx context.Context,
-	id address.NodeID, ttl time.Duration) error {
+	id address.NodeAddr, ttl time.Duration) error {
 	_, span := util.StartSpan(ctx, "Libp2pEndpoint.MaybeAddToPeerstore",
-		trace.WithAttributes(attribute.String("PeerID", id.String())))
+		trace.WithAttributes(attribute.String("PeerID", id.NodeID().String())))
 	defer span.End()
 
 	ai, ok := id.(*addrinfo.AddrInfo)
@@ -139,11 +139,11 @@ func (e *Libp2pEndpoint) MaybeAddToPeerstore(ctx context.Context,
 	}
 
 	// Don't add addresses for self or our connected peers. We have better ones.
-	if ai.ID == e.host.ID() ||
-		e.host.Network().Connectedness(ai.ID) == network.Connected {
+	if ai.PeerID().ID == e.host.ID() ||
+		e.host.Network().Connectedness(ai.PeerID().ID) == network.Connected {
 		return nil
 	}
-	e.host.Peerstore().AddAddrs(ai.ID, ai.Addrs, ttl)
+	e.host.Peerstore().AddAddrs(ai.PeerID().ID, ai.Addrs, ttl)
 	return nil
 }
 
@@ -261,7 +261,7 @@ func (e *Libp2pEndpoint) KadKey() key.KadKey {
 	return peerid.PeerID{ID: e.host.ID()}.Key()
 }
 
-func (e *Libp2pEndpoint) NetworkAddress(n address.NodeID) (address.NodeID, error) {
+func (e *Libp2pEndpoint) NetworkAddress(n address.NodeID) (address.NodeAddr, error) {
 	ai, err := e.PeerInfo(n)
 	if err != nil {
 		return nil, err
@@ -305,7 +305,9 @@ func (e *Libp2pEndpoint) AddRequestHandler(protoID address.ProtocolID,
 					return
 				}
 
-				requester := peerid.NewPeerID(s.Conn().RemotePeer())
+				requester := addrinfo.NewAddrInfo(
+					e.host.Peerstore().PeerInfo(s.Conn().RemotePeer()),
+				)
 				resp, err := reqHandler(ctx, requester, req)
 				if err != nil {
 					span.RecordError(err)

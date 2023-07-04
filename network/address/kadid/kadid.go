@@ -9,7 +9,7 @@ type KadID struct {
 	key.KadKey
 }
 
-var _ address.NodeID = (*KadID)(nil)
+var _ address.NodeAddr = (*KadID)(nil)
 
 func NewKadID(k key.KadKey) *KadID {
 	return &KadID{k}
@@ -25,4 +25,8 @@ func (k KadID) NodeID() address.NodeID {
 
 func (k KadID) String() string {
 	return k.Hex()
+}
+
+func (k KadID) Addresses() []address.Addr {
+	return []address.Addr{k}
 }

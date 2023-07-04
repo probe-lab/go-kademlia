@@ -33,14 +33,14 @@ const (
 )
 
 // connectNodes adds nodes to each other's peerstores and routing tables
-func connectNodes(ctx context.Context, n0, n1 address.NodeID, ep0, ep1 endpoint.Endpoint,
+func connectNodes(ctx context.Context, n0, n1 address.NodeAddr, ep0, ep1 endpoint.Endpoint,
 	rt0, rt1 routingtable.RoutingTable) {
 	// add n1 to n0's peerstore and routing table
 	ep0.MaybeAddToPeerstore(ctx, n1, peerstoreTTL)
-	rt0.AddPeer(ctx, n1)
+	rt0.AddPeer(ctx, n1.NodeID())
 	// add n0 to n1's peerstore and routing table
 	ep1.MaybeAddToPeerstore(ctx, n0, peerstoreTTL)
-	rt1.AddPeer(ctx, n0)
+	rt1.AddPeer(ctx, n0.NodeID())
 }
 
 func findNode(ctx context.Context) {
@@ -107,16 +107,18 @@ func findNode(ctx context.Context) {
 		resp := msg.(*simmessage.SimMessage)
 		fmt.Println("got a response from", id, "with", resp.CloserNodes())
 
-		for _, peer := range resp.CloserNodes() {
-			if peer.String() == ids[3].NodeID().String() {
+		newIds := make([]address.NodeID, len(resp.CloserNodes()))
+		for i, peer := range resp.CloserNodes() {
+			if peer.NodeID().String() == ids[3].NodeID().String() {
 				// the response contains the address of D (ids[3])
 				fmt.Println("success")
 				// returning true will stop the query process
 				return true, nil
 			}
+			newIds[i] = peer.NodeID()
 		}
 		// returning false will continue the query process
-		return false, resp.CloserNodes()
+		return false, newIds
 	}
 
 	// create a query on A (using A's scheduler, endpoint and routing table),

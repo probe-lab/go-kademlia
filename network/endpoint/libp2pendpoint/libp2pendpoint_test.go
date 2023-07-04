@@ -93,7 +93,7 @@ func TestLibp2pEndpoint(t *testing.T) {
 	require.NoError(t, err)
 	ai, ok := netAddr.(*addrinfo.AddrInfo)
 	require.True(t, ok)
-	require.Equal(t, ids[1].ID, ai.ID)
+	require.Equal(t, ids[1].ID, ai.PeerID().ID)
 	require.Len(t, ai.Addrs, len(addrinfos[1].Addrs))
 	for _, addr := range ai.Addrs {
 		require.Contains(t, addrinfos[1].Addrs, addr)
@@ -102,7 +102,6 @@ func TestLibp2pEndpoint(t *testing.T) {
 	netAddr, err = endpoints[0].NetworkAddress(invalidID)
 	require.Equal(t, endpoint.ErrInvalidPeer, err)
 	require.Nil(t, netAddr)
-
 	// dial from 0 to 1
 	err = endpoints[0].DialPeer(ctx, ids[1])
 	require.NoError(t, err)

@@ -80,7 +80,11 @@ var DefaultConfig = func(cfg *Config) error {
 
 	cfg.HandleResultsFunc = func(ctx context.Context, id address.NodeID,
 		resp message.MinKadResponseMessage) (bool, []address.NodeID) {
-		return false, resp.CloserNodes()
+		ids := make([]address.NodeID, len(resp.CloserNodes()))
+		for i, n := range resp.CloserNodes() {
+			ids[i] = n.NodeID()
+		}
+		return false, ids
 	}
 	cfg.NotifyFailureFunc = func(context.Context) {}
 
