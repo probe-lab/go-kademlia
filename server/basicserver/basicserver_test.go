@@ -161,6 +161,54 @@ func TestInvalidSimRequests(t *testing.T) {
 	s.HandleFindNodeRequest(ctx, requester, req2)
 }
 
+func TestSimRequestNoNetworkAddress(t *testing.T) {
+	ctx := context.Background()
+	keylen := 32
+	// invalid option
+	s := NewBasicServer(nil, nil, func(*Config) error {
+		return errors.New("invalid option")
+	})
+	require.Nil(t, s)
+
+	clk := clock.New()
+	router := fakeendpoint.NewFakeRouter()
+
+	var self = kadid.KadID{KadKey: make([]byte, keylen)} // 0000 0000
+
+	// create a valid server
+	sched := simplescheduler.NewSimpleScheduler(clk)
+	fakeEndpoint := fakeendpoint.NewFakeEndpoint(self, sched, router)
+	rt := simplert.NewSimpleRT(self.Key(), 2)
+
+	parsed, err := peer.Decode("1EooooPEER")
+	require.NoError(t, err)
+	addrInfo := addrinfo.NewAddrInfo(peer.AddrInfo{
+		ID:    parsed,
+		Addrs: nil,
+	})
+
+	// add peer to routing table, but NOT to peerstore
+	success, err := rt.AddPeer(ctx, addrInfo.NodeID())
+	require.NoError(t, err)
+	require.True(t, success)
+
+	s = NewBasicServer(rt, fakeEndpoint)
+	require.NotNil(t, s)
+
+	require.NotNil(t, s)
+
+	requester := kadid.KadID{KadKey: append([]byte{0x80}, make([]byte, keylen-1)...)}
+
+	// sim request message (for any key)
+	req := simmessage.NewSimRequest(requester.Key())
+	msg, err := s.HandleFindNodeRequest(ctx, requester, req)
+	require.NoError(t, err)
+	resp, ok := msg.(message.MinKadResponseMessage)
+	require.True(t, ok)
+	fmt.Println(resp.CloserNodes())
+	require.Len(t, resp.CloserNodes(), 0)
+}
+
 func TestIPFSv1Handling(t *testing.T) {
 	ctx := context.Background()
 	clk := clock.NewMock()
@@ -198,7 +246,7 @@ func TestIPFSv1Handling(t *testing.T) {
 			// it is among the numberOfCloserPeersToSend closer peers
 			addrInfo = addrinfo.NewAddrInfo(peer.AddrInfo{
 				ID:    p,
-				Addrs: []multiaddr.Multiaddr{},
+				Addrs: nil,
 			})
 		}
 		// add peers to routing table and peerstore

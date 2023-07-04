@@ -7,10 +7,12 @@ import (
 
 	"github.com/benbjohnson/clock"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/plprobelab/go-kademlia/events/scheduler"
 	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/kadid"
+	"github.com/plprobelab/go-kademlia/network/address/peerid"
 	si "github.com/plprobelab/go-kademlia/network/address/stringid"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"github.com/plprobelab/go-kademlia/network/message"
@@ -49,6 +51,12 @@ func TestFakeEndpoint(t *testing.T) {
 	na, err := fakeEndpoint.NetworkAddress(node0)
 	require.NoError(t, err)
 	require.Equal(t, na, node0)
+
+	parsed, err := peer.Decode("1EooooPEER")
+	require.NoError(t, err)
+	pid := peerid.NewPeerID(parsed)
+	_, err = fakeEndpoint.NetworkAddress(pid)
+	require.Equal(t, endpoint.ErrUnknownPeer, err)
 
 	req := simmessage.NewSimRequest(selfID.Key())
 	resp := &simmessage.SimMessage{}

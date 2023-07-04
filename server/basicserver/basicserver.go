@@ -92,13 +92,6 @@ func (s *BasicServer) HandleFindNodeRequest(ctx context.Context,
 		attribute.Stringer("Target", target)))
 	defer span.End()
 
-	rPeerAddr, err := s.endpoint.NetworkAddress(rpeer)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
-	s.endpoint.MaybeAddToPeerstore(ctx, rPeerAddr, s.peerstoreTTL)
-
 	peers, err := s.rt.NearestPeers(ctx, target, s.numberOfCloserPeersToSend)
 	if err != nil {
 		span.RecordError(err)
@@ -114,14 +107,17 @@ func (s *BasicServer) HandleFindNodeRequest(ctx context.Context,
 	switch msg.(type) {
 	case *simmessage.SimMessage:
 		peerAddrs := make([]address.NodeAddr, len(peers))
-		for i, p := range peers {
-			peerAddrs[i], err = s.endpoint.NetworkAddress(p)
+		var index int
+		for _, p := range peers {
+			na, err := s.endpoint.NetworkAddress(p)
 			if err != nil {
 				span.RecordError(err)
 				continue
 			}
+			peerAddrs[index] = na
+			index++
 		}
-		resp = simmessage.NewSimResponse(peerAddrs)
+		resp = simmessage.NewSimResponse(peerAddrs[:index])
 	case *ipfsv1.Message:
 		nEndpoint, ok := s.endpoint.(endpoint.NetworkedEndpoint)
 		if !ok {

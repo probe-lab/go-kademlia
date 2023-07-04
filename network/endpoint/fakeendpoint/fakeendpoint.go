@@ -113,15 +113,10 @@ func (e *FakeEndpoint) SendRequestHandleResponse(ctx context.Context,
 		return nil
 	}
 
-	// send request
-	addr, ok := e.peerstore[id.String()]
-	if !ok {
-		span.RecordError(endpoint.ErrUnknownPeer)
-		e.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
-			handleResp(ctx, nil, endpoint.ErrUnknownPeer)
-		}))
-		return nil
-	}
+	// send request. id.String() is guaranteed to be in peerstore, because
+	// DialPeer checks it, and an error is returned if it's not there.
+	addr := e.peerstore[id.String()]
+
 	sid, err := e.router.SendMessage(ctx, e.self, addr.NodeID(), protoID, 0, req)
 	if err != nil {
 		span.RecordError(err)
