@@ -3,7 +3,6 @@ package triert
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -13,8 +12,6 @@ import (
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 )
-
-var _ = fmt.Println
 
 // TODO: move to key package and replace ErrInvalidKey
 // ErrKeyWrongLength indicates a key has the wrong length
