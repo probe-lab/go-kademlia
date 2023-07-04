@@ -6,7 +6,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	// "github.com/libp2p/go-libp2p-xor/kademlia"
 	tkey "github.com/libp2p/go-libp2p-xor/key"
 	"github.com/libp2p/go-libp2p-xor/trie"
 	"github.com/plprobelab/go-kademlia/key"
