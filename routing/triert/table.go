@@ -22,7 +22,7 @@ var ErrKeyWrongLength = errors.New("key has wrong length")
 type TrieRT struct {
 	self key.KadKey
 
-	// keymu is held during keys trie and keyNodes map mutations to serialize changes
+	// keymu is held during keys and keyNodes mutations to serialize changes
 	keymu sync.Mutex
 
 	// keys holds a pointer to an immutable trie
