@@ -75,3 +75,11 @@ func (a KadKey) Compare(b KadKey) int {
 func (a KadKey) Equal(b KadKey) bool {
 	return a.Compare(b) == 0
 }
+
+func (k KadKey) BitAt(offset int) int {
+	if k[offset/8]&(byte(1)<<(7-offset%8)) == 0 {
+		return 0
+	} else {
+		return 1
+	}
+}
