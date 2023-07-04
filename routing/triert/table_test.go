@@ -42,7 +42,7 @@ var (
 
 func TestAddPeer(t *testing.T) {
 	t.Run("one", func(t *testing.T) {
-		rt := New(key0, 2)
+		rt := New(key0)
 		success, err := rt.AddPeer(context.Background(), node1)
 		require.NoError(t, err)
 		require.True(t, success)
@@ -50,7 +50,7 @@ func TestAddPeer(t *testing.T) {
 	})
 
 	t.Run("ignore duplicate", func(t *testing.T) {
-		rt := New(key0, 2)
+		rt := New(key0)
 		success, err := rt.AddPeer(context.Background(), node1)
 		require.NoError(t, err)
 		require.True(t, success)
@@ -63,7 +63,7 @@ func TestAddPeer(t *testing.T) {
 	})
 
 	t.Run("many", func(t *testing.T) {
-		rt := New(key0, 2)
+		rt := New(key0)
 		success, err := rt.AddPeer(context.Background(), node1)
 		require.NoError(t, err)
 		require.True(t, success)
@@ -101,7 +101,7 @@ func TestAddPeer(t *testing.T) {
 }
 
 func TestRemovePeer(t *testing.T) {
-	rt := New(key0, 2)
+	rt := New(key0)
 	rt.AddPeer(context.Background(), node1)
 
 	t.Run("unknown peer", func(t *testing.T) {
@@ -119,7 +119,7 @@ func TestRemovePeer(t *testing.T) {
 
 func TestFindPeer(t *testing.T) {
 	t.Run("known peer", func(t *testing.T) {
-		rt := New(key0, 2)
+		rt := New(key0)
 		success, err := rt.AddPeer(context.Background(), node1)
 		require.NoError(t, err)
 		require.True(t, success)
@@ -131,14 +131,14 @@ func TestFindPeer(t *testing.T) {
 	})
 
 	t.Run("unknown peer", func(t *testing.T) {
-		rt := New(key0, 2)
+		rt := New(key0)
 		got, err := rt.Find(context.Background(), key2)
 		require.NoError(t, err)
 		require.Nil(t, got)
 	})
 
 	t.Run("removed peer", func(t *testing.T) {
-		rt := New(key0, 2)
+		rt := New(key0)
 		success, err := rt.AddPeer(context.Background(), node1)
 		require.NoError(t, err)
 		require.True(t, success)
@@ -161,9 +161,7 @@ func TestFindPeer(t *testing.T) {
 func TestNearestPeers(t *testing.T) {
 	ctx := context.Background()
 
-	bucketSize := 5
-
-	rt := New(key0, bucketSize)
+	rt := New(key0)
 	rt.AddPeer(ctx, node1)
 	rt.AddPeer(ctx, node2)
 	rt.AddPeer(ctx, node3)
@@ -177,9 +175,9 @@ func TestNearestPeers(t *testing.T) {
 	rt.AddPeer(ctx, node11)
 
 	// find the 5 nearest peers to key0
-	peers, err := rt.NearestPeers(ctx, key0, bucketSize)
+	peers, err := rt.NearestPeers(ctx, key0, 5)
 	require.NoError(t, err)
-	require.Equal(t, bucketSize, len(peers))
+	require.Equal(t, 5, len(peers))
 
 	expectedOrder := []address.NodeID{node9, node8, node7, node10, node11}
 	require.Equal(t, expectedOrder, peers)
@@ -194,7 +192,7 @@ func TestInvalidKeys(t *testing.T) {
 	incompatKey := key.KadKey(make([]byte, 4)) // key is shorter (4 bytes only)
 	incompatNode := NewNode("inv", incompatKey)
 
-	rt := New(key0, 2)
+	rt := New(key0)
 
 	t.Run("add peer", func(t *testing.T) {
 		success, err := rt.AddPeer(ctx, incompatNode)
@@ -223,7 +221,7 @@ func TestInvalidKeys(t *testing.T) {
 
 func TestCplSize(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		rt := New(key0, 2)
+		rt := New(key0)
 		require.Equal(t, 0, rt.Size())
 		require.Equal(t, 0, rt.CplSize(1))
 		require.Equal(t, 0, rt.CplSize(2))
@@ -233,7 +231,7 @@ func TestCplSize(t *testing.T) {
 
 	t.Run("cpl 1", func(t *testing.T) {
 		ctx := context.Background()
-		rt := New(key0, 2)
+		rt := New(key0)
 
 		success, err := rt.AddPeer(ctx, NewNode("cpl1a", keyWithPrefix("01", 32)))
 		require.NoError(t, err)
@@ -250,7 +248,7 @@ func TestCplSize(t *testing.T) {
 
 	t.Run("cpl 2", func(t *testing.T) {
 		ctx := context.Background()
-		rt := New(key0, 2)
+		rt := New(key0)
 
 		success, err := rt.AddPeer(ctx, NewNode("cpl2a", keyWithPrefix("001", 32)))
 		require.NoError(t, err)
@@ -268,7 +266,7 @@ func TestCplSize(t *testing.T) {
 
 	t.Run("cpl 3", func(t *testing.T) {
 		ctx := context.Background()
-		rt := New(key0, 2)
+		rt := New(key0)
 
 		success, err := rt.AddPeer(ctx, NewNode("cpl3a", keyWithPrefix("0001", 32)))
 		require.NoError(t, err)
@@ -292,7 +290,7 @@ func TestCplSize(t *testing.T) {
 
 	t.Run("cpl mixed", func(t *testing.T) {
 		ctx := context.Background()
-		rt := New(key0, 2)
+		rt := New(key0)
 
 		success, err := rt.AddPeer(ctx, NewNode("cpl1a", keyWithPrefix("01", 32)))
 		require.NoError(t, err)

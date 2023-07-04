@@ -35,7 +35,7 @@ type TrieRT struct {
 	keyNodes atomic.Value
 }
 
-func New(self key.KadKey, bucketSize int) *TrieRT {
+func New(self key.KadKey) *TrieRT {
 	rt := &TrieRT{
 		self: self,
 	}
