@@ -11,7 +11,11 @@ type KadKey[T any] struct {
 	bytes []byte
 }
 
-type KadKey256 = KadKey[[256]byte]
+type KadKey256 = KadKey[[32]byte]
+
+func NewKadKey256(data []byte) KadKey256 {
+	return New[[32]byte](data)
+}
 
 func New[T any](data []byte) KadKey[T] {
 	var v T
