@@ -2,7 +2,6 @@ package triert
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"sync/atomic"
 
@@ -10,10 +9,6 @@ import (
 	"github.com/plprobelab/go-kademlia/key/trie"
 	"github.com/plprobelab/go-kademlia/network/address"
 )
-
-// TODO: move to key package and replace ErrInvalidKey
-// ErrKeyWrongLength indicates a key has the wrong length
-var ErrKeyWrongLength = errors.New("key has wrong length")
 
 // TrieRT is a routing table backed by a Xor Trie which offers good scalablity and performance
 // for large networks. All exported methods are safe for concurrent use.
@@ -46,7 +41,7 @@ func (rt *TrieRT) Self() key.KadKey {
 func (rt *TrieRT) AddPeer(ctx context.Context, node address.NodeID) (bool, error) {
 	kk := node.Key()
 	if kk.Size() != rt.self.Size() {
-		return false, ErrKeyWrongLength
+		return false, trie.ErrMismatchedKeyLength
 	}
 
 	rt.keymu.Lock()
@@ -70,7 +65,7 @@ func (rt *TrieRT) AddPeer(ctx context.Context, node address.NodeID) (bool, error
 // routing table
 func (rt *TrieRT) RemoveKey(ctx context.Context, kk key.KadKey) (bool, error) {
 	if kk.Size() != rt.self.Size() {
-		return false, ErrKeyWrongLength
+		return false, trie.ErrMismatchedKeyLength
 	}
 	rt.keymu.Lock()
 	defer rt.keymu.Unlock()
@@ -92,7 +87,7 @@ func (rt *TrieRT) RemoveKey(ctx context.Context, kk key.KadKey) (bool, error) {
 // NearestPeers returns the n closest peers to a given key
 func (rt *TrieRT) NearestPeers(ctx context.Context, kk key.KadKey, n int) ([]address.NodeID, error) {
 	if kk.Size() != rt.self.Size() {
-		return nil, ErrKeyWrongLength
+		return nil, trie.ErrMismatchedKeyLength
 	}
 
 	keys := rt.keys.Load().(*nodeTrie)
@@ -138,12 +133,12 @@ func closestAtDepth(kk key.KadKey, t *nodeTrie, depth int, n int) []entry {
 
 func (rt *TrieRT) Find(ctx context.Context, kk key.KadKey) (address.NodeID, error) {
 	if kk.Size() != rt.self.Size() {
-		return nil, ErrKeyWrongLength
+		return nil, trie.ErrMismatchedKeyLength
 	}
 
 	keys := rt.keys.Load().(*nodeTrie)
 
-	found, node, _ := trie.Find(keys, kk)
+	found, node := trie.Find(keys, kk)
 
 	if found {
 		return node, nil
@@ -171,7 +166,7 @@ func (rt *TrieRT) CplSize(cpl int) int {
 func countCpl(t *nodeTrie, kk key.KadKey, cpl int, depth int) (int, error) {
 	// special cases for very small tables where keys may be placed higher in the trie due to low population
 	if t.IsLeaf() {
-		if t.IsEmpty() {
+		if t.HasKey() {
 			return 0, nil
 		}
 		keyCpl := kk.CommonPrefixLength(key.KadKey(t.Key))

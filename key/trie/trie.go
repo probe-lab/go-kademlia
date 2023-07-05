@@ -1,12 +1,16 @@
+// Package trie provides an implementation of a XOR Trie
 package trie
 
 import (
-	"encoding/json"
+	"errors"
 
 	"github.com/plprobelab/go-kademlia/key"
 )
 
+var ErrMismatchedKeyLength = errors.New("key length does not match existing keys")
+
 // Trie is a trie for equal-length bit vectors, which stores values only in the leaves.
+// A node may optionally hold data of type T
 // Trie node invariants:
 // (1) Either both branches are nil, or both are non-nil.
 // (2) If branches are non-nil, key must be nil.
@@ -21,20 +25,17 @@ func New[T any]() *Trie[T] {
 	return &Trie[T]{}
 }
 
-func (trie *Trie[T]) String() string {
-	b, _ := json.Marshal(trie)
-	return string(b)
+// Depth returns the maximum depth of the Trie.
+func (tr *Trie[T]) Depth() int {
+	return tr.DepthAtDepth(0)
 }
 
-func (trie *Trie[T]) Depth() int {
-	return trie.DepthAtDepth(0)
-}
-
-func (trie *Trie[T]) DepthAtDepth(depth int) int {
-	if trie.Branch[0] == nil && trie.Branch[1] == nil {
-		return depth
+// Depth returns the maximum depth at or beyond depth d.
+func (tr *Trie[T]) DepthAtDepth(d int) int {
+	if tr.IsLeaf() {
+		return d
 	} else {
-		return max(trie.Branch[0].DepthAtDepth(depth+1), trie.Branch[1].DepthAtDepth(depth+1))
+		return max(tr.Branch[0].DepthAtDepth(d+1), tr.Branch[1].DepthAtDepth(d+1))
 	}
 }
 
@@ -46,90 +47,95 @@ func max(x, y int) int {
 }
 
 // Size returns the number of keys added to the trie.
-// In other words, it returns the number of non-empty leaves in the trie.
-func (trie *Trie[T]) Size() int {
-	return trie.SizeAtDepth(0)
+func (tr *Trie[T]) Size() int {
+	return tr.SizeAtDepth(0)
 }
 
-func (trie *Trie[T]) SizeAtDepth(depth int) int {
-	if trie.Branch[0] == nil && trie.Branch[1] == nil {
-		if trie.IsEmpty() {
+// Size returns the number of keys added to the trie at or beyond depth d.
+func (tr *Trie[T]) SizeAtDepth(d int) int {
+	if tr.IsLeaf() {
+		if !tr.HasKey() {
 			return 0
 		} else {
 			return 1
 		}
 	} else {
-		return trie.Branch[0].SizeAtDepth(depth+1) + trie.Branch[1].SizeAtDepth(depth+1)
+		return tr.Branch[0].SizeAtDepth(d+1) + tr.Branch[1].SizeAtDepth(d+1)
 	}
 }
 
-func (trie *Trie[T]) IsEmpty() bool {
-	return trie.Key == nil
+// HasKey reports whether the Trie node holds a key.
+func (tr *Trie[T]) HasKey() bool {
+	return tr.Key != nil
 }
 
-func (trie *Trie[T]) IsLeaf() bool {
-	return trie.Branch[0] == nil && trie.Branch[1] == nil
+// IsLeaf reports whether the Trie is a leaf node. A leaf node has no child branches but may hold a key and data.
+func (tr *Trie[T]) IsLeaf() bool {
+	return tr.Branch[0] == nil && tr.Branch[1] == nil
 }
 
-func (trie *Trie[T]) IsEmptyLeaf() bool {
-	return trie.IsEmpty() && trie.IsLeaf()
+func (tr *Trie[T]) IsEmptyLeaf() bool {
+	return !tr.HasKey() && tr.IsLeaf()
 }
 
-func (trie *Trie[T]) IsNonEmptyLeaf() bool {
-	return !trie.IsEmpty() && trie.IsLeaf()
+func (tr *Trie[T]) IsNonEmptyLeaf() bool {
+	return tr.HasKey() && tr.IsLeaf()
 }
 
-func (trie *Trie[T]) Copy() *Trie[T] {
-	if trie.IsLeaf() {
-		return &Trie[T]{Key: trie.Key, Data: trie.Data}
+func (tr *Trie[T]) Copy() *Trie[T] {
+	if tr.IsLeaf() {
+		return &Trie[T]{Key: tr.Key, Data: tr.Data}
 	}
 
 	return &Trie[T]{Branch: [2]*Trie[T]{
-		trie.Branch[0].Copy(),
-		trie.Branch[1].Copy(),
+		tr.Branch[0].Copy(),
+		tr.Branch[1].Copy(),
 	}}
 }
 
-func (trie *Trie[T]) shrink() {
-	b0, b1 := trie.Branch[0], trie.Branch[1]
+func (tr *Trie[T]) shrink() {
+	b0, b1 := tr.Branch[0], tr.Branch[1]
 	switch {
 	case b0.IsEmptyLeaf() && b1.IsEmptyLeaf():
-		trie.Branch[0], trie.Branch[1] = nil, nil
+		tr.Branch[0], tr.Branch[1] = nil, nil
 	case b0.IsEmptyLeaf() && b1.IsNonEmptyLeaf():
-		trie.Key = b1.Key
-		trie.Branch[0], trie.Branch[1] = nil, nil
+		tr.Key = b1.Key
+		tr.Branch[0], tr.Branch[1] = nil, nil
 	case b0.IsNonEmptyLeaf() && b1.IsEmptyLeaf():
-		trie.Key = b0.Key
-		trie.Branch[0], trie.Branch[1] = nil, nil
+		tr.Key = b0.Key
+		tr.Branch[0], tr.Branch[1] = nil, nil
 	}
 }
 
 // Add adds the key to trie, returning a new trie.
 // Add is immutable/non-destructive: The original trie remains unchanged.
-func Add[T any](trie *Trie[T], kk key.KadKey, data T) (*Trie[T], error) {
-	return AddAtDepth(0, trie, kk, data)
+func Add[T any](tr *Trie[T], kk key.KadKey, data T) (*Trie[T], error) {
+	return AddAtDepth(0, tr, kk, data)
 }
 
-func AddAtDepth[T any](depth int, trie *Trie[T], kk key.KadKey, data T) (*Trie[T], error) {
+func AddAtDepth[T any](depth int, tr *Trie[T], kk key.KadKey, data T) (*Trie[T], error) {
 	switch {
-	case trie.IsEmptyLeaf():
+	case tr.IsEmptyLeaf():
 		return &Trie[T]{Key: kk, Data: data}, nil
-	case trie.IsNonEmptyLeaf():
-		eq := trie.Key.Equal(kk)
-		if eq {
-			return trie, nil
+	case tr.IsNonEmptyLeaf():
+		if tr.Key.Size() != kk.Size() {
+			return nil, ErrMismatchedKeyLength
 		}
-		return trieForTwo[T](depth, trie.Key, trie.Data, kk, data), nil
+		eq := tr.Key.Equal(kk)
+		if eq {
+			return tr, nil
+		}
+		return trieForTwo[T](depth, tr.Key, tr.Data, kk, data), nil
 
 	default:
 		dir := kk.BitAt(depth)
 		s := &Trie[T]{}
-		b, err := AddAtDepth(depth+1, trie.Branch[dir], kk, data)
+		b, err := AddAtDepth(depth+1, tr.Branch[dir], kk, data)
 		if err != nil {
 			return nil, err
 		}
 		s.Branch[dir] = b
-		s.Branch[1-dir] = trie.Branch[1-dir]
+		s.Branch[1-dir] = tr.Branch[1-dir]
 		return s, nil
 	}
 }
@@ -149,69 +155,90 @@ func trieForTwo[T any](depth int, p key.KadKey, pdata T, q key.KadKey, qdata T) 
 	}
 }
 
-func Remove[T any](trie *Trie[T], q key.KadKey) (*Trie[T], error) {
-	return RemoveAtDepth(0, trie, q)
+// Remove is immutable/non-destructive: The original trie remains unchanged.
+func Remove[T any](tr *Trie[T], q key.KadKey) (*Trie[T], error) {
+	return RemoveAtDepth(0, tr, q)
 }
 
-func RemoveAtDepth[T any](depth int, trie *Trie[T], q key.KadKey) (*Trie[T], error) {
+func RemoveAtDepth[T any](depth int, tr *Trie[T], kk key.KadKey) (*Trie[T], error) {
 	switch {
-	case trie.IsEmptyLeaf():
-		return trie, nil
-	case trie.IsNonEmptyLeaf():
-		eq := trie.Key.Equal(q)
+	case tr.IsEmptyLeaf():
+		return tr, nil
+	case tr.IsNonEmptyLeaf():
+		if tr.Key.Size() != kk.Size() {
+			return nil, ErrMismatchedKeyLength
+		}
+		eq := tr.Key.Equal(kk)
 		if !eq {
-			return trie, nil
+			return tr, nil
 		}
 		return &Trie[T]{}, nil
 
 	default:
-		dir := q.BitAt(depth)
-		b, err := RemoveAtDepth(depth+1, trie.Branch[dir], q)
+		dir := kk.BitAt(depth)
+		b, err := RemoveAtDepth(depth+1, tr.Branch[dir], kk)
 		if err != nil {
 			return nil, err
 		}
 		afterDelete := b
-		if afterDelete == trie.Branch[dir] {
-			return trie, nil
+		if afterDelete == tr.Branch[dir] {
+			return tr, nil
 		}
 		copy := &Trie[T]{}
 		copy.Branch[dir] = afterDelete
-		copy.Branch[1-dir] = trie.Branch[1-dir]
+		copy.Branch[1-dir] = tr.Branch[1-dir]
 		copy.shrink()
 		return copy, nil
 	}
 }
 
-func Equal[T any](p, q *Trie[T]) bool {
+func Equal[T any](a, b *Trie[T]) bool {
 	switch {
-	case p.IsLeaf() && q.IsLeaf():
-		eq := p.Key.Equal(q.Key)
+	case a.IsLeaf() && b.IsLeaf():
+		eq := a.Key.Equal(b.Key)
 		if !eq {
 			return false
 		}
 		return true
-	case !p.IsLeaf() && !q.IsLeaf():
-		return Equal(p.Branch[0], q.Branch[0]) && Equal(p.Branch[1], q.Branch[1])
+	case !a.IsLeaf() && !b.IsLeaf():
+		return Equal(a.Branch[0], b.Branch[0]) && Equal(a.Branch[1], b.Branch[1])
 	}
 	return false
 }
 
-// Find looks for the key in the trie.
-// It reports whether the key was found along with the depth of the leaf reached along the path
-// of the key, regardless of whether the key was found in that leaf.
-func Find[T any](trie *Trie[T], kk key.KadKey) (bool, T, int) {
-	return FindAtDepth(trie, 0, kk)
+// Find looks for a key in the trie.
+// It reports whether the key was found along with data value held with the key.
+func Find[T any](tr *Trie[T], kk key.KadKey) (bool, T) {
+	f, _ := findFromDepth(tr, 0, kk)
+	if f == nil {
+		var v T
+		return false, v
+	}
+	return true, f.Data
 }
 
-func FindAtDepth[T any](trie *Trie[T], depth int, kk key.KadKey) (bool, T, int) {
+// Locate looks for the position of a key in the trie.
+// It reports whether the key was found along with the depth of the leaf reached along the path
+// of the key, regardless of whether the key was found in that leaf.
+func Locate[T any](tr *Trie[T], kk key.KadKey) (bool, int) {
+	f, depth := findFromDepth(tr, 0, kk)
+	if f == nil {
+		return false, depth
+	}
+	return true, depth
+}
+
+func findFromDepth[T any](tr *Trie[T], depth int, kk key.KadKey) (*Trie[T], int) {
 	switch {
-	case trie.IsEmptyLeaf():
-		var v T
-		return false, v, depth
-	case trie.IsNonEmptyLeaf():
-		eq := trie.Key.Equal(kk)
-		return eq, trie.Data, depth
+	case tr.IsEmptyLeaf():
+		return nil, depth
+	case tr.IsNonEmptyLeaf():
+		eq := tr.Key.Equal(kk)
+		if !eq {
+			return nil, depth
+		}
+		return tr, depth
 	default:
-		return FindAtDepth(trie.Branch[kk.BitAt(depth)], depth+1, kk)
+		return findFromDepth(tr.Branch[kk.BitAt(depth)], depth+1, kk)
 	}
 }

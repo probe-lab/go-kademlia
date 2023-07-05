@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/key/trie"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/stretchr/testify/require"
 )
@@ -196,25 +197,25 @@ func TestInvalidKeys(t *testing.T) {
 
 	t.Run("add peer", func(t *testing.T) {
 		success, err := rt.AddPeer(ctx, incompatNode)
-		require.ErrorIs(t, err, ErrKeyWrongLength)
+		require.ErrorIs(t, err, trie.ErrMismatchedKeyLength)
 		require.False(t, success)
 	})
 
 	t.Run("remove key", func(t *testing.T) {
 		success, err := rt.RemoveKey(ctx, incompatKey)
-		require.ErrorIs(t, err, ErrKeyWrongLength)
+		require.ErrorIs(t, err, trie.ErrMismatchedKeyLength)
 		require.False(t, success)
 	})
 
 	t.Run("find", func(t *testing.T) {
 		nodeID, err := rt.Find(ctx, incompatKey)
-		require.ErrorIs(t, err, ErrKeyWrongLength)
+		require.ErrorIs(t, err, trie.ErrMismatchedKeyLength)
 		require.Nil(t, nodeID)
 	})
 
 	t.Run("nearest peers", func(t *testing.T) {
 		nodeIDs, err := rt.NearestPeers(ctx, incompatKey, 2)
-		require.ErrorIs(t, err, ErrKeyWrongLength)
+		require.ErrorIs(t, err, trie.ErrMismatchedKeyLength)
 		require.Nil(t, nodeIDs)
 	})
 }

@@ -7,7 +7,7 @@ import (
 	"github.com/plprobelab/go-kademlia/key"
 )
 
-func FromKeys[T any](kks []key.KadKey) (*Trie[T], error) {
+func trieFromKeys[T any](kks []key.KadKey) (*Trie[T], error) {
 	t := New[T]()
 	var err error
 	for _, kk := range kks {
@@ -34,7 +34,7 @@ func testSeq[T any](tr *Trie[T], t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error during add: %v", err)
 		}
-		found, _, depth := Find(tr, s.key)
+		found, depth := Locate(tr, s.key)
 		if !found {
 			t.Fatalf("key not found: %v", s.key)
 		}
@@ -50,7 +50,7 @@ func testSeq[T any](tr *Trie[T], t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error during remove: %v", err)
 		}
-		found, _, _ := Find(tr, s.key)
+		found, _ := Locate(tr, s.key)
 		if found {
 			t.Fatalf("key unexpectedly found: %v", s.key)
 		}
@@ -62,7 +62,7 @@ func testSeq[T any](tr *Trie[T], t *testing.T) {
 
 func TestCopy(t *testing.T) {
 	for _, sample := range testAddSamples {
-		trie, err := FromKeys[any](sample.Keys)
+		trie, err := trieFromKeys[any](sample.Keys)
 		if err != nil {
 			t.Fatalf("unexpected error during from keys: %v", err)
 		}
@@ -172,26 +172,26 @@ type InvariantDiscrepancy struct {
 }
 
 // CheckInvariant panics of the trie does not meet its invariant.
-func CheckInvariant[T any](trie *Trie[T]) *InvariantDiscrepancy {
-	return checkInvariant(trie, 0, nil)
+func CheckInvariant[T any](tr *Trie[T]) *InvariantDiscrepancy {
+	return checkInvariant(tr, 0, nil)
 }
 
-func checkInvariant[T any](trie *Trie[T], depth int, pathSoFar *triePath) *InvariantDiscrepancy {
+func checkInvariant[T any](tr *Trie[T], depth int, pathSoFar *triePath) *InvariantDiscrepancy {
 	switch {
-	case trie.IsEmptyLeaf():
+	case tr.IsEmptyLeaf():
 		return nil
-	case trie.IsNonEmptyLeaf():
-		if !pathSoFar.matchesKey(trie.Key) {
+	case tr.IsNonEmptyLeaf():
+		if !pathSoFar.matchesKey(tr.Key) {
 			return &InvariantDiscrepancy{
 				Reason:            "key found at invalid location in trie",
 				PathToDiscrepancy: pathSoFar.BitString(),
-				KeyAtDiscrepancy:  trie.Key.BitString(),
+				KeyAtDiscrepancy:  tr.Key.BitString(),
 			}
 		}
 		return nil
 	default:
-		if trie.IsEmpty() {
-			b0, b1 := trie.Branch[0], trie.Branch[1]
+		if !tr.HasKey() {
+			b0, b1 := tr.Branch[0], tr.Branch[1]
 			if d0 := checkInvariant(b0, depth+1, pathSoFar.Push(0)); d0 != nil {
 				return d0
 			}
@@ -224,7 +224,7 @@ func checkInvariant[T any](trie *Trie[T], depth int, pathSoFar *triePath) *Invar
 			return &InvariantDiscrepancy{
 				Reason:            "intermediate node with a key",
 				PathToDiscrepancy: pathSoFar.BitString(),
-				KeyAtDiscrepancy:  trie.Key.BitString(),
+				KeyAtDiscrepancy:  tr.Key.BitString(),
 			}
 		}
 	}
