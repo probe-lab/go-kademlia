@@ -6,23 +6,23 @@ import (
 )
 
 type KadID struct {
-	key.KadKey
+	key.SHA256
 }
 
-var _ address.NodeID = (*KadID)(nil)
+var _ address.NodeID[key.SHA256] = (*KadID)(nil)
 
-func NewKadID(k key.KadKey) *KadID {
+func NewKadID(k key.SHA256) *KadID {
 	return &KadID{k}
 }
 
-func (k KadID) Key() key.KadKey {
-	return k.KadKey
+func (k KadID) Key() key.SHA256 {
+	return k.SHA256
 }
 
-func (k KadID) NodeID() address.NodeID {
+func (k KadID) NodeID() address.NodeID[key.SHA256] {
 	return &k
 }
 
 func (k KadID) String() string {
-	return k.Hex()
+	return "..."
 }

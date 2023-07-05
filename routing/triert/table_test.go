@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	key0 = key.KadKey(make([]byte, 32)) // 000000...000
+	key0 = key.NewSHA256(make([]byte, 32)) // 000000...000
 
 	key1  = keyWithPrefix("010000", 32)
 	key2  = keyWithPrefix("100000", 32)
@@ -43,57 +43,46 @@ var (
 func TestAddPeer(t *testing.T) {
 	t.Run("one", func(t *testing.T) {
 		rt := New(key0)
-		success, err := rt.AddPeer(context.Background(), node1)
-		require.NoError(t, err)
+		success := rt.AddPeer(context.Background(), node1)
 		require.True(t, success)
 		require.Equal(t, 1, rt.Size())
 	})
 
 	t.Run("ignore duplicate", func(t *testing.T) {
 		rt := New(key0)
-		success, err := rt.AddPeer(context.Background(), node1)
-		require.NoError(t, err)
+		success := rt.AddPeer(context.Background(), node1)
 		require.True(t, success)
 		require.Equal(t, 1, rt.Size())
 
-		success, err = rt.AddPeer(context.Background(), node1)
-		require.NoError(t, err)
+		success = rt.AddPeer(context.Background(), node1)
 		require.False(t, success)
 		require.Equal(t, 1, rt.Size())
 	})
 
 	t.Run("many", func(t *testing.T) {
 		rt := New(key0)
-		success, err := rt.AddPeer(context.Background(), node1)
-		require.NoError(t, err)
+		success := rt.AddPeer(context.Background(), node1)
 		require.True(t, success)
 
-		success, err = rt.AddPeer(context.Background(), node2)
-		require.NoError(t, err)
+		success = rt.AddPeer(context.Background(), node2)
 		require.True(t, success)
 
-		success, err = rt.AddPeer(context.Background(), node3)
-		require.NoError(t, err)
+		success = rt.AddPeer(context.Background(), node3)
 		require.True(t, success)
 
-		success, err = rt.AddPeer(context.Background(), node4)
-		require.NoError(t, err)
+		success = rt.AddPeer(context.Background(), node4)
 		require.True(t, success)
 
-		success, err = rt.AddPeer(context.Background(), node5)
-		require.NoError(t, err)
+		success = rt.AddPeer(context.Background(), node5)
 		require.True(t, success)
 
-		success, err = rt.AddPeer(context.Background(), node6)
-		require.NoError(t, err)
+		success = rt.AddPeer(context.Background(), node6)
 		require.True(t, success)
 
-		success, err = rt.AddPeer(context.Background(), node7)
-		require.NoError(t, err)
+		success = rt.AddPeer(context.Background(), node7)
 		require.True(t, success)
 
-		success, err = rt.AddPeer(context.Background(), node8)
-		require.NoError(t, err)
+		success = rt.AddPeer(context.Background(), node8)
 		require.True(t, success)
 
 		require.Equal(t, 8, rt.Size())
@@ -105,14 +94,12 @@ func TestRemovePeer(t *testing.T) {
 	rt.AddPeer(context.Background(), node1)
 
 	t.Run("unknown peer", func(t *testing.T) {
-		success, err := rt.RemoveKey(context.Background(), key2)
-		require.NoError(t, err)
+		success := rt.RemoveKey(context.Background(), key2)
 		require.False(t, success)
 	})
 
 	t.Run("known peer", func(t *testing.T) {
-		success, err := rt.RemoveKey(context.Background(), key1)
-		require.NoError(t, err)
+		success := rt.RemoveKey(context.Background(), key1)
 		require.True(t, success)
 	})
 }
@@ -120,8 +107,7 @@ func TestRemovePeer(t *testing.T) {
 func TestFindPeer(t *testing.T) {
 	t.Run("known peer", func(t *testing.T) {
 		rt := New(key0)
-		success, err := rt.AddPeer(context.Background(), node1)
-		require.NoError(t, err)
+		success := rt.AddPeer(context.Background(), node1)
 		require.True(t, success)
 
 		want := node1
@@ -139,8 +125,7 @@ func TestFindPeer(t *testing.T) {
 
 	t.Run("removed peer", func(t *testing.T) {
 		rt := New(key0)
-		success, err := rt.AddPeer(context.Background(), node1)
-		require.NoError(t, err)
+		success := rt.AddPeer(context.Background(), node1)
 		require.True(t, success)
 
 		want := node1
@@ -148,8 +133,7 @@ func TestFindPeer(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, want, got)
 
-		success, err = rt.RemoveKey(context.Background(), key1)
-		require.NoError(t, err)
+		success = rt.RemoveKey(context.Background(), key1)
 		require.True(t, success)
 
 		got, err = rt.Find(context.Background(), key1)
@@ -179,7 +163,7 @@ func TestNearestPeers(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 5, len(peers))
 
-	expectedOrder := []address.NodeID{node9, node8, node7, node10, node11}
+	expectedOrder := []address.NodeID[key.SHA256]{node9, node8, node7, node10, node11}
 	require.Equal(t, expectedOrder, peers)
 
 	peers, err = rt.NearestPeers(ctx, node11.Key(), 2)
@@ -187,37 +171,36 @@ func TestNearestPeers(t *testing.T) {
 	require.Equal(t, 2, len(peers))
 }
 
-func TestInvalidKeys(t *testing.T) {
-	ctx := context.Background()
-	incompatKey := key.KadKey(make([]byte, 4)) // key is shorter (4 bytes only)
-	incompatNode := NewNode("inv", incompatKey)
-
-	rt := New(key0)
-
-	t.Run("add peer", func(t *testing.T) {
-		success, err := rt.AddPeer(ctx, incompatNode)
-		require.ErrorIs(t, err, ErrKeyWrongLength)
-		require.False(t, success)
-	})
-
-	t.Run("remove key", func(t *testing.T) {
-		success, err := rt.RemoveKey(ctx, incompatKey)
-		require.ErrorIs(t, err, ErrKeyWrongLength)
-		require.False(t, success)
-	})
-
-	t.Run("find", func(t *testing.T) {
-		nodeID, err := rt.Find(ctx, incompatKey)
-		require.ErrorIs(t, err, ErrKeyWrongLength)
-		require.Nil(t, nodeID)
-	})
-
-	t.Run("nearest peers", func(t *testing.T) {
-		nodeIDs, err := rt.NearestPeers(ctx, incompatKey, 2)
-		require.ErrorIs(t, err, ErrKeyWrongLength)
-		require.Nil(t, nodeIDs)
-	})
-}
+// Cannot Happen anymore
+//func TestInvalidKeys(t *testing.T) {
+//	ctx := context.Background()
+//	incompatKey := key.NewSHA256(make([]byte, 4)) // key is shorter (4 bytes only)
+//	incompatNode := NewNode("inv", incompatKey)
+//
+//	rt := New(key0)
+//
+//	t.Run("add peer", func(t *testing.T) {
+//		success := rt.AddPeer(ctx, incompatNode)
+//		require.False(t, success)
+//	})
+//
+//	t.Run("remove key", func(t *testing.T) {
+//		success := rt.RemoveKey(ctx, incompatKey)
+//		require.False(t, success)
+//	})
+//
+//	t.Run("find", func(t *testing.T) {
+//		nodeID, err := rt.Find(ctx, incompatKey)
+//		require.ErrorIs(t, err, ErrKeyWrongLength)
+//		require.Nil(t, nodeID)
+//	})
+//
+//	t.Run("nearest peers", func(t *testing.T) {
+//		nodeIDs, err := rt.NearestPeers(ctx, incompatKey, 2)
+//		require.ErrorIs(t, err, ErrKeyWrongLength)
+//		require.Nil(t, nodeIDs)
+//	})
+//}
 
 func TestCplSize(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
@@ -233,11 +216,9 @@ func TestCplSize(t *testing.T) {
 		ctx := context.Background()
 		rt := New(key0)
 
-		success, err := rt.AddPeer(ctx, NewNode("cpl1a", keyWithPrefix("01", 32)))
-		require.NoError(t, err)
+		success := rt.AddPeer(ctx, NewNode("cpl1a", keyWithPrefix("01", 32)))
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl1b", keyWithPrefix("01", 32)))
-		require.NoError(t, err)
+		success = rt.AddPeer(ctx, NewNode("cpl1b", keyWithPrefix("01", 32)))
 		require.True(t, success)
 		require.Equal(t, 2, rt.Size())
 		require.Equal(t, 2, rt.CplSize(1))
@@ -250,11 +231,9 @@ func TestCplSize(t *testing.T) {
 		ctx := context.Background()
 		rt := New(key0)
 
-		success, err := rt.AddPeer(ctx, NewNode("cpl2a", keyWithPrefix("001", 32)))
-		require.NoError(t, err)
+		success := rt.AddPeer(ctx, NewNode("cpl2a", keyWithPrefix("001", 32)))
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl2b", keyWithPrefix("001", 32)))
-		require.NoError(t, err)
+		success = rt.AddPeer(ctx, NewNode("cpl2b", keyWithPrefix("001", 32)))
 		require.True(t, success)
 
 		require.Equal(t, 2, rt.Size())
@@ -268,17 +247,13 @@ func TestCplSize(t *testing.T) {
 		ctx := context.Background()
 		rt := New(key0)
 
-		success, err := rt.AddPeer(ctx, NewNode("cpl3a", keyWithPrefix("0001", 32)))
-		require.NoError(t, err)
+		success := rt.AddPeer(ctx, NewNode("cpl3a", keyWithPrefix("0001", 32)))
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl3b", keyWithPrefix("0001", 32)))
-		require.NoError(t, err)
+		success = rt.AddPeer(ctx, NewNode("cpl3b", keyWithPrefix("0001", 32)))
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl3c", keyWithPrefix("0001", 32)))
-		require.NoError(t, err)
+		success = rt.AddPeer(ctx, NewNode("cpl3c", keyWithPrefix("0001", 32)))
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl3d", keyWithPrefix("0001", 32)))
-		require.NoError(t, err)
+		success = rt.AddPeer(ctx, NewNode("cpl3d", keyWithPrefix("0001", 32)))
 		require.True(t, success)
 
 		require.Equal(t, 4, rt.Size())
@@ -292,31 +267,23 @@ func TestCplSize(t *testing.T) {
 		ctx := context.Background()
 		rt := New(key0)
 
-		success, err := rt.AddPeer(ctx, NewNode("cpl1a", keyWithPrefix("01", 32)))
-		require.NoError(t, err)
+		success := rt.AddPeer(ctx, NewNode("cpl1a", keyWithPrefix("01", 32)))
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl1b", keyWithPrefix("01", 32)))
-		require.NoError(t, err)
+		success = rt.AddPeer(ctx, NewNode("cpl1b", keyWithPrefix("01", 32)))
 		require.True(t, success)
 
-		success, err = rt.AddPeer(ctx, NewNode("cpl2a", keyWithPrefix("001", 32)))
-		require.NoError(t, err)
+		success = rt.AddPeer(ctx, NewNode("cpl2a", keyWithPrefix("001", 32)))
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl2b", keyWithPrefix("001", 32)))
-		require.NoError(t, err)
+		success = rt.AddPeer(ctx, NewNode("cpl2b", keyWithPrefix("001", 32)))
 		require.True(t, success)
 
-		success, err = rt.AddPeer(ctx, NewNode("cpl3a", keyWithPrefix("0001", 32)))
-		require.NoError(t, err)
+		success = rt.AddPeer(ctx, NewNode("cpl3a", keyWithPrefix("0001", 32)))
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl3b", keyWithPrefix("0001", 32)))
-		require.NoError(t, err)
+		success = rt.AddPeer(ctx, NewNode("cpl3b", keyWithPrefix("0001", 32)))
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl3c", keyWithPrefix("0001", 32)))
-		require.NoError(t, err)
+		success = rt.AddPeer(ctx, NewNode("cpl3c", keyWithPrefix("0001", 32)))
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl3d", keyWithPrefix("0001", 32)))
-		require.NoError(t, err)
+		success = rt.AddPeer(ctx, NewNode("cpl3d", keyWithPrefix("0001", 32)))
 		require.True(t, success)
 
 		require.Equal(t, 8, rt.Size())
@@ -326,7 +293,7 @@ func TestCplSize(t *testing.T) {
 	})
 }
 
-func keyWithPrefix(s string, length int) key.KadKey {
+func keyWithPrefix(s string, length int) key.SHA256 {
 	bits := len(s)
 	if bits > 64 {
 		panic("keyWithPrefix: prefix too long")
@@ -347,17 +314,17 @@ func keyWithPrefix(s string, length int) key.KadKey {
 	lead >>= bits
 	lead |= prefix
 	binary.BigEndian.PutUint64(buf, lead)
-	return key.KadKey(buf)
+	return key.SHA256(buf)
 }
-
-var _ address.NodeID = (*node)(nil)
 
 type node struct {
 	id  string
-	key key.KadKey
+	key key.Kademlia[key.SHA256]
 }
 
-func NewNode(id string, k key.KadKey) *node {
+var _ address.NodeID[key.SHA256] = (*node)(nil)
+
+func NewNode(id string, k key.SHA256) *node {
 	return &node{
 		id:  id,
 		key: k,
@@ -368,10 +335,10 @@ func (n node) String() string {
 	return n.id
 }
 
-func (n node) Key() key.KadKey {
-	return n.key
+func (n node) Key() key.SHA256 {
+	return n.key.Key()
 }
 
-func (n node) NodeID() address.NodeID {
+func (n node) NodeID() address.NodeID[key.SHA256] {
 	return &n
 }

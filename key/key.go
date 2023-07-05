@@ -1,77 +1,175 @@
 package key
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	mh "github.com/multiformats/go-multihash"
+	mhreg "github.com/multiformats/go-multihash/core"
+	"hash"
 	"math"
 )
 
-type KadKey []byte
+var sha256Hasher hash.Hash
 
-func (k KadKey) Size() int {
-	return len(k)
-}
-
-func (k KadKey) Hex() string {
-	return hex.EncodeToString(k[:])
-}
-
-func (k KadKey) String() string {
-	return k.Hex()
-}
-
-func (a KadKey) Xor(b KadKey) (KadKey, error) {
-	if a.Size() != b.Size() {
-		return nil, ErrInvalidKey(a.Size())
+func init() {
+	hasher, err := mhreg.GetHasher(mh.SHA2_256)
+	if err != nil {
+		panic("no hasher found for SHA2_256")
 	}
-
-	xored := make([]byte, a.Size())
-	for i := 0; i < a.Size(); i++ {
-		xored[i] = a[i] ^ b[i]
-	}
-	return xored, nil
+	sha256Hasher = hasher
 }
 
-func (a KadKey) CommonPrefixLength(b KadKey) (int, error) {
-	if a.Size() != b.Size() {
-		return 0, ErrInvalidKey(a.Size())
-	}
+type Kademlia[T any] interface {
+	XOR(T) T
+	CommonPrefixLength(T) int
+	Compare(T) int8
+	Equal(Kademlia[T]) bool
+	BitAt(int) int
+	Bytes() []byte
+	String() string
+	Key() T
+}
 
+type SHA256 [sha256.Size]byte
+
+var _ Kademlia[SHA256] = (SHA256)([sha256.Size]byte{})
+
+func NewSHA256(data []byte) SHA256 {
+	sha256Hasher.Write(data)
+	return SHA256(sha256Hasher.Sum(nil))
+}
+
+func (s SHA256) XOR(other SHA256) SHA256 {
+	xor := [sha256.Size]byte{}
+	for i := 0; i < sha256.Size; i++ {
+		xor[i] = s[i] ^ other[i]
+	}
+	return xor
+}
+
+func (s SHA256) CommonPrefixLength(other SHA256) int {
 	var xored byte
-	for i := 0; i < a.Size(); i++ {
-		xored = a[i] ^ b[i]
+	for i := 0; i < sha256.Size; i++ {
+		xored = s[i] ^ other[i]
 		if xored != 0 {
-			return i*8 + 7 - int(math.Log2(float64(xored))), nil
+			return i*8 + 7 - int(math.Log2(float64(xored)))
 		}
 	}
-	return 8 * a.Size(), nil
+	return 8 * sha256.Size
 }
 
 // Compare returns -1 if a < b, 0 if a == b, and 1 if a > b
-func (a KadKey) Compare(b KadKey) (int8, error) {
-	if a.Size() != b.Size() {
-		return 2, ErrInvalidKey(a.Size())
-	}
-
-	for i := 0; i < a.Size(); i++ {
-		if a[i] < b[i] {
-			return -1, nil
+func (s SHA256) Compare(other SHA256) int8 {
+	for i := 0; i < sha256.Size; i++ {
+		if s[i] < other[i] {
+			return -1
 		}
-		if a[i] > b[i] {
-			return 1, nil
+		if s[i] > other[i] {
+			return 1
 		}
 	}
-	return 0, nil
+	return 0
 }
 
-func (a KadKey) Equal(b KadKey) (bool, error) {
-	cmp, err := a.Compare(b)
-	return cmp == 0, err
+func (s SHA256) Equal(other Kademlia[SHA256]) bool {
+	return s.Compare(other.Key()) == 0
 }
 
-func (k KadKey) BitAt(offset int) int {
-	if k[offset/8]&(byte(1)<<(7-offset%8)) == 0 {
+func (s SHA256) BitAt(offset int) int {
+	if s[offset/8]&(byte(1)<<(7-offset%8)) == 0 {
 		return 0
 	} else {
 		return 1
+	}
+}
+
+func (s SHA256) String() string {
+	return hex.EncodeToString(s[:])
+}
+
+func (s SHA256) Bytes() []byte {
+	return s[:]
+}
+func (s SHA256) Key() SHA256 {
+	return s
+}
+
+type Bytes []byte
+
+var _ Kademlia[Bytes] = (Bytes)([]byte{})
+
+func (b Bytes) XOR(other Bytes) Bytes {
+	b.panicOnUnequalSize(other)
+
+	xor := make([]byte, len(b))
+	for i := 0; i < len(b); i++ {
+		xor[i] = b[i] ^ other[i]
+	}
+	return xor
+}
+
+func (b Bytes) CommonPrefixLength(other Bytes) int {
+	b.panicOnUnequalSize(other)
+
+	var xored byte
+	for i := 0; i < len(b); i++ {
+		xored = b[i] ^ other[i]
+		if xored != 0 {
+			return i*8 + 7 - int(math.Log2(float64(xored)))
+		}
+	}
+	return 8 * len(b)
+}
+
+func (b Bytes) Compare(other Bytes) int8 {
+	b.panicOnUnequalSize(other)
+
+	for i := 0; i < len(b); i++ {
+		if b[i] < other[i] {
+			return -1
+		}
+		if b[i] > other[i] {
+			return 1
+		}
+	}
+	return 0
+}
+
+func (b Bytes) Equal(other Kademlia[Bytes]) bool {
+
+	if b == nil && other.Key() == nil {
+		return true
+	} else if b == nil && other.Key() != nil {
+		return false
+	} else if b != nil && other.Key() == nil {
+		return false
+	}
+	return b.Compare(other.Key()) == 0
+}
+
+func (b Bytes) BitAt(offset int) int {
+	if b[offset/8]&(byte(1)<<(7-offset%8)) == 0 {
+		return 0
+	} else {
+		return 1
+	}
+}
+
+func (b Bytes) Bytes() []byte {
+	return b
+}
+
+func (b Bytes) String() string {
+	return hex.EncodeToString(b[:])
+}
+
+func (b Bytes) Key() Bytes {
+	return b
+}
+
+func (b Bytes) panicOnUnequalSize(other Bytes) {
+	if len(other) != len(b) {
+		panic(fmt.Sprintf("kademlia key bytes have different sizes: %d != %d", len(other), len(b)))
 	}
 }

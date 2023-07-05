@@ -12,7 +12,7 @@ type AddrInfo struct {
 	id *peerid.PeerID
 }
 
-var _ address.NodeID = (*AddrInfo)(nil)
+var _ address.NodeID[key.SHA256] = (*AddrInfo)(nil)
 
 func NewAddrInfo(ai peer.AddrInfo) *AddrInfo {
 	return &AddrInfo{
@@ -21,7 +21,7 @@ func NewAddrInfo(ai peer.AddrInfo) *AddrInfo {
 	}
 }
 
-func (ai AddrInfo) Key() key.KadKey {
+func (ai AddrInfo) Key() key.SHA256 {
 	return ai.id.Key()
 }
 
