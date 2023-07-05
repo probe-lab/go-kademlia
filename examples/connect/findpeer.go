@@ -127,13 +127,16 @@ func FindPeer(ctx context.Context) {
 	queryOpts := []simplequery.Option{
 		simplequery.WithProtocolID(protocolID),
 		simplequery.WithConcurrency(1),
-		simplequery.WithRequestTimeout(5 * time.Second),
+		simplequery.WithRequestTimeout(2 * time.Second),
 		simplequery.WithHandleResultsFunc(handleResultsFn),
 		simplequery.WithRoutingTable(rt),
 		simplequery.WithEndpoint(msgEndpoint),
 		simplequery.WithScheduler(sched),
 	}
-	simplequery.NewSimpleQuery(ctx, req, queryOpts...)
+	_, err = simplequery.NewSimpleQuery(ctx, req, queryOpts...)
+	if err != nil {
+		panic(err)
+	}
 
 	span.AddEvent("start request execution")
 

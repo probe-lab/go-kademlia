@@ -18,7 +18,7 @@ func TestSimpleScheduler(t *testing.T) {
 
 	sched := NewSimpleScheduler(clk)
 
-	require.Equal(t, clk.Now(), sched.Now())
+	require.Equal(t, clk.Now(), sched.Clock().Now())
 
 	nActions := 10
 	actions := make([]*ta.FuncAction, nActions)

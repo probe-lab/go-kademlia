@@ -59,7 +59,6 @@ type SimpleQuery struct {
 // key, and the peers that have been queried so far.
 func NewSimpleQuery(ctx context.Context, req message.MinKadRequestMessage,
 	opts ...Option) (*SimpleQuery, error) {
-
 	ctx, span := util.StartSpan(ctx, "SimpleQuery.NewSimpleQuery",
 		trace.WithAttributes(attribute.String("Target", req.Target().Hex())))
 	defer span.End()
@@ -71,14 +70,22 @@ func NewSimpleQuery(ctx context.Context, req message.MinKadRequestMessage,
 		return nil, err
 	}
 
+	// get the closest peers to the target from the routing table
 	closestPeers, err := cfg.RoutingTable.NearestPeers(ctx, req.Target(),
 		cfg.NumberUsefulCloserPeers)
 	if err != nil {
 		span.RecordError(err)
 		return nil, err
 	}
+	if len(closestPeers) == 0 {
+		err := errors.New("no peers in routing table")
+		span.RecordError(err)
+		return nil, err
+	}
 
+	// create new empty peerlist
 	pl := newPeerList(req.Target(), cfg.Endpoint)
+	// add the closest peers to peerlist
 	pl.addToPeerlist(closestPeers)
 
 	q := &SimpleQuery{
@@ -96,11 +103,28 @@ func NewSimpleQuery(ctx context.Context, req message.MinKadRequestMessage,
 		peerlist:        pl,
 	}
 
+	// add concurrency number of requests to eventqueue
 	q.enqueueNewRequests(ctx)
 
 	return q, nil
 }
 
+// checkIfDone cheks if the query is done, and return an error if it is done.
+func (q *SimpleQuery) checkIfDone() error {
+	if q.done {
+		// query is done, don't send any more requests
+		return errors.New("query done")
+	}
+	if q.ctx.Err() != nil {
+		q.done = true
+		return q.ctx.Err()
+	}
+	return nil
+}
+
+// enqueueNewRequests adds the maximal number of requests to the scheduler's
+// event queue. The maximal number of conccurent requests is limited by the
+// concurrency factor and by the number of queued peers in the peerlist.
 func (q *SimpleQuery) enqueueNewRequests(ctx context.Context) {
 	ctx, span := util.StartSpan(ctx, "SimpleQuery.enqueueNewRequests")
 	defer span.End()
@@ -117,6 +141,7 @@ func (q *SimpleQuery) enqueueNewRequests(ctx context.Context) {
 		q.done = true
 		span.AddEvent("all peers queried")
 		q.notifyFailureFn(ctx)
+		return
 	}
 
 	span.AddEvent("newRequestsToSend: " + strconv.Itoa(newRequestsToSend) +
@@ -127,114 +152,95 @@ func (q *SimpleQuery) enqueueNewRequests(ctx context.Context) {
 		q.sched.EnqueueAction(ctx, ba.BasicAction(q.newRequest))
 
 	}
+	// increase number of inflight requests. Note that it counts both queued
+	// requests and requests in flight
 	q.inflightRequests += newRequestsToSend
 	span.AddEvent("Enqueued " + strconv.Itoa(newRequestsToSend) +
 		" SimpleQuery.newRequest")
 }
 
-func (q *SimpleQuery) checkIfDone() error {
-	if q.done {
-		// query is done, don't send any more requests
-		return errors.New("query done")
-	}
-
-	select {
-	case <-q.ctx.Done():
-		// query is cancelled, mark it as done
-		q.done = true
-		return errors.New("query cancelled")
-	default:
-	}
-	return nil
-}
-
+// newRequest sends a request to the closest peer that hasn't been queried yet.
 func (q *SimpleQuery) newRequest(ctx context.Context) {
-	ctx, cancel := context.WithTimeout(ctx, q.timeout)
-	defer cancel()
-
 	ctx, span := util.StartSpan(ctx, "SimpleQuery.newRequest")
 	defer span.End()
 
 	if err := q.checkIfDone(); err != nil {
 		span.RecordError(err)
+		// decrease counter, because there is one less request queued
 		q.inflightRequests--
 		return
 	}
 
+	// get the closest peer from target that hasn't been queried yet
 	id := q.peerlist.popClosestQueued()
 	if id == nil {
+		// the peer list is empty, we don't have any more peers to query. This
+		// shouldn't happen because enqueueNewRequests doesn't enqueue more
+		// requests than there are queued peers in the peerlist
 		q.inflightRequests--
 		return
 	}
-	span.AddEvent("peer selected: " + id.String())
+	span.AddEvent("Peer selected: " + id.String())
 
-	// function to be executed when a response is received
-	handleResp := func(ctx context.Context, resp message.MinKadResponseMessage, err error) {
-		ctx, span := util.StartSpan(ctx, "SimpleQuery.handleResp")
-		defer span.End()
-
+	// this function will be queued when a response is received, an error
+	// occures or the request times out (with appropriate parameters)
+	handleResp := func(ctx context.Context, resp message.MinKadResponseMessage,
+		err error) {
 		if err != nil {
-			span.AddEvent("got error")
-			q.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
-				q.requestError(ctx, id, err)
-			}))
+			q.requestError(ctx, id, err)
 		} else {
-			span.AddEvent("got response")
-			q.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
-				q.handleResponse(ctx, id, resp)
-			}))
-			span.AddEvent("Enqueued SimpleQuery.handleResponse")
+			q.handleResponse(ctx, id, resp)
 		}
 	}
 
 	// send request
-	q.msgEndpoint.SendRequestHandleResponse(ctx, q.protoID, id, q.req, q.req.EmptyResponse(), q.timeout, handleResp)
+	err := q.msgEndpoint.SendRequestHandleResponse(ctx, q.protoID, id, q.req,
+		q.req.EmptyResponse(), q.timeout, handleResp)
+	if err != nil {
+		// there was an error before the request was sent, handle it
+		span.RecordError(err)
+		q.requestError(ctx, id, err)
+	}
 }
 
-func (q *SimpleQuery) handleResponse(ctx context.Context, id address.NodeID, resp message.MinKadResponseMessage) {
+// handleResponse handles a response to a past query request
+func (q *SimpleQuery) handleResponse(ctx context.Context, id address.NodeID,
+	resp message.MinKadResponseMessage) {
 	ctx, span := util.StartSpan(ctx, "SimpleQuery.handleResponse",
-		trace.WithAttributes(attribute.String("Target", q.req.Target().Hex()), attribute.String("From Peer", id.String())))
+		trace.WithAttributes(attribute.String("Target", q.req.Target().Hex()),
+			attribute.String("From Peer", id.String())))
 	defer span.End()
 
 	if err := q.checkIfDone(); err != nil {
+		// request completed or was cancelled was the message was in flight,
+		// don't handle the message
 		span.RecordError(err)
 		return
 	}
 
 	if resp == nil {
-		span.AddEvent("response is nil")
-		q.requestError(ctx, id, errors.New("nil response"))
+		err := errors.New("nil response")
+		span.RecordError(err)
+		q.requestError(ctx, id, err)
 		return
 	}
-
-	q.inflightRequests--
 
 	closerPeers := resp.CloserNodes()
 	if len(closerPeers) > 0 {
 		// consider that remote peer is behaving correctly if it returns
-		// at least 1 peer
+		// at least 1 peer. We add it to our routing table only if it behaves
+		// as expected (we don't want to add unresponsive nodes to the rt)
 		q.rt.AddPeer(ctx, id)
 	}
 
+	q.inflightRequests--
+
+	// set peer as queried in the peerlist
 	q.peerlist.queriedPeer(id)
 
-	for i, id := range closerPeers {
-		c, err := id.NodeID().Key().Compare(q.rt.Self())
-		if err != nil {
-			// wrong format of kad key, skip
-			span.AddEvent("remote peer provided wrong format of kad key")
-			continue
-		}
-		if c == 0 {
-			// don't add self to queries or routing table
-			span.AddEvent("remote peer provided self as closer peer")
-			closerPeers = append(closerPeers[:i], closerPeers[i+1:]...)
-			continue
-		}
-
-		q.msgEndpoint.MaybeAddToPeerstore(ctx, id, q.peerstoreTTL)
-	}
-
+	// handle the response using the function provided by the caller, this
+	// function decides whether the query should terminate and returns the list
+	// of useful nodes that should be queried next
 	stop, usefulNodeIDs := q.handleResultFn(ctx, id, resp)
 	if stop {
 		// query is done, don't send any more requests
@@ -243,33 +249,43 @@ func (q *SimpleQuery) handleResponse(ctx context.Context, id address.NodeID, res
 		return
 	}
 
-	// remove q.self from usefulNodeIDs
+	// remove all occurneces of q.self from usefulNodeIDs
 	writeIndex := 0
-	// Iterate over the slice and copy elements that do not match the value
 	for _, id := range usefulNodeIDs {
 		if c, err := q.rt.Self().Compare(id.Key()); err == nil && c != 0 {
 			// id is valid and isn't self
 			usefulNodeIDs[writeIndex] = id
 			writeIndex++
+		} else if err != nil {
+			span.AddEvent("wrong KadKey lenght")
+		} else {
+			span.AddEvent("never add self to query peerlist")
 		}
 	}
 	usefulNodeIDs = usefulNodeIDs[:writeIndex]
 
+	// add usefulNodeIDs to peerlist
 	q.peerlist.addToPeerlist(usefulNodeIDs)
 
+	// enqueue new query requests to the event loop (usually 1)
 	q.enqueueNewRequests(ctx)
 }
 
+// requestError handle an error that occured while sending a request or
+// receiving a response.
 func (q *SimpleQuery) requestError(ctx context.Context, id address.NodeID, err error) {
 	ctx, span := util.StartSpan(ctx, "SimpleQuery.requestError",
 		trace.WithAttributes(attribute.String("PeerID", id.String()),
 			attribute.String("Error", err.Error())))
 	defer span.End()
 
+	// the request isn't in flight anymore since it failed
 	q.inflightRequests--
 
 	if q.ctx.Err() == nil {
-		// remove peer from routing table unless context was cancelled
+		// remove peer from routing table unless context was cancelled. We don't
+		// want to keep peers that timed out or peers that returned nil/invalid
+		// responses.
 		q.rt.RemoveKey(ctx, id.Key())
 	}
 
@@ -278,7 +294,9 @@ func (q *SimpleQuery) requestError(ctx context.Context, id address.NodeID, err e
 		return
 	}
 
+	// set peer as unreachable in the peerlist
 	q.peerlist.unreachablePeer(id)
 
+	// enqueue new query requests to the event loop (usually 1)
 	q.enqueueNewRequests(ctx)
 }

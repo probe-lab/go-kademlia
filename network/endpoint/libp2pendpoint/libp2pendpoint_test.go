@@ -200,6 +200,15 @@ func TestLibp2pEndpoint(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	require.False(t, scheds[1].RunOne(ctx)) // only 1 action should run on server
+	wg.Add(1)
+	go func() {
+		// timeout is queued in the scheduler 0
+		for !scheds[0].RunOne(ctx) {
+			time.Sleep(time.Millisecond)
+		}
+		require.False(t, scheds[0].RunOne(ctx))
+		wg.Done()
+	}()
 	wg.Wait()
 
 	// invalid response format (not protobuf)
@@ -238,6 +247,15 @@ func TestLibp2pEndpoint(t *testing.T) {
 	err = endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[2], req,
 		resp, time.Second, invalidRespHandlerBuilder(swarm.ErrNoAddresses))
 	require.NoError(t, err)
+	wg.Add(1)
+	go func() {
+		// timeout is queued in the scheduler 0
+		for !scheds[0].RunOne(ctx) {
+			time.Sleep(time.Millisecond)
+		}
+		require.False(t, scheds[0].RunOne(ctx))
+		wg.Done()
+	}()
 	wg.Wait()
 
 	// test timeout
@@ -277,10 +295,10 @@ func TestLibp2pEndpoint(t *testing.T) {
 	err = endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], req,
 		resp, 0, responseHandler)
 	require.NoError(t, err)
-	wg.Add(1)
 	for !scheds[1].RunOne(ctx) {
 		time.Sleep(time.Millisecond)
 	}
+	wg.Wait() // wg count shoud be 0
 	require.False(t, scheds[1].RunOne(ctx))
 	// no response to be handled by 0
 	require.False(t, scheds[0].RunOne(ctx))
@@ -292,14 +310,27 @@ func TestLibp2pEndpoint(t *testing.T) {
 		return &simmessage.SimMessage{}, nil
 	})
 	require.NoError(t, err)
-	err = endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], req,
+	require.False(t, scheds[0].RunOne(ctx))
+	wg.Add(1)
+	noResponseCtx, cancel := context.WithCancel(ctx)
+	err = endpoints[0].SendRequestHandleResponse(noResponseCtx, protoID, ids[1], req,
 		resp, 0, responseHandler)
 	require.NoError(t, err)
-	wg.Add(1)
 	for !scheds[1].RunOne(ctx) {
 		time.Sleep(time.Millisecond)
 	}
 	require.False(t, scheds[1].RunOne(ctx))
+	cancel()
+	wg.Add(1)
+	go func() {
+		// timeout is queued in the scheduler 0
+		for !scheds[0].RunOne(ctx) {
+			time.Sleep(time.Millisecond)
+		}
+		require.False(t, scheds[0].RunOne(ctx))
+		wg.Done()
+	}()
+	wg.Wait()
 	// no response to be handled by 0
 	require.False(t, scheds[0].RunOne(ctx))
 

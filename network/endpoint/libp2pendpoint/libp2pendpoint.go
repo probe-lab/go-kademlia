@@ -188,7 +188,12 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 				attribute.String("PeerID", n.String()),
 			))
 		defer span.End()
-		ctx, cancel := context.WithCancel(ctx)
+		var cancel context.CancelFunc
+		if timeout > 0 {
+			ctx, cancel = e.sched.Clock().WithTimeout(ctx, timeout)
+		} else {
+			ctx, cancel = context.WithCancel(ctx)
+		}
 		defer cancel()
 
 		var err error
@@ -197,7 +202,9 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 		s, err = e.host.NewStream(ctx, p.ID, protocol.ID(protoID))
 		if err != nil {
 			span.RecordError(err, trace.WithAttributes(attribute.String("where", "stream creation")))
-			responseHandlerFn(ctx, nil, err)
+			e.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
+				responseHandlerFn(ctx, nil, err)
+			}))
 			return
 		}
 		defer s.Close()
@@ -205,7 +212,9 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 		err = WriteMsg(s, protoReq)
 		if err != nil {
 			span.RecordError(err, trace.WithAttributes(attribute.String("where", "write message")))
-			responseHandlerFn(ctx, nil, err)
+			e.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
+				responseHandlerFn(ctx, nil, err)
+			}))
 			return
 		}
 
@@ -231,12 +240,16 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 		}
 		if err != nil {
 			span.RecordError(err, trace.WithAttributes(attribute.String("where", "read message")))
-			responseHandlerFn(ctx, protoResp, err)
+			e.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
+				responseHandlerFn(ctx, protoResp, err)
+			}))
 			return
 		}
 
 		span.AddEvent("response received")
-		responseHandlerFn(ctx, protoResp, err)
+		e.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
+			responseHandlerFn(ctx, protoResp, err)
+		}))
 	}()
 	return nil
 }

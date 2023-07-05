@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/benbjohnson/clock"
 	"github.com/plprobelab/go-kademlia/events/action"
 	"github.com/plprobelab/go-kademlia/events/planner"
 )
@@ -12,7 +13,7 @@ import (
 // or at a specific time
 type Scheduler interface {
 	// Now returns the time of the scheduler's clock
-	Now() time.Time
+	Clock() clock.Clock
 
 	// EnqueueAction enqueues an action to run as soon as possible
 	EnqueueAction(context.Context, action.Action)
@@ -33,7 +34,7 @@ func ScheduleActionIn(ctx context.Context, s Scheduler, d time.Duration, a actio
 		s.EnqueueAction(ctx, a)
 		return nil
 	} else {
-		return s.ScheduleAction(ctx, s.Now().Add(d), a)
+		return s.ScheduleAction(ctx, s.Clock().Now().Add(d), a)
 	}
 }
 

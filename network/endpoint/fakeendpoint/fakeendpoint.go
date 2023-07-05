@@ -193,7 +193,12 @@ func (e *FakeEndpoint) HandleMessage(ctx context.Context, id address.NodeID,
 
 		resp, ok := msg.(message.MinKadResponseMessage)
 		var err error
-		if !ok {
+		if ok {
+			for _, p := range resp.CloserNodes() {
+				e.peerstore[p.NodeID().String()] = p
+				e.connStatus[p.NodeID().String()] = network.CanConnect
+			}
+		} else {
 			err = ErrInvalidResponseType
 		}
 		if followup != nil {
