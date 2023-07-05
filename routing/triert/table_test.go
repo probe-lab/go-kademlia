@@ -2,12 +2,10 @@ package triert
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/binary"
-	"strconv"
 	"testing"
 
 	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/key/keyutil"
 	"github.com/plprobelab/go-kademlia/key/trie"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/stretchr/testify/require"
@@ -16,17 +14,17 @@ import (
 var (
 	key0 = key.KadKey(make([]byte, 32)) // 000000...000
 
-	key1  = keyWithPrefix("010000", 32)
-	key2  = keyWithPrefix("100000", 32)
-	key3  = keyWithPrefix("110000", 32)
-	key4  = keyWithPrefix("111000", 32)
-	key5  = keyWithPrefix("011000", 32)
-	key6  = keyWithPrefix("011100", 32)
-	key7  = keyWithPrefix("000110", 32)
-	key8  = keyWithPrefix("000101", 32)
-	key9  = keyWithPrefix("000100", 32)
-	key10 = keyWithPrefix("001000", 32)
-	key11 = keyWithPrefix("001100", 32)
+	key1  = keyutil.RandomWithPrefix("010000", 32)
+	key2  = keyutil.RandomWithPrefix("100000", 32)
+	key3  = keyutil.RandomWithPrefix("110000", 32)
+	key4  = keyutil.RandomWithPrefix("111000", 32)
+	key5  = keyutil.RandomWithPrefix("011000", 32)
+	key6  = keyutil.RandomWithPrefix("011100", 32)
+	key7  = keyutil.RandomWithPrefix("000110", 32)
+	key8  = keyutil.RandomWithPrefix("000101", 32)
+	key9  = keyutil.RandomWithPrefix("000100", 32)
+	key10 = keyutil.RandomWithPrefix("001000", 32)
+	key11 = keyutil.RandomWithPrefix("001100", 32)
 
 	node1  = NewNode("QmPeer1", key1)
 	node2  = NewNode("QmPeer2", key2)
@@ -234,10 +232,10 @@ func TestCplSize(t *testing.T) {
 		ctx := context.Background()
 		rt := New(key0)
 
-		success, err := rt.AddPeer(ctx, NewNode("cpl1a", keyWithPrefix("01", 32)))
+		success, err := rt.AddPeer(ctx, NewNode("cpl1a", keyutil.RandomWithPrefix("01", 32)))
 		require.NoError(t, err)
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl1b", keyWithPrefix("01", 32)))
+		success, err = rt.AddPeer(ctx, NewNode("cpl1b", keyutil.RandomWithPrefix("01", 32)))
 		require.NoError(t, err)
 		require.True(t, success)
 		require.Equal(t, 2, rt.Size())
@@ -251,10 +249,10 @@ func TestCplSize(t *testing.T) {
 		ctx := context.Background()
 		rt := New(key0)
 
-		success, err := rt.AddPeer(ctx, NewNode("cpl2a", keyWithPrefix("001", 32)))
+		success, err := rt.AddPeer(ctx, NewNode("cpl2a", keyutil.RandomWithPrefix("001", 32)))
 		require.NoError(t, err)
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl2b", keyWithPrefix("001", 32)))
+		success, err = rt.AddPeer(ctx, NewNode("cpl2b", keyutil.RandomWithPrefix("001", 32)))
 		require.NoError(t, err)
 		require.True(t, success)
 
@@ -269,16 +267,16 @@ func TestCplSize(t *testing.T) {
 		ctx := context.Background()
 		rt := New(key0)
 
-		success, err := rt.AddPeer(ctx, NewNode("cpl3a", keyWithPrefix("0001", 32)))
+		success, err := rt.AddPeer(ctx, NewNode("cpl3a", keyutil.RandomWithPrefix("0001", 32)))
 		require.NoError(t, err)
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl3b", keyWithPrefix("0001", 32)))
+		success, err = rt.AddPeer(ctx, NewNode("cpl3b", keyutil.RandomWithPrefix("0001", 32)))
 		require.NoError(t, err)
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl3c", keyWithPrefix("0001", 32)))
+		success, err = rt.AddPeer(ctx, NewNode("cpl3c", keyutil.RandomWithPrefix("0001", 32)))
 		require.NoError(t, err)
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl3d", keyWithPrefix("0001", 32)))
+		success, err = rt.AddPeer(ctx, NewNode("cpl3d", keyutil.RandomWithPrefix("0001", 32)))
 		require.NoError(t, err)
 		require.True(t, success)
 
@@ -293,30 +291,30 @@ func TestCplSize(t *testing.T) {
 		ctx := context.Background()
 		rt := New(key0)
 
-		success, err := rt.AddPeer(ctx, NewNode("cpl1a", keyWithPrefix("01", 32)))
+		success, err := rt.AddPeer(ctx, NewNode("cpl1a", keyutil.RandomWithPrefix("01", 32)))
 		require.NoError(t, err)
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl1b", keyWithPrefix("01", 32)))
-		require.NoError(t, err)
-		require.True(t, success)
-
-		success, err = rt.AddPeer(ctx, NewNode("cpl2a", keyWithPrefix("001", 32)))
-		require.NoError(t, err)
-		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl2b", keyWithPrefix("001", 32)))
+		success, err = rt.AddPeer(ctx, NewNode("cpl1b", keyutil.RandomWithPrefix("01", 32)))
 		require.NoError(t, err)
 		require.True(t, success)
 
-		success, err = rt.AddPeer(ctx, NewNode("cpl3a", keyWithPrefix("0001", 32)))
+		success, err = rt.AddPeer(ctx, NewNode("cpl2a", keyutil.RandomWithPrefix("001", 32)))
 		require.NoError(t, err)
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl3b", keyWithPrefix("0001", 32)))
+		success, err = rt.AddPeer(ctx, NewNode("cpl2b", keyutil.RandomWithPrefix("001", 32)))
 		require.NoError(t, err)
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl3c", keyWithPrefix("0001", 32)))
+
+		success, err = rt.AddPeer(ctx, NewNode("cpl3a", keyutil.RandomWithPrefix("0001", 32)))
 		require.NoError(t, err)
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl3d", keyWithPrefix("0001", 32)))
+		success, err = rt.AddPeer(ctx, NewNode("cpl3b", keyutil.RandomWithPrefix("0001", 32)))
+		require.NoError(t, err)
+		require.True(t, success)
+		success, err = rt.AddPeer(ctx, NewNode("cpl3c", keyutil.RandomWithPrefix("0001", 32)))
+		require.NoError(t, err)
+		require.True(t, success)
+		success, err = rt.AddPeer(ctx, NewNode("cpl3d", keyutil.RandomWithPrefix("0001", 32)))
 		require.NoError(t, err)
 		require.True(t, success)
 
@@ -325,30 +323,6 @@ func TestCplSize(t *testing.T) {
 		require.Equal(t, 2, rt.CplSize(2))
 		require.Equal(t, 4, rt.CplSize(3))
 	})
-}
-
-func keyWithPrefix(s string, length int) key.KadKey {
-	bits := len(s)
-	if bits > 64 {
-		panic("keyWithPrefix: prefix too long")
-	}
-	n, err := strconv.ParseInt(s, 2, 64)
-	if err != nil {
-		panic("keyWithPrefix: " + err.Error())
-	}
-	prefix := uint64(n) << (64 - bits)
-
-	buf := make([]byte, length)
-	if _, err := rand.Read(buf); err != nil {
-		panic("keyWithPrefix: failed to read enough entropy for key")
-	}
-
-	lead := binary.BigEndian.Uint64(buf)
-	lead <<= bits
-	lead >>= bits
-	lead |= prefix
-	binary.BigEndian.PutUint64(buf, lead)
-	return key.KadKey(buf)
 }
 
 var _ address.NodeID = (*node)(nil)

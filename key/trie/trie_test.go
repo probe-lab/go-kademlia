@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/key/keyutil"
+	"github.com/stretchr/testify/require"
 )
 
 func trieFromKeys[T any](kks []key.KadKey) (*Trie[T], error) {
@@ -20,13 +22,14 @@ func trieFromKeys[T any](kks []key.KadKey) (*Trie[T], error) {
 	return t, nil
 }
 
-func TestInsertRemove(t *testing.T) {
+func TestRepeatedAddRemove(t *testing.T) {
 	r := New[any]()
-	testSeq(r, t)
-	testSeq(r, t)
+	testSeq(t, r)
+	testSeq(t, r)
 }
 
-func testSeq[T any](tr *Trie[T], t *testing.T) {
+func testSeq[T any](t *testing.T, tr *Trie[T]) {
+	t.Helper()
 	var err error
 	for _, s := range testInsertSeq {
 		var v T
@@ -61,21 +64,19 @@ func testSeq[T any](tr *Trie[T], t *testing.T) {
 }
 
 func TestCopy(t *testing.T) {
-	for _, sample := range testAddSamples {
-		trie, err := trieFromKeys[any](sample.Keys)
-		if err != nil {
-			t.Fatalf("unexpected error during from keys: %v", err)
-		}
-		copy := trie.Copy()
-		if d := CheckInvariant(copy); d != nil {
-			t.Fatalf("trie invariant discrepancy: %v", d)
-		}
-		if trie == copy {
-			t.Errorf("Expected trie copy not to be the same reference as original")
-		}
-		if !Equal(trie, copy) {
-			t.Errorf("Expected tries to be equal, original: %v\n, copy: %v\n", trie, copy)
-		}
+	tr, err := trieFromKeys[any](sampleKeySet.Keys)
+	if err != nil {
+		t.Fatalf("unexpected error during from keys: %v", err)
+	}
+	copy := tr.Copy()
+	if d := CheckInvariant(copy); d != nil {
+		t.Fatalf("trie invariant discrepancy: %v", d)
+	}
+	if tr == copy {
+		t.Errorf("Expected trie copy not to be the same reference as original")
+	}
+	if !Equal(tr, copy) {
+		t.Errorf("Expected tries to be equal, original: %v\n, copy: %v\n", tr, copy)
 	}
 }
 
@@ -102,7 +103,7 @@ var testRemoveSeq = []struct {
 }
 
 func TestAddIsOrderIndependent(t *testing.T) {
-	for _, s := range append(testAddSamples, randomTestAddSamples(100)...) {
+	for _, s := range newKeySetList(100) {
 		base := New[any]()
 		for _, k := range s.Keys {
 			base, _ = Add(base, k, nil)
@@ -126,42 +127,205 @@ func TestAddIsOrderIndependent(t *testing.T) {
 	}
 }
 
-type testAddSample struct {
+func TestSize(t *testing.T) {
+	tr := New[any]()
+	require.Equal(t, 0, tr.Size())
+
+	var err error
+	for _, kk := range sampleKeySet.Keys {
+		tr, err = Add(tr, kk, nil)
+		require.NoError(t, err)
+	}
+
+	require.Equal(t, len(sampleKeySet.Keys), tr.Size())
+}
+
+func TestAddIgnoresDuplicates(t *testing.T) {
+	tr := New[any]()
+	var err error
+	for _, kk := range sampleKeySet.Keys {
+		tr, err = Add(tr, kk, nil)
+		require.NoError(t, err)
+	}
+	require.Equal(t, len(sampleKeySet.Keys), tr.Size())
+
+	for _, kk := range sampleKeySet.Keys {
+		tr, err = Add(tr, kk, nil)
+		require.NoError(t, err)
+	}
+	require.Equal(t, len(sampleKeySet.Keys), tr.Size())
+
+	if d := CheckInvariant(tr); d != nil {
+		t.Fatalf("reordered trie invariant discrepancy: %v", d)
+	}
+}
+
+func TestAddRejectsMismatchedKeyLength(t *testing.T) {
+	tr, err := trieFromKeys[any](sampleKeySet.Keys)
+	if err != nil {
+		t.Fatalf("unexpected error during from keys: %v", err)
+	}
+
+	trNext, err := Add(tr, keyutil.Random(5), nil)
+	require.ErrorIs(t, err, ErrMismatchedKeyLength)
+
+	// trie has not been changed
+	require.Same(t, tr, trNext)
+
+	if d := CheckInvariant(trNext); d != nil {
+		t.Fatalf("reordered trie invariant discrepancy: %v", d)
+	}
+}
+
+func TestRemove(t *testing.T) {
+	tr, err := trieFromKeys[any](sampleKeySet.Keys)
+	if err != nil {
+		t.Fatalf("unexpected error during from keys: %v", err)
+	}
+	require.Equal(t, len(sampleKeySet.Keys), tr.Size())
+
+	trNext, err := Remove(tr, sampleKeySet.Keys[0])
+	require.NoError(t, err)
+	require.Equal(t, len(sampleKeySet.Keys)-1, trNext.Size())
+
+	if d := CheckInvariant(tr); d != nil {
+		t.Fatalf("reordered trie invariant discrepancy: %v", d)
+	}
+}
+
+func TestRemoveFromEmpty(t *testing.T) {
+	tr := New[any]()
+	trNext, err := Remove(tr, sampleKeySet.Keys[0])
+	require.NoError(t, err)
+	require.Equal(t, 0, tr.Size())
+
+	// trie has not been changed
+	require.Same(t, tr, trNext)
+}
+
+func TestRemoveRejectsMismatchedKeyLength(t *testing.T) {
+	tr, err := trieFromKeys[any](sampleKeySet.Keys)
+	if err != nil {
+		t.Fatalf("unexpected error during from keys: %v", err)
+	}
+
+	trNext, err := Remove(tr, keyutil.Random(5))
+	require.ErrorIs(t, err, ErrMismatchedKeyLength)
+
+	// trie has not been changed
+	require.Same(t, tr, trNext)
+
+	if d := CheckInvariant(trNext); d != nil {
+		t.Fatalf("reordered trie invariant discrepancy: %v", d)
+	}
+}
+
+func TestEqual(t *testing.T) {
+	a, err := trieFromKeys[any](sampleKeySet.Keys)
+	if err != nil {
+		t.Fatalf("unexpected error during from keys: %v", err)
+	}
+	b, err := trieFromKeys[any](sampleKeySet.Keys)
+	if err != nil {
+		t.Fatalf("unexpected error during from keys: %v", err)
+	}
+	require.True(t, Equal(a, b))
+
+	sampleKeySet2 := newKeySetOfLength(12, 8)
+	c, err := trieFromKeys[any](sampleKeySet2.Keys)
+	if err != nil {
+		t.Fatalf("unexpected error during from keys: %v", err)
+	}
+	require.False(t, Equal(a, c))
+}
+
+func TestEqualRejectsMismatchedKeyLength(t *testing.T) {
+	a, err := trieFromKeys[any](sampleKeySet.Keys)
+	if err != nil {
+		t.Fatalf("unexpected error during from keys: %v", err)
+	}
+	b, err := trieFromKeys[any](sampleKeySet.Keys)
+	if err != nil {
+		t.Fatalf("unexpected error during from keys: %v", err)
+	}
+	require.True(t, Equal(a, b))
+}
+
+func TestFindNoData(t *testing.T) {
+	tr, err := trieFromKeys[any](sampleKeySet.Keys)
+	if err != nil {
+		t.Fatalf("unexpected error during from keys: %v", err)
+	}
+
+	for _, kk := range sampleKeySet.Keys {
+		found, _ := Find(tr, kk)
+		require.True(t, found)
+	}
+}
+
+func TestFindNotFound(t *testing.T) {
+	tr, err := trieFromKeys[any](sampleKeySet.Keys[1:])
+	if err != nil {
+		t.Fatalf("unexpected error during from keys: %v", err)
+	}
+
+	found, _ := Find(tr, sampleKeySet.Keys[0])
+	require.False(t, found)
+}
+
+func TestFindMismatchedKeyLength(t *testing.T) {
+	tr, err := trieFromKeys[any](sampleKeySet.Keys)
+	if err != nil {
+		t.Fatalf("unexpected error during from keys: %v", err)
+	}
+
+	found, _ := Find(tr, keyutil.Random(5))
+	require.False(t, found)
+}
+
+func TestFindWithData(t *testing.T) {
+	tr := New[int]()
+
+	var err error
+	for i, kk := range sampleKeySet.Keys {
+		tr, err = Add(tr, kk, i)
+		require.NoError(t, err)
+	}
+
+	for i, kk := range sampleKeySet.Keys {
+		found, v := Find(tr, kk)
+		require.True(t, found)
+		require.Equal(t, i, v)
+	}
+}
+
+type keySet struct {
 	Keys []key.KadKey
 }
 
-var testAddSamples = []*testAddSample{
-	{Keys: []key.KadKey{[]byte{1}, []byte{3}, []byte{5}, []byte{7}, []byte{11}, []byte{13}}},
-	{Keys: []key.KadKey{
-		[]byte{11},
-		[]byte{22},
-		[]byte{23},
-		[]byte{25},
-		[]byte{27},
-		[]byte{28},
-		[]byte{31},
-		[]byte{32},
-		[]byte{33},
-	}},
-}
+var sampleKeySet = newKeySetOfLength(12, 8)
 
-func randomTestAddSamples(count int) []*testAddSample {
-	s := make([]*testAddSample, count)
+func newKeySetList(n int) []*keySet {
+	s := make([]*keySet, n)
 	for i := range s {
-		s[i] = randomTestAddSample(31, 2)
+		s[i] = newKeySetOfLength(31, 4)
 	}
 	return s
 }
 
-func randomTestAddSample(setSize, keySizeByte int) *testAddSample {
-	keySet := make([]key.KadKey, setSize)
-	for i := range keySet {
-		k := make([]byte, keySizeByte)
-		rand.Read(k)
-		keySet[i] = key.KadKey(k)
+func newKeySetOfLength(n int, l int) *keySet {
+	set := make([]key.KadKey, 0, n)
+	seen := make(map[string]bool)
+	for len(set) < n {
+		kk := keyutil.Random(l)
+		if seen[kk.String()] {
+			continue
+		}
+		seen[kk.String()] = true
+		set = append(set, kk)
 	}
-	return &testAddSample{
-		Keys: keySet,
+	return &keySet{
+		Keys: set,
 	}
 }
 
