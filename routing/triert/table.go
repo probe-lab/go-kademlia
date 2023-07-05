@@ -121,10 +121,11 @@ func (rt *TrieRT) NearestPeers(ctx context.Context, kk key.KadKey, n int) ([]add
 	}
 
 	keys := rt.keys.Load().(*trie.Trie)
-	closestKeys, err := closestAtDepth(ctx, tkey.Key(kk), keys, 0, n, make([]tkey.Key, 0, n))
-	if err != nil {
-		return nil, err
+	closestKeys := closestAtDepth(tkey.Key(kk), keys, 0, n, make([]tkey.Key, 0, n))
+	if len(closestKeys) == 0 {
+		return []address.NodeID{}, nil
 	}
+
 	keyNodes := rt.keyNodes.Load().(map[string]address.NodeID)
 
 	nodes := make([]address.NodeID, 0, len(closestKeys))
@@ -137,14 +138,10 @@ func (rt *TrieRT) NearestPeers(ctx context.Context, kk key.KadKey, n int) ([]add
 	return nodes, nil
 }
 
-func closestAtDepth(ctx context.Context, k tkey.Key, t *trie.Trie, depth int, n int, found []tkey.Key) ([]tkey.Key, error) {
-	if ctx.Err() != nil {
-		return found, ctx.Err()
-	}
-
+func closestAtDepth(k tkey.Key, t *trie.Trie, depth int, n int, found []tkey.Key) []tkey.Key {
 	// If we've already found enough peers, abort.
 	if n == len(found) {
-		return found, nil
+		return found
 	}
 
 	// Find the closest direction.
@@ -158,20 +155,15 @@ func closestAtDepth(ctx context.Context, k tkey.Key, t *trie.Trie, depth int, n 
 		chosenDir = 1 - dir
 	} else if t.Key != nil {
 		// We've found a leaf
-		return append(found, t.Key), nil
+		return append(found, t.Key)
 	} else {
 		// We've found an empty node?
-		return found, nil
+		return found
 	}
 
-	var err error
 	// Add peers from the closest direction first, then from the other direction.
-	found, err = closestAtDepth(ctx, k, t.Branch[chosenDir], depth+1, n, found)
-	if err != nil {
-		return found, err
-	}
-
-	return closestAtDepth(ctx, k, t.Branch[1-chosenDir], depth+1, n, found)
+	found = closestAtDepth(k, t.Branch[chosenDir], depth+1, n, found)
+	return closestAtDepth(k, t.Branch[1-chosenDir], depth+1, n, found)
 }
 
 func (rt *TrieRT) Find(ctx context.Context, kk key.KadKey) (address.NodeID, error) {
