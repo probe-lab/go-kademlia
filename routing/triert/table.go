@@ -178,7 +178,7 @@ func (rt *TrieRT) Size() int {
 	return keys.Size()
 }
 
-// CplSize returns the number of peers in the table that share the specified common prefix length with the table's key.
+// CplSize returns the number of peers in the table whose longest common prefix with the table's key is of length cpl.
 func (rt *TrieRT) CplSize(cpl int) int {
 	keys := rt.keys.Load().(*trie.Trie)
 	n, err := countCpl(keys, rt.self, cpl, 0)
@@ -189,6 +189,7 @@ func (rt *TrieRT) CplSize(cpl int) int {
 }
 
 func countCpl(t *trie.Trie, kk key.KadKey, cpl int, depth int) (int, error) {
+	// special cases for very small tables where keys may be placed higher in the trie due to low population
 	if t.IsLeaf() {
 		if t.IsEmpty() {
 			return 0, nil
@@ -204,7 +205,8 @@ func countCpl(t *trie.Trie, kk key.KadKey, cpl int, depth int) (int, error) {
 	}
 
 	if depth == cpl {
-		return t.Size(), nil
+		// return the number of entries that do not share the next bit with kk
+		return t.Branch[1-kk.BitAt(depth)].Size(), nil
 	}
 
 	return countCpl(t.Branch[kk.BitAt(depth)], kk, cpl, depth+1)

@@ -260,7 +260,7 @@ func TestCplSize(t *testing.T) {
 		require.Equal(t, 2, rt.Size())
 		require.Equal(t, 2, rt.CplSize(2))
 
-		require.Equal(t, 2, rt.CplSize(1))
+		require.Equal(t, 0, rt.CplSize(1))
 		require.Equal(t, 0, rt.CplSize(3))
 	})
 
@@ -284,8 +284,8 @@ func TestCplSize(t *testing.T) {
 		require.Equal(t, 4, rt.Size())
 		require.Equal(t, 4, rt.CplSize(3))
 
-		require.Equal(t, 4, rt.CplSize(1))
-		require.Equal(t, 4, rt.CplSize(2))
+		require.Equal(t, 0, rt.CplSize(1))
+		require.Equal(t, 0, rt.CplSize(2))
 	})
 
 	t.Run("cpl mixed", func(t *testing.T) {
@@ -320,8 +320,8 @@ func TestCplSize(t *testing.T) {
 		require.True(t, success)
 
 		require.Equal(t, 8, rt.Size())
-		require.Equal(t, 8, rt.CplSize(1))
-		require.Equal(t, 6, rt.CplSize(2))
+		require.Equal(t, 2, rt.CplSize(1))
+		require.Equal(t, 2, rt.CplSize(2))
 		require.Equal(t, 4, rt.CplSize(3))
 	})
 }
