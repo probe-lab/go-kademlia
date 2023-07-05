@@ -16,7 +16,7 @@ type KadKey256 = KadKey[[256]byte]
 func New[T any](data []byte) KadKey[T] {
 	var v T
 	if uintptr(len(data)) != unsafe.Sizeof(v) {
-		panic("invalid data lenght for key")
+		panic("invalid data length for key")
 	}
 	return KadKey[T]{bytes: data}
 }
