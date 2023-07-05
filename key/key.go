@@ -2,7 +2,9 @@ package key
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math"
+	"strings"
 )
 
 type KadKey []byte
@@ -24,6 +26,15 @@ func shortLong(a, b KadKey) (min, max KadKey) {
 		return a, b
 	}
 	return b, a
+}
+
+// BitString returns a bit representation of the key, in descending order of significance.
+func (k KadKey) BitString() string {
+	sb := new(strings.Builder)
+	for _, b := range k {
+		sb.WriteString(fmt.Sprintf("%08b", b))
+	}
+	return sb.String()
 }
 
 func (a KadKey) Xor(b KadKey) KadKey {

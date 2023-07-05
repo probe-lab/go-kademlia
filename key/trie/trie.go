@@ -81,7 +81,7 @@ func (trie *Trie[T]) IsNonEmptyLeaf() bool {
 
 func (trie *Trie[T]) Copy() *Trie[T] {
 	if trie.IsLeaf() {
-		return &Trie[T]{Key: trie.Key}
+		return &Trie[T]{Key: trie.Key, Data: trie.Data}
 	}
 
 	return &Trie[T]{Branch: [2]*Trie[T]{
@@ -104,30 +104,27 @@ func (trie *Trie[T]) shrink() {
 	}
 }
 
-// Add adds the key q to trie, returning a new trie.
+// Add adds the key to trie, returning a new trie.
 // Add is immutable/non-destructive: The original trie remains unchanged.
-func Add[T any](trie *Trie[T], q key.KadKey) (*Trie[T], error) {
-	return AddAtDepth(0, trie, q)
+func Add[T any](trie *Trie[T], kk key.KadKey, data T) (*Trie[T], error) {
+	return AddAtDepth(0, trie, kk, data)
 }
 
-func AddAtDepth[T any](depth int, trie *Trie[T], q key.KadKey) (*Trie[T], error) {
+func AddAtDepth[T any](depth int, trie *Trie[T], kk key.KadKey, data T) (*Trie[T], error) {
 	switch {
 	case trie.IsEmptyLeaf():
-		return &Trie[T]{Key: q}, nil
+		return &Trie[T]{Key: kk, Data: data}, nil
 	case trie.IsNonEmptyLeaf():
-		eq, err := trie.Key.Equal(q)
-		if err != nil {
-			return nil, err
-		}
+		eq := trie.Key.Equal(kk)
 		if eq {
 			return trie, nil
 		}
-		return trieForTwo[T](depth, trie.Key, q), nil
+		return trieForTwo[T](depth, trie.Key, trie.Data, kk, data), nil
 
 	default:
-		dir := q.BitAt(depth)
+		dir := kk.BitAt(depth)
 		s := &Trie[T]{}
-		b, err := AddAtDepth(depth+1, trie.Branch[dir], q)
+		b, err := AddAtDepth(depth+1, trie.Branch[dir], kk, data)
 		if err != nil {
 			return nil, err
 		}
@@ -137,17 +134,17 @@ func AddAtDepth[T any](depth int, trie *Trie[T], q key.KadKey) (*Trie[T], error)
 	}
 }
 
-func trieForTwo[T any](depth int, p, q key.KadKey) *Trie[T] {
+func trieForTwo[T any](depth int, p key.KadKey, pdata T, q key.KadKey, qdata T) *Trie[T] {
 	pDir, qDir := p.BitAt(depth), q.BitAt(depth)
 	if qDir == pDir {
 		s := &Trie[T]{}
-		s.Branch[pDir] = trieForTwo[T](depth+1, p, q)
+		s.Branch[pDir] = trieForTwo[T](depth+1, p, pdata, q, qdata)
 		s.Branch[1-pDir] = &Trie[T]{}
 		return s
 	} else {
 		s := &Trie[T]{}
-		s.Branch[pDir] = &Trie[T]{Key: p}
-		s.Branch[qDir] = &Trie[T]{Key: q}
+		s.Branch[pDir] = &Trie[T]{Key: p, Data: pdata}
+		s.Branch[qDir] = &Trie[T]{Key: q, Data: qdata}
 		return s
 	}
 }
@@ -161,10 +158,7 @@ func RemoveAtDepth[T any](depth int, trie *Trie[T], q key.KadKey) (*Trie[T], err
 	case trie.IsEmptyLeaf():
 		return trie, nil
 	case trie.IsNonEmptyLeaf():
-		eq, err := trie.Key.Equal(q)
-		if err != nil {
-			return nil, err
-		}
+		eq := trie.Key.Equal(q)
 		if !eq {
 			return trie, nil
 		}
@@ -188,24 +182,36 @@ func RemoveAtDepth[T any](depth int, trie *Trie[T], q key.KadKey) (*Trie[T], err
 	}
 }
 
-// Find looks for the key q in the trie.
-// It returns the depth of the leaf reached along the path of q, regardless of whether q was found in that leaf.
-// It also returns a boolean flag indicating whether the key was found.
-func Find[T any](trie *Trie[T], q key.KadKey) (int, bool, error) {
-	return FindAtDepth(trie, 0, q)
+func Equal[T any](p, q *Trie[T]) bool {
+	switch {
+	case p.IsLeaf() && q.IsLeaf():
+		eq := p.Key.Equal(q.Key)
+		if !eq {
+			return false
+		}
+		return true
+	case !p.IsLeaf() && !q.IsLeaf():
+		return Equal(p.Branch[0], q.Branch[0]) && Equal(p.Branch[1], q.Branch[1])
+	}
+	return false
 }
 
-func FindAtDepth[T any](trie *Trie[T], depth int, q key.KadKey) (int, bool, error) {
+// Find looks for the key in the trie.
+// It reports whether the key was found along with the depth of the leaf reached along the path
+// of the key, regardless of whether the key was found in that leaf.
+func Find[T any](trie *Trie[T], kk key.KadKey) (bool, T, int) {
+	return FindAtDepth(trie, 0, kk)
+}
+
+func FindAtDepth[T any](trie *Trie[T], depth int, kk key.KadKey) (bool, T, int) {
 	switch {
 	case trie.IsEmptyLeaf():
-		return depth, false, nil
+		var v T
+		return false, v, depth
 	case trie.IsNonEmptyLeaf():
-		eq, err := trie.Key.Equal(q)
-		if err != nil {
-			return depth, false, err
-		}
-		return depth, eq, nil
+		eq := trie.Key.Equal(kk)
+		return eq, trie.Data, depth
 	default:
-		return FindAtDepth(trie.Branch[q.BitAt(depth)], depth+1, q)
+		return FindAtDepth(trie.Branch[kk.BitAt(depth)], depth+1, kk)
 	}
 }

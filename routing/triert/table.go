@@ -6,9 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	tkey "github.com/libp2p/go-libp2p-xor/key"
-	"github.com/libp2p/go-libp2p-xor/trie"
 	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/key/trie"
 	"github.com/plprobelab/go-kademlia/network/address"
 )
 
@@ -21,25 +20,21 @@ var ErrKeyWrongLength = errors.New("key has wrong length")
 type TrieRT struct {
 	self key.KadKey
 
-	// keymu is held during keys and keyNodes mutations to serialize changes
+	// keymu is held during trie mutations to serialize changes
 	keymu sync.Mutex
 
 	// keys holds a pointer to an immutable trie
 	// any store to keys must be performed while holding keymu, loads may be performed without the lock
 	keys atomic.Value
-
-	// keyNodes holds a mapping of kademlia key to node id (map[string]address.NodeID)
-	// note: this could be eliminated if the trie was modified to allow a tuple to be stored at each node
-	// any store to keyNodes must be performed while holding keymu, loads may be performed without the lock
-	keyNodes atomic.Value
 }
+
+type nodeTrie = trie.Trie[address.NodeID]
 
 func New(self key.KadKey) *TrieRT {
 	rt := &TrieRT{
 		self: self,
 	}
-	rt.keys.Store(&trie.Trie{})
-	rt.keyNodes.Store(map[string]address.NodeID{})
+	rt.keys.Store(&nodeTrie{})
 	return rt
 }
 
@@ -57,24 +52,16 @@ func (rt *TrieRT) AddPeer(ctx context.Context, node address.NodeID) (bool, error
 	rt.keymu.Lock()
 	defer rt.keymu.Unlock()
 	// load the old trie, derive a mutated variant and store it in place of the original
-	keys := rt.keys.Load().(*trie.Trie)
-	keysNext := trie.Add(keys, tkey.Key(kk))
+	keys := rt.keys.Load().(*nodeTrie)
+	keysNext, err := trie.Add(keys, kk, node)
+	if err != nil {
+		return false, err
+	}
 
 	// if trie is unchanged then we didn't add the key
 	if keysNext == keys {
 		return false, nil
 	}
-
-	// make a copy of keyNodes
-	// could avoid this if we held key/nodeid tuple in the trie
-	keyNodes := rt.keyNodes.Load().(map[string]address.NodeID)
-	keyNodesNext := make(map[string]address.NodeID, len(keyNodes)+1)
-	for k, v := range keyNodes {
-		keyNodesNext[k] = v
-	}
-	keyNodesNext[string(kk)] = node
-
-	rt.keyNodes.Store(keyNodesNext)
 	rt.keys.Store(keysNext)
 	return true, nil
 }
@@ -88,26 +75,14 @@ func (rt *TrieRT) RemoveKey(ctx context.Context, kk key.KadKey) (bool, error) {
 	rt.keymu.Lock()
 	defer rt.keymu.Unlock()
 	// load the old trie, derive a mutated variant and store it in place of the original
-	keys := rt.keys.Load().(*trie.Trie)
-	keysNext := trie.Remove(keys, tkey.Key(kk))
-
+	keys := rt.keys.Load().(*nodeTrie)
+	keysNext, err := trie.Remove(keys, kk)
+	if err != nil {
+		return false, err
+	}
 	// if trie is unchanged then we didn't remove the key
 	if keysNext == keys {
 		return false, nil
-	}
-
-	// make a copy of keyNodes without removed key
-	// could avoid this if we held key/nodeid tuple in the trie
-	keyNodes := rt.keyNodes.Load().(map[string]address.NodeID)
-	if _, exists := keyNodes[string(kk)]; exists {
-		keyNodesNext := make(map[string]address.NodeID, len(keyNodes))
-		for k, v := range keyNodes {
-			if k == string(kk) {
-				continue
-			}
-			keyNodesNext[k] = v
-		}
-		rt.keyNodes.Store(keyNodesNext)
 	}
 
 	rt.keys.Store(keysNext)
@@ -120,42 +95,45 @@ func (rt *TrieRT) NearestPeers(ctx context.Context, kk key.KadKey, n int) ([]add
 		return nil, ErrKeyWrongLength
 	}
 
-	keys := rt.keys.Load().(*trie.Trie)
-	closestKeys := closestAtDepth(tkey.Key(kk), keys, 0, n)
-	if len(closestKeys) == 0 {
+	keys := rt.keys.Load().(*nodeTrie)
+	closestEntries := closestAtDepth(kk, keys, 0, n)
+	if len(closestEntries) == 0 {
 		return []address.NodeID{}, nil
 	}
 
-	keyNodes := rt.keyNodes.Load().(map[string]address.NodeID)
-
-	nodes := make([]address.NodeID, 0, len(closestKeys))
-	for _, c := range closestKeys {
-		if id, ok := keyNodes[string(key.KadKey(c))]; ok {
-			nodes = append(nodes, id)
-		}
+	nodes := make([]address.NodeID, 0, len(closestEntries))
+	for _, c := range closestEntries {
+		nodes = append(nodes, c.Data)
 	}
 
 	return nodes, nil
 }
 
-func closestAtDepth(k tkey.Key, t *trie.Trie, depth int, n int) []tkey.Key {
+type entry struct {
+	Key  key.KadKey
+	Data address.NodeID
+}
+
+func closestAtDepth(kk key.KadKey, t *nodeTrie, depth int, n int) []entry {
 	if t.Key != nil {
 		// We've found a leaf
-		return []tkey.Key{t.Key}
+		return []entry{
+			{Key: t.Key, Data: t.Data},
+		}
 	} else if t.Branch[0] == nil && t.Branch[1] == nil {
 		// We've found an empty node?
 		return nil
 	}
 
 	// Find the closest direction.
-	dir := k.BitAt(depth)
+	dir := kk.BitAt(depth)
 	// Add peers from the closest direction first
-	found := closestAtDepth(k, t.Branch[dir], depth+1, n)
+	found := closestAtDepth(kk, t.Branch[dir], depth+1, n)
 	if len(found) == n {
 		return found
 	}
 	// Didn't find enough peers in the closest direction, try the other direction.
-	return append(found, closestAtDepth(k, t.Branch[1-dir], depth+1, n-len(found))...)
+	return append(found, closestAtDepth(kk, t.Branch[1-dir], depth+1, n-len(found))...)
 }
 
 func (rt *TrieRT) Find(ctx context.Context, kk key.KadKey) (address.NodeID, error) {
@@ -163,10 +141,12 @@ func (rt *TrieRT) Find(ctx context.Context, kk key.KadKey) (address.NodeID, erro
 		return nil, ErrKeyWrongLength
 	}
 
-	keyNodes := rt.keyNodes.Load().(map[string]address.NodeID)
+	keys := rt.keys.Load().(*nodeTrie)
 
-	if id, ok := keyNodes[string(key.KadKey(kk))]; ok {
-		return id, nil
+	found, node, _ := trie.Find(keys, kk)
+
+	if found {
+		return node, nil
 	}
 
 	return nil, nil
@@ -174,13 +154,13 @@ func (rt *TrieRT) Find(ctx context.Context, kk key.KadKey) (address.NodeID, erro
 
 // Size returns the number of peers contained in the table.
 func (rt *TrieRT) Size() int {
-	keys := rt.keys.Load().(*trie.Trie)
+	keys := rt.keys.Load().(*nodeTrie)
 	return keys.Size()
 }
 
 // CplSize returns the number of peers in the table whose longest common prefix with the table's key is of length cpl.
 func (rt *TrieRT) CplSize(cpl int) int {
-	keys := rt.keys.Load().(*trie.Trie)
+	keys := rt.keys.Load().(*nodeTrie)
 	n, err := countCpl(keys, rt.self, cpl, 0)
 	if err != nil {
 		return 0
@@ -188,16 +168,13 @@ func (rt *TrieRT) CplSize(cpl int) int {
 	return n
 }
 
-func countCpl(t *trie.Trie, kk key.KadKey, cpl int, depth int) (int, error) {
+func countCpl(t *nodeTrie, kk key.KadKey, cpl int, depth int) (int, error) {
 	// special cases for very small tables where keys may be placed higher in the trie due to low population
 	if t.IsLeaf() {
 		if t.IsEmpty() {
 			return 0, nil
 		}
-		keyCpl, err := kk.CommonPrefixLength(key.KadKey(t.Key))
-		if err != nil {
-			return 0, err
-		}
+		keyCpl := kk.CommonPrefixLength(key.KadKey(t.Key))
 		if keyCpl == cpl {
 			return 1, nil
 		}
