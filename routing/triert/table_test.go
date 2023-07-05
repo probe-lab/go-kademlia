@@ -350,6 +350,8 @@ func keyWithPrefix(s string, length int) key.KadKey {
 	return key.KadKey(buf)
 }
 
+var _ address.NodeID = (*node)(nil)
+
 type node struct {
 	id  string
 	key key.KadKey
