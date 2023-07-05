@@ -12,16 +12,16 @@ type PeerID struct {
 	peer.ID
 }
 
-var _ address.NodeID = (*PeerID)(nil)
+var _ address.NodeID256 = (*PeerID)(nil)
 
 func NewPeerID(p peer.ID) *PeerID {
 	return &PeerID{p}
 }
 
-func (id PeerID) Key() key.KadKey {
+func (id PeerID) Key() key.KadKey256 {
 	return builder.StringKadID(string(id.ID))
 }
 
-func (id PeerID) NodeID() address.NodeID {
+func (id PeerID) NodeID() address.NodeID256 {
 	return &id
 }
