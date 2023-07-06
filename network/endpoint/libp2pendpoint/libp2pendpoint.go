@@ -152,7 +152,7 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 	resp message.MinKadMessage, timeout time.Duration,
 	responseHandlerFn endpoint.ResponseHandlerFn) error {
 
-	_, span := util.StartSpan(context.Background(),
+	_, span := util.StartSpan(ctx,
 		"Libp2pEndpoint.SendRequestHandleResponse", trace.WithAttributes(
 			attribute.String("PeerID", n.String()),
 		))
@@ -176,13 +176,18 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 		return ErrRequirePeerID
 	}
 
+	if len(e.host.Peerstore().Addrs(p.ID)) == 0 {
+		span.RecordError(endpoint.ErrUnknownPeer)
+		return endpoint.ErrUnknownPeer
+	}
+
 	if responseHandlerFn == nil {
 		span.RecordError(endpoint.ErrNilResponseHandler)
 		return endpoint.ErrNilResponseHandler
 	}
 
 	go func() {
-		ctx, span := util.StartSpan(context.Background(),
+		ctx, span := util.StartSpan(e.ctx,
 			"Libp2pEndpoint.SendRequestHandleResponse libp2p go routine",
 			trace.WithAttributes(
 				attribute.String("PeerID", n.String()),
