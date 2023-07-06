@@ -25,7 +25,7 @@ import (
 	"github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/network/message/ipfsv1"
 	sq "github.com/plprobelab/go-kademlia/query/simplequery"
-	"github.com/plprobelab/go-kademlia/routingtable/simplert"
+	"github.com/plprobelab/go-kademlia/routing/simplert"
 	"github.com/plprobelab/go-kademlia/server/basicserver"
 	"github.com/plprobelab/go-kademlia/util"
 
@@ -37,9 +37,7 @@ const (
 	protoID      = "/ipfs/kad/1.0.0"
 )
 
-var (
-	targetBytesID = "mACQIARIgp9PBu+JuU8aicuW8xT+Oa08OntMyqdLbfQtOplAHlME"
-)
+var targetBytesID = "mACQIARIgp9PBu+JuU8aicuW8xT+Oa08OntMyqdLbfQtOplAHlME"
 
 func queryTest(ctx context.Context) {
 	ctx, span := util.StartSpan(ctx, "queryTest")
@@ -58,7 +56,7 @@ func queryTest(ctx context.Context) {
 	addrA := multiaddr.StringCast("/ip4/1.1.1.1/tcp/4001/")
 	var naddrA address.NodeAddr = addrinfo.NewAddrInfo(peer.AddrInfo{ID: selfA.ID,
 		Addrs: []multiaddr.Multiaddr{addrA}})
-	rtA := simplert.NewSimpleRT(selfA.Key(), 2)
+	rtA := simplert.New(selfA.Key(), 2)
 	schedA := ss.NewSimpleScheduler(clk)
 	endpointA := fakeendpoint.NewFakeEndpoint(selfA, schedA, router)
 	servA := basicserver.NewBasicServer(rtA, endpointA)
@@ -76,7 +74,7 @@ func queryTest(ctx context.Context) {
 	addrB := multiaddr.StringCast("/ip4/2.2.2.2/tcp/4001/")
 	var naddrB address.NodeAddr = addrinfo.NewAddrInfo(peer.AddrInfo{ID: selfB.ID,
 		Addrs: []multiaddr.Multiaddr{addrB}})
-	rtB := simplert.NewSimpleRT(selfB.Key(), 2)
+	rtB := simplert.New(selfB.Key(), 2)
 	schedB := ss.NewSimpleScheduler(clk)
 	endpointB := fakeendpoint.NewFakeEndpoint(selfB, schedB, router)
 	servB := basicserver.NewBasicServer(rtB, endpointB)
@@ -94,7 +92,7 @@ func queryTest(ctx context.Context) {
 	addrC := multiaddr.StringCast("/ip4/3.3.3.3/tcp/4001/")
 	var naddrC address.NodeAddr = addrinfo.NewAddrInfo(peer.AddrInfo{ID: selfC.ID,
 		Addrs: []multiaddr.Multiaddr{addrC}})
-	rtC := simplert.NewSimpleRT(selfC.Key(), 2)
+	rtC := simplert.New(selfC.Key(), 2)
 	schedC := ss.NewSimpleScheduler(clk)
 	endpointC := fakeendpoint.NewFakeEndpoint(selfC, schedC, router)
 	servC := basicserver.NewBasicServer(rtC, endpointC)

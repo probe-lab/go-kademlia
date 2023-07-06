@@ -9,7 +9,7 @@ import (
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"github.com/plprobelab/go-kademlia/network/message"
-	"github.com/plprobelab/go-kademlia/routingtable"
+	"github.com/plprobelab/go-kademlia/routing"
 )
 
 // Config is a structure containing all the options that can be used when
@@ -39,7 +39,7 @@ type Config struct {
 
 	// RoutingTable is the routing table used to find closer peers. It is
 	// updated with newly discovered peers.
-	RoutingTable routingtable.RoutingTable
+	RoutingTable routing.Table
 	// Endpoint is the message endpoint used to send requests
 	Endpoint endpoint.Endpoint
 	// Scheduler is the scheduler used to schedule events for the single worker
@@ -152,7 +152,7 @@ func WithNotifyFailureFunc(fn NotifyFailureFn) Option {
 	}
 }
 
-func WithRoutingTable(rt routingtable.RoutingTable) Option {
+func WithRoutingTable(rt routing.Table) Option {
 	return func(cfg *Config) error {
 		if rt == nil {
 			return fmt.Errorf("SimpleQuery option RoutingTable cannot be nil")

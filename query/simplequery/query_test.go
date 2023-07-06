@@ -28,8 +28,8 @@ import (
 	"github.com/plprobelab/go-kademlia/network/endpoint/libp2pendpoint"
 	"github.com/plprobelab/go-kademlia/network/message"
 	sm "github.com/plprobelab/go-kademlia/network/message/simmessage"
-	"github.com/plprobelab/go-kademlia/routingtable"
-	"github.com/plprobelab/go-kademlia/routingtable/simplert"
+	"github.com/plprobelab/go-kademlia/routing"
+	"github.com/plprobelab/go-kademlia/routing/simplert"
 	"github.com/plprobelab/go-kademlia/server"
 	"github.com/plprobelab/go-kademlia/server/basicserver"
 	"github.com/stretchr/testify/require"
@@ -52,8 +52,8 @@ func TestTrivialQuery(t *testing.T) {
 	sched1 := ss.NewSimpleScheduler(clk)
 	fendpoint0 := fe.NewFakeEndpoint(node0, sched0, router)
 	fendpoint1 := fe.NewFakeEndpoint(node1, sched1, router)
-	rt0 := simplert.NewSimpleRT(node0.Key(), 1)
-	rt1 := simplert.NewSimpleRT(node1.Key(), 1)
+	rt0 := simplert.New(node0.Key(), 1)
+	rt1 := simplert.New(node1.Key(), 1)
 
 	// make node1 a server
 	server1 := basicserver.NewBasicServer(rt1, fendpoint1)
@@ -116,7 +116,7 @@ func TestInvalidQueryOptions(t *testing.T) {
 	node := si.StringID("node0")
 	sched := ss.NewSimpleScheduler(clk)
 	fendpoint := fe.NewFakeEndpoint(node, sched, router)
-	rt := simplert.NewSimpleRT(node.Key(), 1)
+	rt := simplert.New(node.Key(), 1)
 
 	// fails because rt is not set
 	invalidOpts := []Option{}
@@ -218,14 +218,14 @@ func simulationSetup(t *testing.T, ctx context.Context, n, bucketSize int,
 	clk clock.Clock, protoID address.ProtocolID, peerstoreTTL time.Duration,
 	defaultQueryOpts []Option) (
 	[]address.NodeAddr, []scheduler.AwareScheduler, []endpoint.SimEndpoint,
-	[]routingtable.RoutingTable, []server.Server, [][]Option) {
+	[]routing.Table, []server.Server, [][]Option) {
 
 	router := fe.NewFakeRouter()
 
 	ids := make([]address.NodeAddr, n)
 	scheds := make([]scheduler.AwareScheduler, n)
 	fendpoints := make([]endpoint.SimEndpoint, n)
-	rts := make([]routingtable.RoutingTable, n)
+	rts := make([]routing.Table, n)
 	servers := make([]server.Server, n)
 
 	spacing := 256 / n
@@ -234,7 +234,7 @@ func simulationSetup(t *testing.T, ctx context.Context, n, bucketSize int,
 		scheds[i] = ss.NewSimpleScheduler(clk)
 		ids[i] = kadid.NewKadID([]byte{byte(i * spacing)})
 		fendpoints[i] = fe.NewFakeEndpoint(ids[i].NodeID(), scheds[i], router)
-		rts[i] = simplert.NewSimpleRT(ids[i].NodeID().Key(), bucketSize)
+		rts[i] = simplert.New(ids[i].NodeID().Key(), bucketSize)
 		servers[i] = basicserver.NewBasicServer(rts[i], fendpoints[i],
 			basicserver.WithNumberUsefulCloserPeers(bucketSize))
 		fendpoints[i].AddRequestHandler(protoID, &sm.SimMessage{}, servers[i].HandleRequest)
@@ -492,14 +492,14 @@ func TestConcurrentQuery(t *testing.T) {
 	ids := make([]address.NodeAddr, nPeers)
 	scheds := make([]scheduler.AwareScheduler, nPeers)
 	fendpoints := make([]endpoint.SimEndpoint, nPeers)
-	rts := make([]routingtable.RoutingTable, nPeers)
+	rts := make([]routing.Table, nPeers)
 	servers := make([]server.Server, nPeers)
 
 	for i := 0; i < nPeers; i++ {
 		scheds[i] = ss.NewSimpleScheduler(clk)
 		ids[i] = kadid.NewKadID([]byte{byte(i * 32)})
 		fendpoints[i] = fe.NewFakeEndpoint(ids[i].NodeID(), scheds[i], router)
-		rts[i] = simplert.NewSimpleRT(ids[i].NodeID().Key(), bucketSize)
+		rts[i] = simplert.New(ids[i].NodeID().Key(), bucketSize)
 		servers[i] = basicserver.NewBasicServer(rts[i], fendpoints[i],
 			basicserver.WithNumberUsefulCloserPeers(bucketSize))
 		fendpoints[i].AddRequestHandler(protoID, &sm.SimMessage{}, servers[i].HandleRequest)
@@ -597,7 +597,7 @@ func TestUnresponsivePeer(t *testing.T) {
 	sched1 := ss.NewSimpleScheduler(clk)
 	fendpoint0 := fe.NewFakeEndpoint(id0.NodeID(), sched0, router)
 	fendpoint1 := fe.NewFakeEndpoint(id1.NodeID(), sched1, router)
-	rt0 := simplert.NewSimpleRT(id0.NodeID().Key(), bucketSize)
+	rt0 := simplert.New(id0.NodeID().Key(), bucketSize)
 
 	serverRequestHandler := func(context.Context, address.NodeID,
 		message.MinKadMessage) (message.MinKadMessage, error) {
@@ -659,7 +659,7 @@ func TestCornerCases(t *testing.T) {
 	id0 := kadid.NewKadID([]byte{0x00})
 	sched0 := ss.NewSimpleScheduler(clk)
 	fendpoint0 := fe.NewFakeEndpoint(id0.NodeID(), sched0, router)
-	rt0 := simplert.NewSimpleRT(id0.NodeID().Key(), bucketSize)
+	rt0 := simplert.New(id0.NodeID().Key(), bucketSize)
 
 	id1 := kadid.NewKadID([]byte{0x01})
 	fendpoint0.MaybeAddToPeerstore(ctx, id1, peerstoreTTL)
@@ -750,7 +750,7 @@ func TestLibp2pCornerCase(t *testing.T) {
 	id := peerid.NewPeerID(h.ID())
 	sched := ss.NewSimpleScheduler(clk)
 	libp2pEndpoint := libp2pendpoint.NewLibp2pEndpoint(ctx, h, sched)
-	rt := simplert.NewSimpleRT(id.Key(), bucketSize)
+	rt := simplert.New(id.Key(), bucketSize)
 
 	parsed, err := peer.Decode("1D3oooUnknownPeer")
 	require.NoError(t, err)

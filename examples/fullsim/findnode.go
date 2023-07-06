@@ -14,8 +14,8 @@ import (
 	"github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/network/message/simmessage"
 	sq "github.com/plprobelab/go-kademlia/query/simplequery"
-	"github.com/plprobelab/go-kademlia/routingtable"
-	"github.com/plprobelab/go-kademlia/routingtable/simplert"
+	"github.com/plprobelab/go-kademlia/routing"
+	"github.com/plprobelab/go-kademlia/routing/simplert"
 	"github.com/plprobelab/go-kademlia/server"
 	"github.com/plprobelab/go-kademlia/server/basicserver"
 	"github.com/plprobelab/go-kademlia/util"
@@ -34,7 +34,7 @@ const (
 
 // connectNodes adds nodes to each other's peerstores and routing tables
 func connectNodes(ctx context.Context, n0, n1 address.NodeAddr, ep0, ep1 endpoint.Endpoint,
-	rt0, rt1 routingtable.RoutingTable) {
+	rt0, rt1 routing.Table) {
 	// add n1 to n0's peerstore and routing table
 	ep0.MaybeAddToPeerstore(ctx, n1, peerstoreTTL)
 	rt0.AddPeer(ctx, n1.NodeID())
@@ -73,7 +73,7 @@ func findNode(ctx context.Context) {
 
 	for i := 0; i < len(ids); i++ {
 		// create a routing table, with bucket size 2
-		rts[i] = simplert.NewSimpleRT(ids[i].KadKey, 2)
+		rts[i] = simplert.New(ids[i].KadKey, 2)
 		// create a scheduler based on the mock clock
 		schedulers[i] = ss.NewSimpleScheduler(clk)
 		// create a fake endpoint for the node, communicating through the router
@@ -103,7 +103,8 @@ func findNode(ctx context.Context) {
 
 	// handleResFn is called when a response is received during the query process
 	handleResFn := func(_ context.Context, id address.NodeID,
-		msg message.MinKadResponseMessage) (bool, []address.NodeID) {
+		msg message.MinKadResponseMessage,
+	) (bool, []address.NodeID) {
 		resp := msg.(*simmessage.SimMessage)
 		fmt.Println("got a response from", id, "with", resp.CloserNodes())
 

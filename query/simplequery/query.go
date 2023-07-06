@@ -11,7 +11,7 @@ import (
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	message "github.com/plprobelab/go-kademlia/network/message"
-	"github.com/plprobelab/go-kademlia/routingtable"
+	"github.com/plprobelab/go-kademlia/routing"
 	"github.com/plprobelab/go-kademlia/util"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -38,7 +38,7 @@ type SimpleQuery struct {
 	timeout      time.Duration
 
 	msgEndpoint endpoint.Endpoint
-	rt          routingtable.RoutingTable
+	rt          routing.Table
 	sched       scheduler.Scheduler
 
 	inflightRequests int // requests that are either in flight or scheduled
@@ -150,7 +150,6 @@ func (q *SimpleQuery) enqueueNewRequests(ctx context.Context) {
 	for i := 0; i < newRequestsToSend; i++ {
 		// add new pending request(s) for this query to eventqueue
 		q.sched.EnqueueAction(ctx, ba.BasicAction(q.newRequest))
-
 	}
 	// increase number of inflight requests. Note that it counts both queued
 	// requests and requests in flight

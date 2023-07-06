@@ -18,13 +18,11 @@ import (
 	"github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/network/message/ipfsv1"
 	"github.com/plprobelab/go-kademlia/query/simplequery"
-	"github.com/plprobelab/go-kademlia/routingtable/simplert"
+	"github.com/plprobelab/go-kademlia/routing/simplert"
 	"github.com/plprobelab/go-kademlia/util"
 )
 
-var (
-	protocolID address.ProtocolID = "/ipfs/kad/1.0.0" // IPFS DHT network protocol ID
-)
+var protocolID address.ProtocolID = "/ipfs/kad/1.0.0" // IPFS DHT network protocol ID
 
 func FindPeer(ctx context.Context) {
 	ctx, span := util.StartSpan(ctx, "FindPeer Test")
@@ -44,7 +42,7 @@ func FindPeer(ctx context.Context) {
 	kadid := pid.Key()
 
 	// create a simple routing table, with bucket size 20
-	rt := simplert.NewSimpleRT(kadid, 20)
+	rt := simplert.New(kadid, 20)
 	// create a scheduler using real time
 	sched := simplescheduler.NewSimpleScheduler(clk)
 	// create a message endpoint is used to communicate with other peers
@@ -87,7 +85,8 @@ func FindPeer(ctx context.Context) {
 	// endCond is used to terminate the simulation once the query is done
 	endCond := false
 	handleResultsFn := func(ctx context.Context, id address.NodeID,
-		resp message.MinKadResponseMessage) (bool, []address.NodeID) {
+		resp message.MinKadResponseMessage,
+	) (bool, []address.NodeID) {
 		// parse response to ipfs dht message
 		msg, ok := resp.(*ipfsv1.Message)
 		if !ok {
