@@ -192,7 +192,6 @@ func (q *SimpleQuery) newRequest(ctx context.Context) {
 			q.handleResponse(ctx, id, resp)
 		}
 	}
-
 	// send request
 	err := q.msgEndpoint.SendRequestHandleResponse(ctx, q.protoID, id, q.req,
 		q.req.EmptyResponse(), q.timeout, handleResp)
@@ -257,7 +256,7 @@ func (q *SimpleQuery) handleResponse(ctx context.Context, id address.NodeID,
 			usefulNodeIDs[writeIndex] = id
 			writeIndex++
 		} else if err != nil {
-			span.AddEvent("wrong KadKey lenght")
+			span.AddEvent("wrong KadKey length")
 		} else {
 			span.AddEvent("never add self to query peerlist")
 		}

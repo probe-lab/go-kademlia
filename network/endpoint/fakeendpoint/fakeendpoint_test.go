@@ -11,6 +11,7 @@ import (
 	"github.com/plprobelab/go-kademlia/events/scheduler"
 	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
 	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-kademlia/network/address/kadaddr"
 	"github.com/plprobelab/go-kademlia/network/address/kadid"
 	"github.com/plprobelab/go-kademlia/network/address/peerid"
 	si "github.com/plprobelab/go-kademlia/network/address/stringid"
@@ -141,6 +142,31 @@ func TestFakeEndpoint(t *testing.T) {
 	fakeEndpoint.HandleMessage(ctx, node0, errProtoID, 1001, msg)
 	// no message should have been sent to node0, so nothing to run
 	require.False(t, sched0.RunOne(ctx))
+
+	var followupRan bool
+	// test that HandleMessage adds the closer peers to the peerstore
+	followup := func(ctx context.Context, resp message.MinKadResponseMessage,
+		err error) {
+		require.NoError(t, err)
+		followupRan = true
+	}
+	// add followup function for the stream and make sure it runs
+	fakeEndpoint.streamFollowup[1000] = followup
+	addrs := []address.NodeAddr{
+		kadaddr.NewKadAddr(kadid.NewKadID([]byte{0}), []string{"0"}),
+		kadaddr.NewKadAddr(kadid.NewKadID([]byte{1}), []string{"1"}),
+		kadaddr.NewKadAddr(kadid.NewKadID([]byte{2}), []string{"2"}),
+	}
+	msg = simmessage.NewSimResponse(addrs)
+	fakeEndpoint.HandleMessage(ctx, node0, protoID, 1000, msg)
+
+	a, err := fakeEndpoint.NetworkAddress(addrs[0].NodeID())
+	require.NoError(t, err)
+	require.Equal(t, addrs[0], a)
+
+	require.True(t, sched.RunOne(ctx))
+	require.False(t, sched.RunOne(ctx))
+	require.True(t, followupRan)
 }
 
 func TestRequestTimeout(t *testing.T) {
