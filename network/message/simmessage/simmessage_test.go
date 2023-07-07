@@ -17,7 +17,7 @@ func TestSimRequest(t *testing.T) {
 
 	require.Equal(t, &SimMessage{}, msg.EmptyResponse())
 
-	b, _ := msg.Target().Equal(target.Key())
+	b := msg.Target().Equal(target.Key())
 	require.True(t, b)
 	require.Nil(t, msg.CloserNodes())
 }

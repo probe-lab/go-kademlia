@@ -39,12 +39,11 @@ func TestFakeEndpoint(t *testing.T) {
 
 	fakeEndpoint := NewFakeEndpoint(selfID, sched, router)
 
-	b, err := selfID.Key().Equal(fakeEndpoint.KadKey())
-	require.NoError(t, err)
+	b := selfID.Key().Equal(fakeEndpoint.KadKey())
 	require.True(t, b)
 
 	node0 := si.StringID("node0")
-	err = fakeEndpoint.DialPeer(ctx, node0)
+	err := fakeEndpoint.DialPeer(ctx, node0)
 	require.Equal(t, endpoint.ErrUnknownPeer, err)
 
 	connectedness, err := fakeEndpoint.Connectedness(node0)

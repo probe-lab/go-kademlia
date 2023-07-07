@@ -250,12 +250,12 @@ func (q *SimpleQuery) handleResponse(ctx context.Context, id address.NodeID,
 	// remove all occurneces of q.self from usefulNodeIDs
 	writeIndex := 0
 	for _, id := range usefulNodeIDs {
-		if c, err := q.rt.Self().Compare(id.Key()); err == nil && c != 0 {
+		if q.rt.Self().Size() != id.Key().Size() {
+			span.AddEvent("wrong KadKey length")
+		} else if !q.rt.Self().Equal(id.Key()) {
 			// id is valid and isn't self
 			usefulNodeIDs[writeIndex] = id
 			writeIndex++
-		} else if err != nil {
-			span.AddEvent("wrong KadKey length")
 		} else {
 			span.AddEvent("never add self to query peerlist")
 		}

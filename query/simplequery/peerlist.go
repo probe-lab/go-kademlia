@@ -76,7 +76,7 @@ func (pl *peerList) addToPeerlist(ids []address.NodeID) {
 	currOld := true // current element is from old list
 	closestQueuedReached := false
 
-	r, _ := oldHead.distance.Compare(newHead.distance)
+	r := oldHead.distance.Compare(newHead.distance)
 	if r > 0 {
 		pl.closest = newHead
 		pl.closestQueued = newHead
@@ -153,7 +153,7 @@ func (pl *peerList) addToPeerlist(ids []address.NodeID) {
 		if oldHead == nil || newHead == nil {
 			break
 		}
-		r, _ = oldHead.distance.Compare(newHead.distance)
+		r = oldHead.distance.Compare(newHead.distance)
 	}
 
 	// append the remaining list to the end
@@ -189,15 +189,13 @@ func sliceToPeerInfos(target key.KadKey, ids []address.NodeID) *peerInfo {
 
 	// sort the new list
 	sort.Slice(newPeers, func(i, j int) bool {
-		r, _ := newPeers[i].distance.Compare(newPeers[j].distance)
-		return r < 0
+		return newPeers[i].distance.Compare(newPeers[j].distance) < 0
 	})
 
 	// convert slice to linked list and remove duplicates
 	curr := newPeers[0]
 	for i := 1; i < len(newPeers); i++ {
-		r, _ := curr.distance.Compare(newPeers[i].distance)
-		if r != 0 {
+		if !curr.distance.Equal(newPeers[i].distance) {
 			curr.next = newPeers[i]
 			curr = curr.next
 		}
@@ -210,9 +208,8 @@ func addrInfoToPeerInfo(target key.KadKey, id address.NodeID) *peerInfo {
 	if id == nil || id.String() == "" || target.Size() != id.Key().Size() {
 		return nil
 	}
-	dist, _ := target.Xor(id.Key())
 	return &peerInfo{
-		distance: dist,
+		distance: target.Xor(id.Key()),
 		status:   queued,
 		id:       id,
 	}
@@ -227,7 +224,7 @@ func (pl *peerList) enqueueUnreachablePeer(pi *peerInfo) {
 
 			pl.queuedCount++
 			// if curr is closer to target than closestQueued, update closestQueued
-			if r, _ := pi.distance.Compare(pl.closestQueued.distance); r < 0 {
+			if pi.distance.Compare(pl.closestQueued.distance) < 0 {
 				pl.closestQueued = pi
 			}
 		}

@@ -38,13 +38,6 @@ func New(self key.KadKey, bucketSize int) *SimpleRT {
 	return &rt
 }
 
-func (rt *SimpleRT) keyError(kadId key.KadKey) error {
-	if rt.self.Size() != kadId.Size() {
-		return key.ErrInvalidKey(rt.self.Size())
-	}
-	return nil
-}
-
 func (rt *SimpleRT) Self() key.KadKey {
 	return rt.self
 }
@@ -58,10 +51,11 @@ func (rt *SimpleRT) BucketSize() int {
 }
 
 func (rt *SimpleRT) BucketIdForKey(kadId key.KadKey) (int, error) {
-	bid, err := rt.self.CommonPrefixLength(kadId)
-	if err != nil {
-		return 0, err
+	if rt.self.Size() != kadId.Size() {
+		return 0, routing.ErrWrongKeySize
 	}
+
+	bid := rt.self.CommonPrefixLength(kadId)
 	nBuckets := len(rt.buckets)
 	if bid >= nBuckets {
 		bid = nBuckets - 1
@@ -84,9 +78,8 @@ func (rt *SimpleRT) addPeer(ctx context.Context, kadId key.KadKey, id address.No
 	))
 	defer span.End()
 
-	if err := rt.keyError(kadId); err != nil {
-		span.RecordError(err)
-		return false, err
+	if rt.self.Size() != kadId.Size() {
+		return false, routing.ErrWrongKeySize
 	}
 
 	// no need to check the error here, it's already been checked in keyError
@@ -129,7 +122,7 @@ func (rt *SimpleRT) addPeer(ctx context.Context, kadId key.KadKey, id address.No
 		span.AddEvent("splitting last bucket (" + strconv.Itoa(lastBucketId) + ")")
 
 		for _, p := range rt.buckets[lastBucketId] {
-			if cpl, _ := p.kadId.CommonPrefixLength(rt.self); cpl == lastBucketId {
+			if p.kadId.CommonPrefixLength(rt.self) == lastBucketId {
 				farBucket = append(farBucket, p)
 			} else {
 				closeBucket = append(closeBucket, p)
@@ -137,8 +130,8 @@ func (rt *SimpleRT) addPeer(ctx context.Context, kadId key.KadKey, id address.No
 					strconv.Itoa(lastBucketId+1) + ")")
 			}
 		}
-		cpl, _ := rt.self.CommonPrefixLength(kadId)
-		if len(farBucket) == rt.bucketSize && cpl == lastBucketId {
+		if len(farBucket) == rt.bucketSize &&
+			rt.self.CommonPrefixLength(kadId) == lastBucketId {
 			// if all peers in the last bucket have the CPL matching this bucket,
 			// don't split it and discard the new peer
 			return false, nil
@@ -161,8 +154,7 @@ func (rt *SimpleRT) addPeer(ctx context.Context, kadId key.KadKey, id address.No
 func (rt *SimpleRT) alreadyInBucket(kadId key.KadKey, bucketId int) bool {
 	for _, p := range rt.buckets[bucketId] {
 		// error already checked in keyError by the caller
-		c, _ := kadId.Compare(p.kadId)
-		if c == 0 {
+		if kadId.Equal(p.kadId) {
 			return true
 		}
 	}
@@ -175,15 +167,13 @@ func (rt *SimpleRT) RemoveKey(ctx context.Context, kadId key.KadKey) (bool, erro
 	))
 	defer span.End()
 
-	if err := rt.keyError(kadId); err != nil {
-		span.RecordError(err)
-		return false, err
+	if rt.self.Size() != kadId.Size() {
+		return false, routing.ErrWrongKeySize
 	}
 
 	bid, _ := rt.BucketIdForKey(kadId)
 	for i, p := range rt.buckets[bid] {
-		c, _ := kadId.Compare(p.kadId)
-		if c == 0 {
+		if kadId.Equal(p.kadId) {
 			// remove peer from bucket
 			rt.buckets[bid][i] = rt.buckets[bid][len(rt.buckets[bid])-1]
 			rt.buckets[bid] = rt.buckets[bid][:len(rt.buckets[bid])-1]
@@ -203,15 +193,13 @@ func (rt *SimpleRT) Find(ctx context.Context, kadId key.KadKey) (address.NodeID,
 	))
 	defer span.End()
 
-	if err := rt.keyError(kadId); err != nil {
-		span.RecordError(err)
-		return nil, err
+	if rt.self.Size() != kadId.Size() {
+		return nil, routing.ErrWrongKeySize
 	}
 
 	bid, _ := rt.BucketIdForKey(kadId)
 	for _, p := range rt.buckets[bid] {
-		c, _ := kadId.Compare(p.kadId)
-		if c == 0 {
+		if kadId.Equal(p.kadId) {
 			return p.id, nil
 		}
 	}
@@ -227,9 +215,8 @@ func (rt *SimpleRT) NearestPeers(ctx context.Context, kadId key.KadKey, n int) (
 	))
 	defer span.End()
 
-	if err := rt.keyError(kadId); err != nil {
-		span.RecordError(err)
-		return nil, err
+	if rt.self.Size() != kadId.Size() {
+		return nil, routing.ErrWrongKeySize
 	}
 
 	bid, _ := rt.BucketIdForKey(kadId)
@@ -243,8 +230,7 @@ func (rt *SimpleRT) NearestPeers(ctx context.Context, kadId key.KadKey, n int) (
 		peers = make([]peerInfo, 0)
 		for i := 0; i < len(rt.buckets); i++ {
 			for _, p := range rt.buckets[i] {
-				c, _ := rt.self.Compare(p.kadId)
-				if c != 0 {
+				if !rt.self.Equal(p.kadId) {
 					peers = append(peers, p)
 				}
 			}

@@ -10,6 +10,7 @@ import (
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/peerid"
 	si "github.com/plprobelab/go-kademlia/network/address/stringid"
+	"github.com/plprobelab/go-kademlia/routing"
 	"github.com/stretchr/testify/require"
 )
 
@@ -227,22 +228,22 @@ func TestInvalidKeys(t *testing.T) {
 
 	rt := New(key0, 2)
 	success, err := rt.addPeer(ctx, invalidKey, dummyNodeId)
-	require.Equal(t, err, key.ErrInvalidKey(32))
+	require.Equal(t, routing.ErrWrongKeySize, err)
 	require.False(t, success)
 
 	bid, err := rt.BucketIdForKey(invalidKey)
-	require.Equal(t, err, key.ErrInvalidKey(32))
+	require.Equal(t, routing.ErrWrongKeySize, err)
 	require.Equal(t, bid, 0)
 
 	success, err = rt.RemoveKey(ctx, invalidKey)
-	require.Equal(t, err, key.ErrInvalidKey(32))
+	require.Equal(t, routing.ErrWrongKeySize, err)
 	require.False(t, success)
 
 	nodeID, err := rt.Find(ctx, invalidKey)
-	require.Equal(t, err, key.ErrInvalidKey(32))
+	require.Equal(t, routing.ErrWrongKeySize, err)
 	require.Nil(t, nodeID)
 
 	nodeIDs, err := rt.NearestPeers(ctx, invalidKey, 2)
-	require.Equal(t, err, key.ErrInvalidKey(32))
+	require.Equal(t, routing.ErrWrongKeySize, err)
 	require.Nil(t, nodeIDs)
 }
