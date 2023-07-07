@@ -12,5 +12,13 @@ type NodeID interface {
 	String() string
 }
 
+type Addr any
+
+type NodeAddr interface {
+	NodeID() NodeID
+
+	Addresses() []Addr
+}
+
 // ProtocolID is a protocol identifier.
 type ProtocolID string

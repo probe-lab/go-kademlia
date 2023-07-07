@@ -37,8 +37,8 @@ func NewSimpleScheduler(clk clock.Clock) *SimpleScheduler {
 }
 
 // Now returns the scheduler's current time.
-func (s *SimpleScheduler) Now() time.Time {
-	return s.clk.Now()
+func (s *SimpleScheduler) Clock() clock.Clock {
+	return s.clk
 }
 
 // EnqueueAction enqueues an action to be run as soon as possible.

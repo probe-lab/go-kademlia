@@ -76,9 +76,6 @@ func FindPeer(ctx context.Context) {
 
 	// create a find peer request message
 	req := ipfsv1.FindPeerRequest(targetID)
-	// empty response message to be filled by the query process, the protobuf
-	// message must be know to parse the response
-	var resp message.ProtoKadResponseMessage = &ipfsv1.Message{}
 	// add friend to routing table
 	success, err := rt.AddPeer(ctx, friendID)
 	if err != nil || !success {
@@ -120,15 +117,25 @@ func FindPeer(ctx context.Context) {
 		return endCond, peers
 	}
 
-	// create the query, using the target kademlia key as target, the IPFS DHT
-	// protocol ID, the request and response messages in the IPFS DHT format,
+	// create the query, the IPFS DHT protocol ID, the IPFS DHT request message,
 	// a concurrency parameter of 1, a timeout of 5 seconds, the libp2p message
 	// endpoint, the node's routing table and scheduler, and the response
 	// handler function.
 	// The query will be executed only once actions are run on the scheduler.
 	// For now, it is only scheduled to be run.
-	simplequery.NewSimpleQuery(ctx, targetID.Key(), protocolID, req, resp, 1,
-		5*time.Second, msgEndpoint, rt, sched, handleResultsFn)
+	queryOpts := []simplequery.Option{
+		simplequery.WithProtocolID(protocolID),
+		simplequery.WithConcurrency(1),
+		simplequery.WithRequestTimeout(2 * time.Second),
+		simplequery.WithHandleResultsFunc(handleResultsFn),
+		simplequery.WithRoutingTable(rt),
+		simplequery.WithEndpoint(msgEndpoint),
+		simplequery.WithScheduler(sched),
+	}
+	_, err = simplequery.NewSimpleQuery(ctx, req, queryOpts...)
+	if err != nil {
+		panic(err)
+	}
 
 	span.AddEvent("start request execution")
 

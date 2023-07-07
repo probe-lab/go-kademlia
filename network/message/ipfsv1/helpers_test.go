@@ -26,8 +26,7 @@ func TestFindPeerRequest(t *testing.T) {
 
 	require.Equal(t, msg.GetKey(), []byte(p))
 
-	b, err := msg.Target().Equal(pid.Key())
-	require.NoError(t, err)
+	b := msg.Target().Equal(pid.Key())
 	require.True(t, b)
 
 	require.Equal(t, 0, len(msg.CloserNodes()))
@@ -56,7 +55,7 @@ func TestFindPeerResponse(t *testing.T) {
 	fakeEndpoint := fakeendpoint.NewFakeEndpoint(selfAddr, nil, nil)
 
 	nPeers := 5
-	closerPeers := make([]address.NodeID, nPeers)
+	closerPeers := make([]address.NodeAddr, nPeers)
 	closerIds := make([]address.NodeID, nPeers)
 	for i := 0; i < nPeers; i++ {
 		s := strconv.Itoa(2 + i)
@@ -78,13 +77,15 @@ func TestCornerCases(t *testing.T) {
 	require.Nil(t, resp.Target())
 	require.Equal(t, 0, len(resp.CloserNodes()))
 
+	require.Equal(t, &Message{}, resp.EmptyResponse())
+
 	ids := make([]address.NodeID, 0)
 	resp = FindPeerResponse(ids, nil)
 
 	require.Nil(t, resp.Target())
 	require.Equal(t, 0, len(resp.CloserNodes()))
 
-	fakeEndpoint := fakeendpoint.NewFakeEndpoint(peerid.PeerID{}, nil, nil)
+	fakeEndpoint := fakeendpoint.NewFakeEndpoint(addrinfo.AddrInfo{}, nil, nil)
 	n0, err := peer.Decode("1D3oooUnknownPeer")
 	require.NoError(t, err)
 	ids = append(ids, &peerid.PeerID{ID: n0})

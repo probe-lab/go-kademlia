@@ -9,16 +9,8 @@ import (
 
 var keysize = 4
 
-func zeroBytes(n int) []byte {
-	bytes := make([]byte, n)
-	for i := 0; i < n; i++ {
-		bytes[i] = 0
-	}
-	return bytes
-}
-
 func TestKadKeyString(t *testing.T) {
-	zeroKadid := KadKey(zeroBytes(keysize))
+	zeroKadid := KadKey(make([]byte, keysize))
 	zeroHex := strings.Repeat("00", keysize)
 	require.Equal(t, zeroHex, zeroKadid.String())
 
@@ -38,72 +30,84 @@ func TestKadKeyString(t *testing.T) {
 }
 
 func TestXor(t *testing.T) {
-	key0 := KadKey(zeroBytes(keysize))                // 00000...000
+	key0 := KadKey(make([]byte, keysize))             // 00000...000
 	randKey := KadKey([]byte{0x23, 0xe4, 0xdd, 0x03}) // arbitrary key
 
-	xored, err := key0.Xor(key0)
-	require.NoError(t, err)
+	xored := key0.Xor(key0)
 	require.Equal(t, key0, xored)
-	xored, _ = randKey.Xor(key0)
+	xored = randKey.Xor(key0)
 	require.Equal(t, randKey, xored)
-	xored, _ = key0.Xor(randKey)
+	xored = key0.Xor(randKey)
 	require.Equal(t, randKey, xored)
-	xored, _ = randKey.Xor(randKey)
+	xored = randKey.Xor(randKey)
 	require.Equal(t, key0, xored)
 
-	invalidKey := KadKey([]byte{0x23, 0xe4, 0xdd}) // invalid key
-	_, err = key0.Xor(invalidKey)
-	require.Equal(t, ErrInvalidKey(4), err)
+	shorterKey := KadKey([]byte{0x23, 0xe4, 0xdd}) // shorter key
+	xored = key0.Xor(shorterKey)
+	expected := append(shorterKey, make([]byte, key0.Size()-shorterKey.Size())...)
+	require.Equal(t, expected, xored)
+	xored = shorterKey.Xor(key0)
+	require.Equal(t, expected, xored)
+	xored = key0.Xor(nil)
+	require.Equal(t, key0, xored)
 }
 
 func TestCommonPrefixLength(t *testing.T) {
-	key0 := KadKey(zeroBytes(keysize))                            // 00000...000
-	key1 := KadKey(append(zeroBytes(keysize-1), 0x01))            // 00000...001
-	key2 := KadKey(append([]byte{0x80}, zeroBytes(keysize-1)...)) // 10000...000
-	key3 := KadKey(append([]byte{0x40}, zeroBytes(keysize-1)...)) // 01000...000
+	key0 := KadKey(make([]byte, keysize))                            // 00000...000
+	key1 := KadKey(append(make([]byte, keysize-1), 0x01))            // 00000...001
+	key2 := KadKey(append([]byte{0x80}, make([]byte, keysize-1)...)) // 10000...000
+	key3 := KadKey(append([]byte{0x40}, make([]byte, keysize-1)...)) // 01000...000
 
-	cpl, err := key0.CommonPrefixLength(key0)
-	require.NoError(t, err)
+	cpl := key0.CommonPrefixLength(key0)
 	require.Equal(t, keysize*8, cpl)
-	cpl, _ = key0.CommonPrefixLength(key1)
+	cpl = key0.CommonPrefixLength(key1)
 	require.Equal(t, keysize*8-1, cpl)
-	cpl, _ = key0.CommonPrefixLength(key2)
+	cpl = key0.CommonPrefixLength(key2)
 	require.Equal(t, 0, cpl)
-	cpl, _ = key0.CommonPrefixLength(key3)
+	cpl = key0.CommonPrefixLength(key3)
 	require.Equal(t, 1, cpl)
 
-	invalidKey := KadKey([]byte{0x23, 0xe4, 0xdd}) // invalid key
-	_, err = key0.CommonPrefixLength(invalidKey)
-	require.Equal(t, ErrInvalidKey(4), err)
+	cpl = key0.CommonPrefixLength(nil)
+	require.Equal(t, 0, cpl)
+	cpl = key0.CommonPrefixLength([]byte{0x00})
+	require.Equal(t, 8, cpl)
+	cpl = key0.CommonPrefixLength([]byte{0x00, 0x40})
+	require.Equal(t, 9, cpl)
+	cpl = key0.CommonPrefixLength([]byte{0x80})
+	require.Equal(t, 0, cpl)
 }
 
 func TestCompare(t *testing.T) {
 	nKeys := 5
 	keys := make([]KadKey, nKeys)
 	// ascending order
-	keys[0] = KadKey(zeroBytes(keysize))                            // 00000...000
-	keys[1] = KadKey(append(zeroBytes(keysize-1), 0x01))            // 00000...001
-	keys[2] = KadKey(append(zeroBytes(keysize-1), 0x02))            // 00000...010
-	keys[3] = KadKey(append([]byte{0x40}, zeroBytes(keysize-1)...)) // 01000...000
-	keys[4] = KadKey(append([]byte{0x80}, zeroBytes(keysize-1)...)) // 10000...000
+	keys[0] = KadKey(make([]byte, keysize))                            // 00000...000
+	keys[1] = KadKey(append(make([]byte, keysize-1), 0x01))            // 00000...001
+	keys[2] = KadKey(append(make([]byte, keysize-1), 0x02))            // 00000...010
+	keys[3] = KadKey(append([]byte{0x40}, make([]byte, keysize-1)...)) // 01000...000
+	keys[4] = KadKey(append([]byte{0x80}, make([]byte, keysize-1)...)) // 10000...000
 
 	for i := 0; i < nKeys; i++ {
 		for j := 0; j < nKeys; j++ {
-			res, _ := keys[i].Compare(keys[j])
+			res := keys[i].Compare(keys[j])
 			if i < j {
-				require.Equal(t, int8(-1), res)
+				require.Equal(t, -1, res)
 			} else if i > j {
-				require.Equal(t, int8(1), res)
+				require.Equal(t, 1, res)
 			} else {
-				require.Equal(t, int8(0), res)
-				equal, err := keys[i].Equal(keys[j])
-				require.NoError(t, err)
+				require.Equal(t, 0, res)
+				equal := keys[i].Equal(keys[j])
 				require.True(t, equal)
 			}
 		}
 	}
 
-	invalidKey := KadKey([]byte{0x23, 0xe4, 0xdd}) // invalid key
-	_, err := keys[0].Compare(invalidKey)
-	require.Equal(t, ErrInvalidKey(4), err)
+	// compare keys of different sizes
+	key := keys[4]                                                          // 10000...000 (32 bits)
+	require.Equal(t, 1, key.Compare([]byte{}))                              // b is prefix of a -> 1
+	require.Equal(t, 1, key.Compare([]byte{0x00}))                          // a[0] > b [0] -> 1
+	require.Equal(t, 1, key.Compare([]byte{0x80}))                          // b is prefix of a -> 1
+	require.Equal(t, -1, key.Compare([]byte{0x81}))                         // a[4] < b[4] -> -1
+	require.Equal(t, 0, key.Compare([]byte{0x80, 0x00, 0x00, 0x00}))        // a == b -> 0
+	require.Equal(t, -1, key.Compare([]byte{0x80, 0x00, 0x00, 0x00, 0x00})) // a is prefix of b -> -1
 }

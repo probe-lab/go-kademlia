@@ -5,6 +5,7 @@ import (
 
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-kademlia/network/endpoint"
 )
 
 type peerStatus uint8
@@ -17,15 +18,18 @@ const (
 )
 
 type peerInfo struct {
-	distance key.KadKey
-	status   peerStatus
-	id       address.NodeID
+	distance          key.KadKey
+	status            peerStatus
+	id                address.NodeID
+	addrs             []address.Addr
+	tryAgainOnFailure bool
 
 	next *peerInfo
 }
 
 type peerList struct {
-	target key.KadKey
+	target   key.KadKey
+	endpoint endpoint.NetworkedEndpoint
 
 	closest       *peerInfo
 	closestQueued *peerInfo
@@ -33,10 +37,14 @@ type peerList struct {
 	queuedCount int
 }
 
-func newPeerList(target key.KadKey) *peerList {
+func newPeerList(target key.KadKey, ep endpoint.Endpoint) *peerList {
+	nep, ok := ep.(endpoint.NetworkedEndpoint)
+	if !ok {
+		nep = nil
+	}
 	return &peerList{
-		target:      target,
-		queuedCount: 0,
+		target:   target,
+		endpoint: nep,
 	}
 }
 
@@ -65,10 +73,10 @@ func (pl *peerList) addToPeerlist(ids []address.NodeID) {
 
 	// merge the new sorted list into the existing sorted list
 	var prev *peerInfo
-	currOld := true
+	currOld := true // current element is from old list
 	closestQueuedReached := false
 
-	r, _ := oldHead.distance.Compare(newHead.distance)
+	r := oldHead.distance.Compare(newHead.distance)
 	if r > 0 {
 		pl.closest = newHead
 		pl.closestQueued = newHead
@@ -106,22 +114,53 @@ func (pl *peerList) addToPeerlist(ids []address.NodeID) {
 				prev.next = oldHead
 				currOld = true
 			}
-			prev = oldHead
-			oldHead = oldHead.next
 			if r == 0 {
 				// newHead is a duplicate of oldHead, discard newHead
 				newHead = newHead.next
+
+				if pl.endpoint != nil && (oldHead.status == unreachable ||
+					oldHead.status == waiting) {
+					// If oldHead is unreachable, and new addresses are discovered
+					// for this NodeID, set status to queued as we will try again.
+					// If oldHead is waiting, set tryAgainOnFailure to true
+					// so that we will try again with the newly discovered
+					// addresses upon failure.
+					na, err := pl.endpoint.NetworkAddress(oldHead.id)
+					if err == nil {
+						for _, addr := range na.Addresses() {
+							found := false
+							for _, oldAddr := range oldHead.addrs {
+								if addr == oldAddr {
+									found = true
+									break
+								}
+							}
+							if !found {
+								if oldHead.status == unreachable {
+									pl.enqueueUnreachablePeer(oldHead)
+								} else if oldHead.status == waiting {
+									oldHead.tryAgainOnFailure = true
+								}
+							}
+						}
+					}
+				}
 			}
+			prev = oldHead
+			oldHead = oldHead.next
 		}
 		// we are done when we reach the end of either list
 		if oldHead == nil || newHead == nil {
 			break
 		}
-		r, _ = oldHead.distance.Compare(newHead.distance)
+		r = oldHead.distance.Compare(newHead.distance)
 	}
 
 	// append the remaining list to the end
 	if oldHead == nil {
+		if !closestQueuedReached {
+			pl.closestQueued = newHead
+		}
 		prev.next = newHead
 
 		// if there are still new peers to be appended, increase queued count
@@ -150,15 +189,13 @@ func sliceToPeerInfos(target key.KadKey, ids []address.NodeID) *peerInfo {
 
 	// sort the new list
 	sort.Slice(newPeers, func(i, j int) bool {
-		r, _ := newPeers[i].distance.Compare(newPeers[j].distance)
-		return r < 0
+		return newPeers[i].distance.Compare(newPeers[j].distance) < 0
 	})
 
 	// convert slice to linked list and remove duplicates
 	curr := newPeers[0]
 	for i := 1; i < len(newPeers); i++ {
-		r, _ := curr.distance.Compare(newPeers[i].distance)
-		if r != 0 {
+		if !curr.distance.Equal(newPeers[i].distance) {
 			curr.next = newPeers[i]
 			curr = curr.next
 		}
@@ -171,54 +208,89 @@ func addrInfoToPeerInfo(target key.KadKey, id address.NodeID) *peerInfo {
 	if id == nil || id.String() == "" || target.Size() != id.Key().Size() {
 		return nil
 	}
-	dist, _ := target.Xor(id.Key())
 	return &peerInfo{
-		distance: dist,
+		distance: target.Xor(id.Key()),
 		status:   queued,
 		id:       id,
 	}
 }
 
-func (pl *peerList) updatePeerStatusInPeerlist(id address.NodeID, newStatus peerStatus) {
-	curr := pl.closest
-	for curr != nil && curr.id.String() != id.String() {
-		curr = curr.next
-	}
-	if curr != nil {
-		if curr.status == queued && newStatus != queued {
-			pl.queuedCount--
-		} else if curr.status != queued && newStatus == queued {
-			pl.queuedCount++
+func (pl *peerList) enqueueUnreachablePeer(pi *peerInfo) {
+	if pi != nil {
+		// curr is the id we are looking for
+		if pi.status != queued {
+			pi.tryAgainOnFailure = false
+			pi.status = queued
 
-			for curr := pl.closest; curr != nil; curr = curr.next {
-				// if a peer is set to queued, we may need to update closestQueued
-				if curr.id.String() == id.String() {
-					pl.closestQueued = curr
-					break
-				} else if curr == pl.closestQueued {
-					break
-				}
+			pl.queuedCount++
+			// if curr is closer to target than closestQueued, update closestQueued
+			if pi.distance.Compare(pl.closestQueued.distance) < 0 {
+				pl.closestQueued = pi
 			}
 		}
-
-		curr.status = newStatus
-
-		if curr == pl.closestQueued && newStatus != queued {
-			pl.closestQueued = findNextQueued(curr)
-		}
 	}
+
 }
 
+// setPeerWaiting sets the status of a "queued" peer to "waiting". it records
+// the addresses associated with id in the peerstore at the time of the request
+// to curr.addrs.
 func (pl *peerList) popClosestQueued() address.NodeID {
 	if pl.closestQueued == nil {
 		return nil
 	}
 	pi := pl.closestQueued
+	if pl.endpoint != nil {
+		na, _ := pl.endpoint.NetworkAddress(pi.id)
+		for na == nil {
+			// if peer doesn't have addresses, set status to unreachable
+			pi.status = unreachable
+			pl.queuedCount--
+
+			pi = findNextQueued(pi)
+			if pi == nil {
+				return nil
+			}
+			na, _ = pl.endpoint.NetworkAddress(pi.id)
+		}
+		pi.addrs = na.Addresses()
+	}
 	pi.status = waiting
 	pl.queuedCount--
 
 	pl.closestQueued = findNextQueued(pi)
 	return pi.id
+}
+
+func (pl *peerList) queriedPeer(id address.NodeID) {
+	curr := pl.closest
+	for curr != nil && curr.id.String() != id.String() {
+		curr = curr.next
+	}
+	if curr != nil {
+		// curr is the id we are looking for
+		if curr.status == waiting {
+			curr.status = queried
+		}
+	}
+}
+
+// unreachablePeer sets the status of a "waiting" peer to "unreachable".
+func (pl *peerList) unreachablePeer(id address.NodeID) {
+	curr := pl.closest
+	for curr != nil && curr.id.String() != id.String() {
+		curr = curr.next
+	}
+	if curr != nil {
+		// curr is the id we are looking for
+		if curr.status == waiting {
+			if curr.tryAgainOnFailure {
+				pl.enqueueUnreachablePeer(curr)
+			} else {
+				curr.status = unreachable
+			}
+		}
+	}
 }
 
 func findNextQueued(pi *peerInfo) *peerInfo {

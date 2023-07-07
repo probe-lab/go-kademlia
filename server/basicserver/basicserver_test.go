@@ -62,9 +62,10 @@ func TestSimMessageHandling(t *testing.T) {
 	}
 
 	s0 := NewBasicServer(rt, fakeEndpoint, WithPeerstoreTTL(peerstoreTTL),
-		WithNumberOfCloserPeersToSend(numberOfCloserPeersToSend))
+		WithNumberUsefulCloserPeers(numberOfCloserPeersToSend))
 
 	requester := kadid.KadID{KadKey: []byte{0b00000001}} // 0000 0001
+	fakeEndpoint.MaybeAddToPeerstore(ctx, requester, peerstoreTTL)
 
 	req0 := simmessage.NewSimRequest([]byte{0b00000000})
 	msg, err := s0.HandleRequest(ctx, requester, req0)
@@ -100,7 +101,7 @@ func TestSimMessageHandling(t *testing.T) {
 	}
 
 	numberOfCloserPeersToSend = 3
-	s1 := NewBasicServer(rt, fakeEndpoint, WithNumberOfCloserPeersToSend(3))
+	s1 := NewBasicServer(rt, fakeEndpoint, WithNumberUsefulCloserPeers(3))
 
 	req2 := simmessage.NewSimRequest([]byte{0b01100000})
 	msg, err = s1.HandleRequest(ctx, requester, req2)
@@ -164,6 +165,54 @@ func TestInvalidSimRequests(t *testing.T) {
 	s.HandleFindNodeRequest(ctx, requester, req2)
 }
 
+func TestSimRequestNoNetworkAddress(t *testing.T) {
+	ctx := context.Background()
+	keylen := 32
+	// invalid option
+	s := NewBasicServer(nil, nil, func(*Config) error {
+		return errors.New("invalid option")
+	})
+	require.Nil(t, s)
+
+	clk := clock.New()
+	router := fakeendpoint.NewFakeRouter()
+
+	var self = kadid.KadID{KadKey: make([]byte, keylen)} // 0000 0000
+
+	// create a valid server
+	sched := simplescheduler.NewSimpleScheduler(clk)
+	fakeEndpoint := fakeendpoint.NewFakeEndpoint(self, sched, router)
+	rt := simplert.New(self.Key(), 2)
+
+	parsed, err := peer.Decode("1EooooPEER")
+	require.NoError(t, err)
+	addrInfo := addrinfo.NewAddrInfo(peer.AddrInfo{
+		ID:    parsed,
+		Addrs: nil,
+	})
+
+	// add peer to routing table, but NOT to peerstore
+	success, err := rt.AddPeer(ctx, addrInfo.NodeID())
+	require.NoError(t, err)
+	require.True(t, success)
+
+	s = NewBasicServer(rt, fakeEndpoint)
+	require.NotNil(t, s)
+
+	require.NotNil(t, s)
+
+	requester := kadid.KadID{KadKey: append([]byte{0x80}, make([]byte, keylen-1)...)}
+
+	// sim request message (for any key)
+	req := simmessage.NewSimRequest(requester.Key())
+	msg, err := s.HandleFindNodeRequest(ctx, requester, req)
+	require.NoError(t, err)
+	resp, ok := msg.(message.MinKadResponseMessage)
+	require.True(t, ok)
+	fmt.Println(resp.CloserNodes())
+	require.Len(t, resp.CloserNodes(), 0)
+}
+
 func TestIPFSv1Handling(t *testing.T) {
 	ctx := context.Background()
 	clk := clock.NewMock()
@@ -201,7 +250,7 @@ func TestIPFSv1Handling(t *testing.T) {
 			// it is among the numberOfCloserPeersToSend closer peers
 			addrInfo = addrinfo.NewAddrInfo(peer.AddrInfo{
 				ID:    p,
-				Addrs: []multiaddr.Multiaddr{},
+				Addrs: nil,
 			})
 		}
 		// add peers to routing table and peerstore
@@ -221,11 +270,15 @@ func TestIPFSv1Handling(t *testing.T) {
 	// peerids[5]: 00ca8d64555add66790c4fb3e62075911a02a3577622fa69279731e82c135b8a (bucket 0)
 
 	s0 := NewBasicServer(rt, fakeEndpoint, WithPeerstoreTTL(peerstoreTTL),
-		WithNumberOfCloserPeersToSend(numberOfCloserPeersToSend))
+		WithNumberUsefulCloserPeers(numberOfCloserPeersToSend))
 
 	requesterPid, err := peer.Decode("1WoooREQUESTER")
 	require.NoError(t, err)
 	requester := peerid.NewPeerID(requesterPid)
+	fakeEndpoint.MaybeAddToPeerstore(ctx, addrinfo.NewAddrInfo(peer.AddrInfo{
+		ID:    requesterPid,
+		Addrs: nil,
+	}), peerstoreTTL)
 
 	req0 := ipfsv1.FindPeerRequest(self)
 	msg, err := s0.HandleRequest(ctx, requester, req0)
@@ -250,9 +303,8 @@ type invalidEndpoint struct{}
 
 var _ endpoint.Endpoint = (*invalidEndpoint)(nil)
 
-func (e *invalidEndpoint) MaybeAddToPeerstore(context.Context, address.NodeID,
-	time.Duration,
-) error {
+func (e *invalidEndpoint) MaybeAddToPeerstore(context.Context, address.NodeAddr,
+	time.Duration) error {
 	return nil
 }
 
@@ -267,7 +319,7 @@ func (e *invalidEndpoint) KadKey() key.KadKey {
 	return make([]byte, 0)
 }
 
-func (e *invalidEndpoint) NetworkAddress(address.NodeID) (address.NodeID, error) {
+func (e *invalidEndpoint) NetworkAddress(address.NodeID) (address.NodeAddr, error) {
 	return nil, nil
 }
 
@@ -309,7 +361,7 @@ func TestInvalidIpfsv1Requests(t *testing.T) {
 	}
 
 	s0 := NewBasicServer(rt, invalidEP, WithPeerstoreTTL(peerstoreTTL),
-		WithNumberOfCloserPeersToSend(numberOfCloserPeersToSend))
+		WithNumberUsefulCloserPeers(numberOfCloserPeersToSend))
 
 	requesterPid, err := peer.Decode("1WoooREQUESTER")
 	require.NoError(t, err)

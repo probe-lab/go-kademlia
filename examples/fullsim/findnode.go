@@ -33,15 +33,14 @@ const (
 )
 
 // connectNodes adds nodes to each other's peerstores and routing tables
-func connectNodes(ctx context.Context, n0, n1 address.NodeID, ep0, ep1 endpoint.Endpoint,
-	rt0, rt1 routing.Table,
-) {
+func connectNodes(ctx context.Context, n0, n1 address.NodeAddr, ep0, ep1 endpoint.Endpoint,
+	rt0, rt1 routing.Table) {
 	// add n1 to n0's peerstore and routing table
 	ep0.MaybeAddToPeerstore(ctx, n1, peerstoreTTL)
-	rt0.AddPeer(ctx, n1)
+	rt0.AddPeer(ctx, n1.NodeID())
 	// add n0 to n1's peerstore and routing table
 	ep1.MaybeAddToPeerstore(ctx, n0, peerstoreTTL)
-	rt1.AddPeer(ctx, n0)
+	rt1.AddPeer(ctx, n0.NodeID())
 }
 
 func findNode(ctx context.Context) {
@@ -82,7 +81,10 @@ func findNode(ctx context.Context) {
 		// create a server instance for the node
 		servers[i] = basicserver.NewBasicServer(rts[i], eps[i])
 		// add the server request handler for protoID to the endpoint
-		eps[i].AddRequestHandler(protoID, servers[i].HandleRequest, nil)
+		err := eps[i].AddRequestHandler(protoID, nil, servers[i].HandleRequest)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	// A connects to B
@@ -98,7 +100,6 @@ func findNode(ctx context.Context) {
 	// A will first ask B, B will reply with C's address (and A's address)
 	// A will then ask C, C will reply with D's address (and B's address)
 	req := simmessage.NewSimRequest(ids[3].Key())
-	resp := &simmessage.SimMessage{}
 
 	// handleResFn is called when a response is received during the query process
 	handleResFn := func(_ context.Context, id address.NodeID,
@@ -107,16 +108,18 @@ func findNode(ctx context.Context) {
 		resp := msg.(*simmessage.SimMessage)
 		fmt.Println("got a response from", id, "with", resp.CloserNodes())
 
-		for _, peer := range resp.CloserNodes() {
-			if peer.String() == ids[3].NodeID().String() {
+		newIds := make([]address.NodeID, len(resp.CloserNodes()))
+		for i, peer := range resp.CloserNodes() {
+			if peer.NodeID().String() == ids[3].NodeID().String() {
 				// the response contains the address of D (ids[3])
 				fmt.Println("success")
 				// returning true will stop the query process
 				return true, nil
 			}
+			newIds[i] = peer.NodeID()
 		}
 		// returning false will continue the query process
-		return false, resp.CloserNodes()
+		return false, newIds
 	}
 
 	// create a query on A (using A's scheduler, endpoint and routing table),
@@ -125,8 +128,16 @@ func findNode(ctx context.Context) {
 	// concurrency of 1, a timeout of 1 second, and handleResFn as the response
 	// handler. The query doesn't run yet, it is added to A's event queue
 	// through A's scheduler.
-	sq.NewSimpleQuery(ctx, ids[3].Key(), protoID, req, resp, 1, time.Second,
-		eps[0], rts[0], schedulers[0], handleResFn)
+	queryOpts := []sq.Option{
+		sq.WithProtocolID(protoID),
+		sq.WithConcurrency(1),
+		sq.WithRequestTimeout(time.Second),
+		sq.WithHandleResultsFunc(handleResFn),
+		sq.WithRoutingTable(rts[0]),
+		sq.WithEndpoint(eps[0]),
+		sq.WithScheduler(schedulers[0]),
+	}
+	sq.NewSimpleQuery(ctx, req, queryOpts...)
 
 	// create a simulator, simulating [A, B, C, D]'s simulators
 	sim := litesimulator.NewLiteSimulator(clk)

@@ -12,13 +12,14 @@ type MinKadMessage interface {
 type MinKadRequestMessage interface {
 	MinKadMessage
 
-	Target() *key.KadKey
+	Target() key.KadKey
+	EmptyResponse() MinKadResponseMessage
 }
 
 type MinKadResponseMessage interface {
 	MinKadMessage
 
-	CloserNodes() []address.NodeID
+	CloserNodes() []address.NodeAddr
 }
 
 type ProtoKadMessage interface {

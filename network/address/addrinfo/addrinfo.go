@@ -12,7 +12,7 @@ type AddrInfo struct {
 	id *peerid.PeerID
 }
 
-var _ address.NodeID = (*AddrInfo)(nil)
+var _ address.NodeAddr = (*AddrInfo)(nil)
 
 func NewAddrInfo(ai peer.AddrInfo) *AddrInfo {
 	return &AddrInfo{
@@ -31,4 +31,16 @@ func (ai AddrInfo) String() string {
 
 func (ai AddrInfo) PeerID() *peerid.PeerID {
 	return ai.id
+}
+
+func (ai AddrInfo) NodeID() address.NodeID {
+	return ai.id
+}
+
+func (ai AddrInfo) Addresses() []address.Addr {
+	addrs := make([]address.Addr, len(ai.Addrs))
+	for i, a := range ai.Addrs {
+		addrs[i] = a
+	}
+	return addrs
 }

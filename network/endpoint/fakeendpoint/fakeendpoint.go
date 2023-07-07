@@ -23,7 +23,7 @@ type FakeEndpoint struct {
 	self  address.NodeID
 	sched scheduler.Scheduler // client
 
-	peerstore      map[string]address.NodeID
+	peerstore      map[string]address.NodeAddr
 	connStatus     map[string]network.Connectedness
 	serverProtos   map[address.ProtocolID]endpoint.RequestHandlerFn // server
 	streamFollowup map[endpoint.StreamID]endpoint.ResponseHandlerFn // client
@@ -41,7 +41,7 @@ func NewFakeEndpoint(self address.NodeID, sched scheduler.Scheduler, router *Fak
 		sched:        sched,
 		serverProtos: make(map[address.ProtocolID]endpoint.RequestHandlerFn),
 
-		peerstore:  make(map[string]address.NodeID),
+		peerstore:  make(map[string]address.NodeAddr),
 		connStatus: make(map[string]network.Connectedness),
 
 		streamFollowup: make(map[endpoint.StreamID]endpoint.ResponseHandlerFn),
@@ -78,8 +78,8 @@ func (e *FakeEndpoint) DialPeer(ctx context.Context, id address.NodeID) error {
 
 // MaybeAddToPeerstore adds the given address to the peerstore. FakeEndpoint
 // doesn't take into account the ttl.
-func (e *FakeEndpoint) MaybeAddToPeerstore(ctx context.Context, id address.NodeID, ttl time.Duration) error {
-	strNodeID := id.String()
+func (e *FakeEndpoint) MaybeAddToPeerstore(ctx context.Context, id address.NodeAddr, ttl time.Duration) error {
+	strNodeID := id.NodeID().String()
 	_, span := util.StartSpan(ctx, "MaybeAddToPeerstore",
 		trace.WithAttributes(attribute.String("self", e.self.String())),
 		trace.WithAttributes(attribute.String("id", strNodeID)),
@@ -107,16 +107,23 @@ func (e *FakeEndpoint) SendRequestHandleResponse(ctx context.Context,
 
 	if err := e.DialPeer(ctx, id); err != nil {
 		span.RecordError(err)
-		handleResp(ctx, nil, err)
-		return err
+		e.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
+			handleResp(ctx, nil, err)
+		}))
+		return nil
 	}
 
-	// send request
-	sid, err := e.router.SendMessage(ctx, e.self, id, protoID, 0, req)
+	// send request. id.String() is guaranteed to be in peerstore, because
+	// DialPeer checks it, and an error is returned if it's not there.
+	addr := e.peerstore[id.String()]
+
+	sid, err := e.router.SendMessage(ctx, e.self, addr.NodeID(), protoID, 0, req)
 	if err != nil {
 		span.RecordError(err)
-		handleResp(ctx, nil, err)
-		return err
+		e.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
+			handleResp(ctx, nil, err)
+		}))
+		return nil
 	}
 	e.streamFollowup[sid] = handleResp
 
@@ -151,9 +158,12 @@ func (e *FakeEndpoint) Connectedness(id address.NodeID) (network.Connectedness, 
 	}
 }
 
-func (e *FakeEndpoint) NetworkAddress(id address.NodeID) (address.NodeID, error) {
+func (e *FakeEndpoint) NetworkAddress(id address.NodeID) (address.NodeAddr, error) {
 	if ai, ok := e.peerstore[id.String()]; ok {
 		return ai, nil
+	}
+	if na, ok := id.(address.NodeAddr); ok {
+		return na, nil
 	}
 	return nil, endpoint.ErrUnknownPeer
 }
@@ -183,7 +193,12 @@ func (e *FakeEndpoint) HandleMessage(ctx context.Context, id address.NodeID,
 
 		resp, ok := msg.(message.MinKadResponseMessage)
 		var err error
-		if !ok {
+		if ok {
+			for _, p := range resp.CloserNodes() {
+				e.peerstore[p.NodeID().String()] = p
+				e.connStatus[p.NodeID().String()] = network.CanConnect
+			}
+		} else {
 			err = ErrInvalidResponseType
 		}
 		if followup != nil {
@@ -194,9 +209,9 @@ func (e *FakeEndpoint) HandleMessage(ctx context.Context, id address.NodeID,
 		return
 	}
 
-	if _, ok := e.serverProtos[protoID]; ok {
+	if handler, ok := e.serverProtos[protoID]; ok && handler != nil {
 		// it isn't a response, so treat it as a request
-		resp, err := e.serverProtos[protoID](ctx, id, msg)
+		resp, err := handler(ctx, id, msg)
 		if err != nil {
 			span.RecordError(err)
 			return
@@ -206,7 +221,10 @@ func (e *FakeEndpoint) HandleMessage(ctx context.Context, id address.NodeID,
 }
 
 func (e *FakeEndpoint) AddRequestHandler(protoID address.ProtocolID,
-	reqHandler endpoint.RequestHandlerFn, req message.MinKadMessage) error {
+	req message.MinKadMessage, reqHandler endpoint.RequestHandlerFn) error {
+	if reqHandler == nil {
+		return endpoint.ErrNilRequestHandler
+	}
 	e.serverProtos[protoID] = reqHandler
 	return nil
 }

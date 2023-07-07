@@ -18,6 +18,7 @@ var (
 	ErrNoValidAddresses = errors.New("no valid addresses")
 )
 
+var _ message.ProtoKadRequestMessage = (*Message)(nil)
 var _ message.ProtoKadResponseMessage = (*Message)(nil)
 
 func FindPeerRequest(p *peerid.PeerID) *Message {
@@ -43,10 +44,14 @@ func (msg *Message) Target() key.KadKey {
 	return peerid.PeerID{ID: p}.Key()
 }
 
-func (msg *Message) CloserNodes() []address.NodeID {
+func (msg *Message) EmptyResponse() message.MinKadResponseMessage {
+	return &Message{}
+}
+
+func (msg *Message) CloserNodes() []address.NodeAddr {
 	closerPeers := msg.GetCloserPeers()
 	if closerPeers == nil {
-		return []address.NodeID{}
+		return []address.NodeAddr{}
 	}
 	return ParsePeers(closerPeers)
 }
@@ -69,8 +74,8 @@ func PBPeerToPeerInfo(pbp *Message_Peer) (*addrinfo.AddrInfo, error) {
 	}), nil
 }
 
-func ParsePeers(pbps []*Message_Peer) []address.NodeID {
-	peers := make([]address.NodeID, 0, len(pbps))
+func ParsePeers(pbps []*Message_Peer) []address.NodeAddr {
+	peers := make([]address.NodeAddr, 0, len(pbps))
 	for _, p := range pbps {
 		pi, err := PBPeerToPeerInfo(p)
 		if err == nil {
