@@ -8,6 +8,7 @@ import (
 	"github.com/plprobelab/go-kademlia/key/keyutil"
 	"github.com/plprobelab/go-kademlia/key/trie"
 	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-kademlia/network/address/kadid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -323,6 +324,29 @@ func TestCplSize(t *testing.T) {
 		require.Equal(t, 2, rt.CplSize(2))
 		require.Equal(t, 4, rt.CplSize(3))
 	})
+}
+
+func BenchmarkBuildTable(b *testing.B) {
+	b.Run("1000", makeBenchmarkBuildTable(1000))
+	b.Run("10000", makeBenchmarkBuildTable(10000))
+	b.Run("100000", makeBenchmarkBuildTable(100000))
+}
+
+func makeBenchmarkBuildTable(n int) func(b *testing.B) {
+	return func(b *testing.B) {
+		nodes := make([]address.NodeID, n)
+		for i := 0; i < n; i++ {
+			nodes[i] = kadid.NewKadID(keyutil.Random(32))
+		}
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			rt := New(key0)
+			for _, node := range nodes {
+				rt.AddPeer(context.Background(), node)
+			}
+		}
+	}
 }
 
 var _ address.NodeID = (*node)(nil)
