@@ -26,8 +26,7 @@ func TestFindPeerRequest(t *testing.T) {
 
 	require.Equal(t, msg.GetKey(), []byte(p))
 
-	b, err := msg.Target().Equal(pid.Key())
-	require.NoError(t, err)
+	b := msg.Target().Equal(pid.Key())
 	require.True(t, b)
 
 	require.Equal(t, 0, len(msg.CloserNodes()))

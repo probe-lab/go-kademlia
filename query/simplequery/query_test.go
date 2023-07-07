@@ -286,7 +286,7 @@ func getHandleResults(t *testing.T, req message.MinKadRequestMessage,
 		var found bool
 		for i, n := range resp.CloserNodes() {
 			ids[i] = n.NodeID()
-			if match, err := ids[i].Key().Equal(req.Target()); err == nil && match {
+			if ids[i].Key().Equal(req.Target()) {
 				// the target was found, stop the query
 				found = true
 			}
@@ -330,7 +330,7 @@ func TestElementaryQuery(t *testing.T) {
 
 	currID := 0
 	// while currID != target.Key()
-	for c, _ := ids[currID].NodeID().Key().Equal(req.Target()); !c; {
+	for !ids[currID].NodeID().Key().Equal(req.Target()) {
 		// get closest peer to target from the sollicited peer
 		closest, err := rts[currID].NearestPeers(ctx, req.Target(), 1)
 		require.NoError(t, err)
@@ -349,9 +349,6 @@ func TestElementaryQuery(t *testing.T) {
 			closestKey[i] = n.Key()
 		}
 		expectedResponses = append(expectedResponses, closestKey)
-
-		// test if the current ID is the target
-		c, _ = ids[currID].NodeID().Key().Equal(req.Target())
 	}
 
 	// handleResults is called when a peer receives a response from a peer. If
