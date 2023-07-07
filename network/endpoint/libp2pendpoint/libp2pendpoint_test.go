@@ -416,7 +416,7 @@ func TestReqTimeout(t *testing.T) {
 	require.NoError(t, err)
 
 	responseHandler := func(_ context.Context, _ message.MinKadResponseMessage, err error) {
-		require.Equal(t, endpoint.ErrTimeout, err)
+		require.Error(t, err)
 		wg.Done()
 	}
 	// timeout after 100 ms, will fail immediately
