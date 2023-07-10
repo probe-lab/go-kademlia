@@ -2,6 +2,7 @@ package triert
 
 import (
 	"context"
+	"math/rand"
 	"testing"
 
 	"github.com/plprobelab/go-kademlia/key"
@@ -350,6 +351,12 @@ func BenchmarkNearestPeers(b *testing.B) {
 	b.Run("100000", benchmarkNearestPeers(100000))
 }
 
+func BenchmarkChurn(b *testing.B) {
+	b.Run("1000", benchmarkChurn(1000))
+	b.Run("10000", benchmarkChurn(10000))
+	b.Run("100000", benchmarkChurn(100000))
+}
+
 func benchmarkBuildTable(n int) func(b *testing.B) {
 	return func(b *testing.B) {
 		nodes := make([]address.NodeID, n)
@@ -428,6 +435,35 @@ func benchmarkNearestPeers(n int) func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			rt.NearestPeers(context.Background(), keyutil.Random(32), 20)
+		}
+	}
+}
+
+func benchmarkChurn(n int) func(b *testing.B) {
+	return func(b *testing.B) {
+		universe := make([]address.NodeID, n)
+		for i := 0; i < n; i++ {
+			universe[i] = kadid.NewKadID(keyutil.Random(32))
+		}
+		rt := New(key0)
+		// Add a portion of the universe to the routing table
+		for i := 0; i < len(universe)/4; i++ {
+			rt.AddPeer(context.Background(), universe[i])
+		}
+		rand.Shuffle(len(universe), func(i, j int) { universe[i], universe[j] = universe[j], universe[i] })
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			node := universe[i%len(universe)]
+			found, _ := rt.Find(context.Background(), node.Key())
+			if found == nil {
+				// add new peer
+				rt.AddPeer(context.Background(), universe[i%len(universe)])
+			} else {
+				// remove it
+				rt.RemoveKey(context.Background(), node.Key())
+			}
 		}
 	}
 }
