@@ -1,19 +1,19 @@
 package keyutil
 
 import (
-	"crypto/rand"
 	"encoding/binary"
+	"math/rand"
 	"strconv"
 
 	"github.com/plprobelab/go-kademlia/key"
 )
 
+var rng = rand.New(rand.NewSource(299792458))
+
 // Random returns a KadKey of length l populated with random data.
 func Random(l int) key.KadKey {
 	buf := make([]byte, l)
-	if _, err := rand.Read(buf); err != nil {
-		panic("RandomWithPrefix: failed to read enough entropy for key")
-	}
+	rng.Read(buf)
 	return buf
 }
 
@@ -40,9 +40,7 @@ func RandomWithPrefix(s string, l int) key.KadKey {
 	}
 
 	buf := make([]byte, size)
-	if _, err := rand.Read(buf); err != nil {
-		panic("RandomWithPrefix: failed to read enough entropy for key")
-	}
+	rng.Read(buf)
 
 	lead := binary.BigEndian.Uint64(buf)
 	lead <<= bits

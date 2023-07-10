@@ -404,6 +404,253 @@ func TestFindWithData(t *testing.T) {
 	}
 }
 
+func BenchmarkBuildTrieMutable(b *testing.B) {
+	b.Run("1000", benchmarkBuildTrieMutable(1000))
+	b.Run("10000", benchmarkBuildTrieMutable(10000))
+	b.Run("100000", benchmarkBuildTrieMutable(100000))
+}
+
+func BenchmarkBuildTrieImmutable(b *testing.B) {
+	b.Run("1000", benchmarkBuildTrieImmutable(1000))
+	b.Run("10000", benchmarkBuildTrieImmutable(10000))
+	b.Run("100000", benchmarkBuildTrieImmutable(100000))
+}
+
+func BenchmarkAddMutable(b *testing.B) {
+	b.Run("1000", benchmarkAddMutable(1000))
+	b.Run("10000", benchmarkAddMutable(10000))
+	b.Run("100000", benchmarkAddMutable(100000))
+}
+
+func BenchmarkAddImmutable(b *testing.B) {
+	b.Run("1000", benchmarkAddImmutable(1000))
+	b.Run("10000", benchmarkAddImmutable(10000))
+	b.Run("100000", benchmarkAddImmutable(100000))
+}
+
+func BenchmarkRemoveMutable(b *testing.B) {
+	b.Run("1000", benchmarkRemoveMutable(1000))
+	b.Run("10000", benchmarkRemoveMutable(10000))
+	b.Run("100000", benchmarkRemoveMutable(100000))
+}
+
+func BenchmarkRemoveImmutable(b *testing.B) {
+	b.Run("1000", benchmarkRemoveImmutable(1000))
+	b.Run("10000", benchmarkRemoveImmutable(10000))
+	b.Run("100000", benchmarkRemoveImmutable(100000))
+}
+
+func BenchmarkFindPositive(b *testing.B) {
+	b.Run("1000", benchmarkFindPositive(1000))
+	b.Run("10000", benchmarkFindPositive(10000))
+	b.Run("100000", benchmarkFindPositive(100000))
+}
+
+func BenchmarkFindNegative(b *testing.B) {
+	b.Run("1000", benchmarkFindNegative(1000))
+	b.Run("10000", benchmarkFindNegative(10000))
+	b.Run("100000", benchmarkFindNegative(100000))
+}
+
+func benchmarkBuildTrieMutable(n int) func(b *testing.B) {
+	return func(b *testing.B) {
+		keys := make([]key.KadKey, n)
+		for i := 0; i < n; i++ {
+			keys[i] = keyutil.Random(32)
+		}
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			tr := New[any]()
+			for _, kk := range keys {
+				tr.Add(kk, nil)
+			}
+		}
+		b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(n), "ns/key")
+	}
+}
+
+func benchmarkBuildTrieImmutable(n int) func(b *testing.B) {
+	return func(b *testing.B) {
+		keys := make([]key.KadKey, n)
+		for i := 0; i < n; i++ {
+			keys[i] = keyutil.Random(32)
+		}
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			tr := New[any]()
+			for _, kk := range keys {
+				tr, _ = Add(tr, kk, nil)
+			}
+		}
+		b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(n), "ns/key")
+	}
+}
+
+func benchmarkAddMutable(n int) func(b *testing.B) {
+	return func(b *testing.B) {
+		keys := make([]key.KadKey, n)
+		for i := 0; i < n; i++ {
+			keys[i] = keyutil.Random(32)
+		}
+		tr := New[any]()
+		for _, kk := range keys {
+			tr, _ = Add(tr, kk, nil)
+		}
+
+		// number of additions has to be large enough so that benchmarking takes
+		// more time than cloning the trie
+		// see https://github.com/golang/go/issues/27217
+		additions := make([]key.KadKey, n/4)
+		for i := range additions {
+			additions[i] = keyutil.Random(32)
+		}
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			trclone := tr.Copy()
+			b.StartTimer()
+			for _, kk := range additions {
+				trclone.Add(kk, nil)
+			}
+		}
+		b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(len(additions)), "ns/key")
+	}
+}
+
+func benchmarkAddImmutable(n int) func(b *testing.B) {
+	return func(b *testing.B) {
+		keys := make([]key.KadKey, n)
+		for i := 0; i < n; i++ {
+			keys[i] = keyutil.Random(32)
+		}
+		trBase := New[any]()
+		for _, kk := range keys {
+			trBase, _ = Add(trBase, kk, nil)
+		}
+
+		additions := make([]key.KadKey, n/4)
+		for i := range additions {
+			additions[i] = keyutil.Random(32)
+		}
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			tr := trBase
+			for _, kk := range additions {
+				tr, _ = Add(tr, kk, nil)
+			}
+		}
+		b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(len(additions)), "ns/key")
+	}
+}
+
+func benchmarkRemoveMutable(n int) func(b *testing.B) {
+	return func(b *testing.B) {
+		keys := make([]key.KadKey, n)
+		for i := 0; i < n; i++ {
+			keys[i] = keyutil.Random(32)
+		}
+		tr := New[any]()
+		for _, kk := range keys {
+			tr, _ = Add(tr, kk, nil)
+		}
+
+		// number of removals has to be large enough so that benchmarking takes
+		// more time than cloning the trie
+		// see https://github.com/golang/go/issues/27217
+		removals := make([]key.KadKey, n/4)
+		for i := range removals {
+			removals[i] = keys[i*4] // every 4th key
+		}
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			trclone := tr.Copy()
+			b.StartTimer()
+			for _, kk := range removals {
+				trclone.Remove(kk)
+			}
+		}
+		b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(len(removals)), "ns/key")
+	}
+}
+
+func benchmarkRemoveImmutable(n int) func(b *testing.B) {
+	return func(b *testing.B) {
+		keys := make([]key.KadKey, n)
+		for i := 0; i < n; i++ {
+			keys[i] = keyutil.Random(32)
+		}
+		trBase := New[any]()
+		for _, kk := range keys {
+			trBase, _ = Add(trBase, kk, nil)
+		}
+
+		removals := make([]key.KadKey, n/4)
+		for i := range removals {
+			removals[i] = keys[i*4] // every 4th key
+		}
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			tr := trBase
+			for _, kk := range removals {
+				tr, _ = Remove(tr, kk)
+			}
+		}
+		b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(len(removals)), "ns/key")
+	}
+}
+
+func benchmarkFindPositive(n int) func(b *testing.B) {
+	return func(b *testing.B) {
+		keys := make([]key.KadKey, n)
+		for i := 0; i < n; i++ {
+			keys[i] = keyutil.Random(32)
+		}
+		tr := New[any]()
+		for _, kk := range keys {
+			tr, _ = Add(tr, kk, nil)
+		}
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			Find(tr, keys[i%len(keys)])
+		}
+	}
+}
+
+func benchmarkFindNegative(n int) func(b *testing.B) {
+	return func(b *testing.B) {
+		keys := make([]key.KadKey, n)
+		for i := 0; i < n; i++ {
+			keys[i] = keyutil.Random(32)
+		}
+		tr := New[any]()
+		for _, kk := range keys {
+			tr, _ = Add(tr, kk, nil)
+		}
+		unknown := make([]key.KadKey, n)
+		for i := 0; i < n; i++ {
+			kk := keyutil.Random(32)
+			if found, _ := Find(tr, kk); found {
+				continue
+			}
+			unknown[i] = kk
+		}
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			Find(tr, unknown[i%len(unknown)])
+		}
+	}
+}
+
 type keySet struct {
 	Keys []key.KadKey
 }
