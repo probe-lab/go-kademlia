@@ -327,12 +327,30 @@ func TestCplSize(t *testing.T) {
 }
 
 func BenchmarkBuildTable(b *testing.B) {
-	b.Run("1000", makeBenchmarkBuildTable(1000))
-	b.Run("10000", makeBenchmarkBuildTable(10000))
-	b.Run("100000", makeBenchmarkBuildTable(100000))
+	b.Run("1000", benchmarkBuildTable(1000))
+	b.Run("10000", benchmarkBuildTable(10000))
+	b.Run("100000", benchmarkBuildTable(100000))
 }
 
-func makeBenchmarkBuildTable(n int) func(b *testing.B) {
+func BenchmarkFindPositive(b *testing.B) {
+	b.Run("1000", benchmarkFindPositive(1000))
+	b.Run("10000", benchmarkFindPositive(10000))
+	b.Run("100000", benchmarkFindPositive(100000))
+}
+
+func BenchmarkFindNegative(b *testing.B) {
+	b.Run("1000", benchmarkFindNegative(1000))
+	b.Run("10000", benchmarkFindNegative(10000))
+	b.Run("100000", benchmarkFindNegative(100000))
+}
+
+func BenchmarkNearestPeers(b *testing.B) {
+	b.Run("1000", benchmarkNearestPeers(1000))
+	b.Run("10000", benchmarkNearestPeers(10000))
+	b.Run("100000", benchmarkNearestPeers(100000))
+}
+
+func benchmarkBuildTable(n int) func(b *testing.B) {
 	return func(b *testing.B) {
 		nodes := make([]address.NodeID, n)
 		for i := 0; i < n; i++ {
@@ -345,6 +363,71 @@ func makeBenchmarkBuildTable(n int) func(b *testing.B) {
 			for _, node := range nodes {
 				rt.AddPeer(context.Background(), node)
 			}
+		}
+		b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(len(nodes)), "ns/node")
+	}
+}
+
+func benchmarkFindPositive(n int) func(b *testing.B) {
+	return func(b *testing.B) {
+		keys := make([]key.KadKey, n)
+		for i := 0; i < n; i++ {
+			keys[i] = keyutil.Random(32)
+		}
+		rt := New(key0)
+		for _, kk := range keys {
+			rt.AddPeer(context.Background(), kadid.NewKadID(kk))
+		}
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			rt.Find(context.Background(), keys[i%len(keys)])
+		}
+	}
+}
+
+func benchmarkFindNegative(n int) func(b *testing.B) {
+	return func(b *testing.B) {
+		keys := make([]key.KadKey, n)
+		for i := 0; i < n; i++ {
+			keys[i] = keyutil.Random(32)
+		}
+		rt := New(key0)
+		for _, kk := range keys {
+			rt.AddPeer(context.Background(), kadid.NewKadID(kk))
+		}
+
+		unknown := make([]key.KadKey, n)
+		for i := 0; i < n; i++ {
+			kk := keyutil.Random(32)
+			if found, _ := rt.Find(context.Background(), kk); found != nil {
+				continue
+			}
+			unknown[i] = kk
+		}
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			rt.Find(context.Background(), unknown[i%len(unknown)])
+		}
+	}
+}
+
+func benchmarkNearestPeers(n int) func(b *testing.B) {
+	return func(b *testing.B) {
+		keys := make([]key.KadKey, n)
+		for i := 0; i < n; i++ {
+			keys[i] = keyutil.Random(32)
+		}
+		rt := New(key0)
+		for _, kk := range keys {
+			rt.AddPeer(context.Background(), kadid.NewKadID(kk))
+		}
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			rt.NearestPeers(context.Background(), keyutil.Random(32), 20)
 		}
 	}
 }
