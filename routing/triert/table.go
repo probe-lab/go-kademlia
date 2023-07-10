@@ -110,12 +110,13 @@ type entry struct {
 }
 
 func closestAtDepth(kk key.KadKey, t *nodeTrie, depth int, n int) []entry {
-	if t.Key != nil {
-		// We've found a leaf
-		return []entry{
-			{Key: t.Key, Data: t.Data},
+	if t.IsLeaf() {
+		if t.HasKey() {
+			// We've found a leaf
+			return []entry{
+				{Key: t.Key(), Data: t.Data()},
+			}
 		}
-	} else if t.Branch[0] == nil && t.Branch[1] == nil {
 		// We've found an empty node?
 		return nil
 	}
@@ -123,12 +124,12 @@ func closestAtDepth(kk key.KadKey, t *nodeTrie, depth int, n int) []entry {
 	// Find the closest direction.
 	dir := kk.BitAt(depth)
 	// Add peers from the closest direction first
-	found := closestAtDepth(kk, t.Branch[dir], depth+1, n)
+	found := closestAtDepth(kk, t.Branch(dir), depth+1, n)
 	if len(found) == n {
 		return found
 	}
 	// Didn't find enough peers in the closest direction, try the other direction.
-	return append(found, closestAtDepth(kk, t.Branch[1-dir], depth+1, n-len(found))...)
+	return append(found, closestAtDepth(kk, t.Branch(1-dir), depth+1, n-len(found))...)
 }
 
 func (rt *TrieRT) Find(ctx context.Context, kk key.KadKey) (address.NodeID, error) {
@@ -169,7 +170,7 @@ func countCpl(t *nodeTrie, kk key.KadKey, cpl int, depth int) (int, error) {
 		if t.HasKey() {
 			return 0, nil
 		}
-		keyCpl := kk.CommonPrefixLength(key.KadKey(t.Key))
+		keyCpl := kk.CommonPrefixLength(key.KadKey(t.Key()))
 		if keyCpl == cpl {
 			return 1, nil
 		}
@@ -178,8 +179,8 @@ func countCpl(t *nodeTrie, kk key.KadKey, cpl int, depth int) (int, error) {
 
 	if depth == cpl {
 		// return the number of entries that do not share the next bit with kk
-		return t.Branch[1-kk.BitAt(depth)].Size(), nil
+		return t.Branch(1 - kk.BitAt(depth)).Size(), nil
 	}
 
-	return countCpl(t.Branch[kk.BitAt(depth)], kk, cpl, depth+1)
+	return countCpl(t.Branch(kk.BitAt(depth)), kk, cpl, depth+1)
 }

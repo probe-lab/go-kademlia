@@ -106,6 +106,31 @@ func TestAddIsOrderIndependent(t *testing.T) {
 	for _, s := range newKeySetList(100) {
 		base := New[any]()
 		for _, k := range s.Keys {
+			base.Add(k, nil)
+		}
+		if d := CheckInvariant(base); d != nil {
+			t.Fatalf("base trie invariant discrepancy: %v", d)
+		}
+		for j := 0; j < 100; j++ {
+			perm := rand.Perm(len(s.Keys))
+			reordered := New[any]()
+			for i := range s.Keys {
+				reordered.Add(s.Keys[perm[i]], nil)
+			}
+			if d := CheckInvariant(reordered); d != nil {
+				t.Fatalf("reordered trie invariant discrepancy: %v", d)
+			}
+			if !Equal(base, reordered) {
+				t.Errorf("trie %v differs from trie %v", base, reordered)
+			}
+		}
+	}
+}
+
+func TestImmutableAddIsOrderIndependent(t *testing.T) {
+	for _, s := range newKeySetList(100) {
+		base := New[any]()
+		for _, k := range s.Keys {
 			base, _ = Add(base, k, nil)
 		}
 		if d := CheckInvariant(base); d != nil {
@@ -142,6 +167,27 @@ func TestSize(t *testing.T) {
 
 func TestAddIgnoresDuplicates(t *testing.T) {
 	tr := New[any]()
+	for _, kk := range sampleKeySet.Keys {
+		added, err := tr.Add(kk, nil)
+		require.NoError(t, err)
+		require.True(t, added)
+	}
+	require.Equal(t, len(sampleKeySet.Keys), tr.Size())
+
+	for _, kk := range sampleKeySet.Keys {
+		added, err := tr.Add(kk, nil)
+		require.NoError(t, err)
+		require.False(t, added)
+	}
+	require.Equal(t, len(sampleKeySet.Keys), tr.Size())
+
+	if d := CheckInvariant(tr); d != nil {
+		t.Fatalf("reordered trie invariant discrepancy: %v", d)
+	}
+}
+
+func TestImmutableAddIgnoresDuplicates(t *testing.T) {
+	tr := New[any]()
 	var err error
 	for _, kk := range sampleKeySet.Keys {
 		tr, err = Add(tr, kk, nil)
@@ -166,6 +212,21 @@ func TestAddRejectsMismatchedKeyLength(t *testing.T) {
 		t.Fatalf("unexpected error during from keys: %v", err)
 	}
 
+	added, err := tr.Add(keyutil.Random(5), nil)
+	require.ErrorIs(t, err, ErrMismatchedKeyLength)
+	require.False(t, added)
+
+	if d := CheckInvariant(tr); d != nil {
+		t.Fatalf("reordered trie invariant discrepancy: %v", d)
+	}
+}
+
+func TestImmutableAddRejectsMismatchedKeyLength(t *testing.T) {
+	tr, err := trieFromKeys[any](sampleKeySet.Keys)
+	if err != nil {
+		t.Fatalf("unexpected error during from keys: %v", err)
+	}
+
 	trNext, err := Add(tr, keyutil.Random(5), nil)
 	require.ErrorIs(t, err, ErrMismatchedKeyLength)
 
@@ -184,6 +245,23 @@ func TestRemove(t *testing.T) {
 	}
 	require.Equal(t, len(sampleKeySet.Keys), tr.Size())
 
+	removed, err := tr.Remove(sampleKeySet.Keys[0])
+	require.NoError(t, err)
+	require.True(t, removed)
+	require.Equal(t, len(sampleKeySet.Keys)-1, tr.Size())
+
+	if d := CheckInvariant(tr); d != nil {
+		t.Fatalf("reordered trie invariant discrepancy: %v", d)
+	}
+}
+
+func TestImmutableRemove(t *testing.T) {
+	tr, err := trieFromKeys[any](sampleKeySet.Keys)
+	if err != nil {
+		t.Fatalf("unexpected error during from keys: %v", err)
+	}
+	require.Equal(t, len(sampleKeySet.Keys), tr.Size())
+
 	trNext, err := Remove(tr, sampleKeySet.Keys[0])
 	require.NoError(t, err)
 	require.Equal(t, len(sampleKeySet.Keys)-1, trNext.Size())
@@ -195,6 +273,18 @@ func TestRemove(t *testing.T) {
 
 func TestRemoveFromEmpty(t *testing.T) {
 	tr := New[any]()
+	removed, err := tr.Remove(sampleKeySet.Keys[0])
+	require.NoError(t, err)
+	require.False(t, removed)
+	require.Equal(t, 0, tr.Size())
+
+	if d := CheckInvariant(tr); d != nil {
+		t.Fatalf("reordered trie invariant discrepancy: %v", d)
+	}
+}
+
+func TestImmutableRemoveFromEmpty(t *testing.T) {
+	tr := New[any]()
 	trNext, err := Remove(tr, sampleKeySet.Keys[0])
 	require.NoError(t, err)
 	require.Equal(t, 0, tr.Size())
@@ -204,6 +294,21 @@ func TestRemoveFromEmpty(t *testing.T) {
 }
 
 func TestRemoveRejectsMismatchedKeyLength(t *testing.T) {
+	tr, err := trieFromKeys[any](sampleKeySet.Keys)
+	if err != nil {
+		t.Fatalf("unexpected error during from keys: %v", err)
+	}
+
+	removed, err := tr.Remove(keyutil.Random(5))
+	require.ErrorIs(t, err, ErrMismatchedKeyLength)
+	require.False(t, removed)
+
+	if d := CheckInvariant(tr); d != nil {
+		t.Fatalf("reordered trie invariant discrepancy: %v", d)
+	}
+}
+
+func TestImmutableRemoveRejectsMismatchedKeyLength(t *testing.T) {
 	tr, err := trieFromKeys[any](sampleKeySet.Keys)
 	if err != nil {
 		t.Fatalf("unexpected error during from keys: %v", err)
@@ -345,17 +450,17 @@ func checkInvariant[T any](tr *Trie[T], depth int, pathSoFar *triePath) *Invaria
 	case tr.IsEmptyLeaf():
 		return nil
 	case tr.IsNonEmptyLeaf():
-		if !pathSoFar.matchesKey(tr.Key) {
+		if !pathSoFar.matchesKey(tr.key) {
 			return &InvariantDiscrepancy{
 				Reason:            "key found at invalid location in trie",
 				PathToDiscrepancy: pathSoFar.BitString(),
-				KeyAtDiscrepancy:  tr.Key.BitString(),
+				KeyAtDiscrepancy:  tr.key.BitString(),
 			}
 		}
 		return nil
 	default:
 		if !tr.HasKey() {
-			b0, b1 := tr.Branch[0], tr.Branch[1]
+			b0, b1 := tr.branch[0], tr.branch[1]
 			if d0 := checkInvariant(b0, depth+1, pathSoFar.Push(0)); d0 != nil {
 				return d0
 			}
@@ -388,7 +493,7 @@ func checkInvariant[T any](tr *Trie[T], depth int, pathSoFar *triePath) *Invaria
 			return &InvariantDiscrepancy{
 				Reason:            "intermediate node with a key",
 				PathToDiscrepancy: pathSoFar.BitString(),
-				KeyAtDiscrepancy:  tr.Key.BitString(),
+				KeyAtDiscrepancy:  tr.key.BitString(),
 			}
 		}
 	}

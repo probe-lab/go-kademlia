@@ -87,8 +87,14 @@ func (a KadKey) Equal(b KadKey) bool {
 	return a.Compare(b) == 0
 }
 
-func (k KadKey) BitAt(offset int) int {
-	if k[offset/8]&(byte(1)<<(7-offset%8)) == 0 {
+// BitLen returns the length of the key in bits
+func (k KadKey) BitLen() int {
+	return len(k) * 8
+}
+
+// BitAt returns the value of the i'th bit of the key from most significant to least. It is equivalent to (key>>(bitlen-i-1))&1.
+func (k KadKey) BitAt(i int) int {
+	if k[i/8]&(byte(1)<<(7-i%8)) == 0 {
 		return 0
 	} else {
 		return 1
