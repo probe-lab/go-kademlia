@@ -103,7 +103,9 @@ func TestAddPeer(t *testing.T) {
 
 func TestRemovePeer(t *testing.T) {
 	rt := New(key0)
-	rt.AddPeer(context.Background(), node1)
+	success, err := rt.AddPeer(context.Background(), node1)
+	require.NoError(t, err)
+	require.True(t, success)
 
 	t.Run("unknown peer", func(t *testing.T) {
 		success, err := rt.RemoveKey(context.Background(), key2)

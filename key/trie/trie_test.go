@@ -238,6 +238,38 @@ func TestImmutableAddRejectsMismatchedKeyLength(t *testing.T) {
 	}
 }
 
+func TestAddWithData(t *testing.T) {
+	tr := New[int]()
+	for i, kk := range sampleKeySet.Keys {
+		added, err := tr.Add(kk, i)
+		require.NoError(t, err)
+		require.True(t, added)
+	}
+	require.Equal(t, len(sampleKeySet.Keys), tr.Size())
+
+	for i, kk := range sampleKeySet.Keys {
+		found, v := Find(tr, kk)
+		require.True(t, found)
+		require.Equal(t, i, v)
+	}
+}
+
+func TestImmutableAddWithData(t *testing.T) {
+	tr := New[int]()
+	var err error
+	for i, kk := range sampleKeySet.Keys {
+		tr, err = Add(tr, kk, i)
+		require.NoError(t, err)
+	}
+	require.Equal(t, len(sampleKeySet.Keys), tr.Size())
+
+	for i, kk := range sampleKeySet.Keys {
+		found, v := Find(tr, kk)
+		require.True(t, found)
+		require.Equal(t, i, v)
+	}
+}
+
 func TestRemove(t *testing.T) {
 	tr, err := trieFromKeys[any](sampleKeySet.Keys)
 	if err != nil {
@@ -316,6 +348,45 @@ func TestImmutableRemoveRejectsMismatchedKeyLength(t *testing.T) {
 
 	trNext, err := Remove(tr, keyutil.Random(5))
 	require.ErrorIs(t, err, ErrMismatchedKeyLength)
+
+	// trie has not been changed
+	require.Same(t, tr, trNext)
+
+	if d := CheckInvariant(trNext); d != nil {
+		t.Fatalf("reordered trie invariant discrepancy: %v", d)
+	}
+}
+
+func TestRemoveUnknown(t *testing.T) {
+	tr, err := trieFromKeys[any](sampleKeySet.Keys)
+	if err != nil {
+		t.Fatalf("unexpected error during from keys: %v", err)
+	}
+	require.Equal(t, len(sampleKeySet.Keys), tr.Size())
+
+	unknown := newKeyNotInSet(sampleKeySet.Keys[0].Size(), sampleKeySet)
+
+	removed, err := tr.Remove(unknown)
+	require.NoError(t, err)
+	require.False(t, removed)
+	require.Equal(t, len(sampleKeySet.Keys), tr.Size())
+
+	if d := CheckInvariant(tr); d != nil {
+		t.Fatalf("reordered trie invariant discrepancy: %v", d)
+	}
+}
+
+func TestImmutableRemoveUnknown(t *testing.T) {
+	tr, err := trieFromKeys[any](sampleKeySet.Keys)
+	if err != nil {
+		t.Fatalf("unexpected error during from keys: %v", err)
+	}
+	require.Equal(t, len(sampleKeySet.Keys), tr.Size())
+
+	unknown := newKeyNotInSet(sampleKeySet.Keys[0].Size(), sampleKeySet)
+
+	trNext, err := Remove(tr, unknown)
+	require.NoError(t, err)
 
 	// trie has not been changed
 	require.Same(t, tr, trNext)
@@ -679,6 +750,20 @@ func newKeySetOfLength(n int, l int) *keySet {
 	return &keySet{
 		Keys: set,
 	}
+}
+
+func newKeyNotInSet(l int, ks *keySet) key.KadKey {
+	seen := make(map[string]bool)
+	for i := range ks.Keys {
+		seen[ks.Keys[i].String()] = true
+	}
+
+	kk := keyutil.Random(l)
+	for seen[kk.String()] {
+		kk = keyutil.Random(l)
+	}
+
+	return kk
 }
 
 type InvariantDiscrepancy struct {

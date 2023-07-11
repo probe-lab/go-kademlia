@@ -84,6 +84,9 @@ func (a KadKey) Compare(b KadKey) int {
 }
 
 func (a KadKey) Equal(b KadKey) bool {
+	if a.Size() != b.Size() {
+		return false
+	}
 	return a.Compare(b) == 0
 }
 

@@ -114,7 +114,7 @@ func (tr *Trie[T]) firstNonEmptyLeaf() *Trie[T] {
 	return tr.branch[1].firstNonEmptyLeaf()
 }
 
-// Add attemptes to add a key to the trie, mutating the trie.
+// Add attempts to add a key to the trie, mutating the trie.
 // Returns true if the key was added, false otherwise.
 func (tr *Trie[T]) Add(kk key.KadKey, data T) (bool, error) {
 	f := tr.firstNonEmptyLeaf()
@@ -137,10 +137,14 @@ func (tr *Trie[T]) addAtDepth(depth int, kk key.KadKey, data T) bool {
 			return false
 		} else {
 			p := tr.key
+			d := tr.data
 			tr.key = nil
+			var v T
+			tr.data = v
 			// both branches are nil
 			tr.branch[0], tr.branch[1] = &Trie[T]{}, &Trie[T]{}
 			tr.branch[p.BitAt(depth)].key = p
+			tr.branch[p.BitAt(depth)].data = d
 			return tr.branch[kk.BitAt(depth)].addAtDepth(depth+1, kk, data)
 		}
 	default:
@@ -165,9 +169,6 @@ func addAtDepth[T any](depth int, tr *Trie[T], kk key.KadKey, data T) *Trie[T] {
 	case tr.IsEmptyLeaf():
 		return &Trie[T]{key: kk, data: data}
 	case tr.IsNonEmptyLeaf():
-		if tr.key.Size() != kk.Size() {
-			return nil
-		}
 		eq := tr.key.Equal(kk)
 		if eq {
 			return tr
@@ -215,6 +216,10 @@ func (tr *Trie[T]) removeAtDepth(depth int, kk key.KadKey) bool {
 	case tr.IsEmptyLeaf():
 		return false
 	case tr.IsNonEmptyLeaf():
+		eq := tr.key.Equal(kk)
+		if !eq {
+			return false
+		}
 		tr.key = nil
 		var v T
 		tr.data = v
@@ -223,9 +228,8 @@ func (tr *Trie[T]) removeAtDepth(depth int, kk key.KadKey) bool {
 		if tr.branch[kk.BitAt(depth)].removeAtDepth(depth+1, kk) {
 			tr.shrink()
 			return true
-		} else {
-			return false
 		}
+		return false
 	}
 }
 
@@ -247,9 +251,6 @@ func removeAtDepth[T any](depth int, tr *Trie[T], kk key.KadKey) *Trie[T] {
 	case tr.IsEmptyLeaf():
 		return tr
 	case tr.IsNonEmptyLeaf():
-		if tr.key.Size() != kk.Size() {
-			return nil
-		}
 		eq := tr.key.Equal(kk)
 		if !eq {
 			return tr

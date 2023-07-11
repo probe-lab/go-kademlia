@@ -2,25 +2,18 @@ package triert
 
 import (
 	"context"
-	"sync"
-	"sync/atomic"
 
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/key/trie"
 	"github.com/plprobelab/go-kademlia/network/address"
 )
 
-// TrieRT is a routing table backed by a Xor Trie which offers good scalablity and performance
-// for large networks. All exported methods are safe for concurrent use.
+// TrieRT is a routing table backed by a XOR Trie which offers good scalablity and performance
+// for large networks.
 type TrieRT struct {
 	self key.KadKey
 
-	// keymu is held during trie mutations to serialize changes
-	keymu sync.Mutex
-
-	// keys holds a pointer to an immutable trie
-	// any store to keys must be performed while holding keymu, loads may be performed without the lock
-	keys atomic.Value
+	keys *nodeTrie
 }
 
 type nodeTrie = trie.Trie[address.NodeID]
@@ -28,8 +21,8 @@ type nodeTrie = trie.Trie[address.NodeID]
 func New(self key.KadKey) *TrieRT {
 	rt := &TrieRT{
 		self: self,
+		keys: &nodeTrie{},
 	}
-	rt.keys.Store(&nodeTrie{})
 	return rt
 }
 
@@ -44,21 +37,7 @@ func (rt *TrieRT) AddPeer(ctx context.Context, node address.NodeID) (bool, error
 		return false, trie.ErrMismatchedKeyLength
 	}
 
-	rt.keymu.Lock()
-	defer rt.keymu.Unlock()
-	// load the old trie, derive a mutated variant and store it in place of the original
-	keys := rt.keys.Load().(*nodeTrie)
-	keysNext, err := trie.Add(keys, kk, node)
-	if err != nil {
-		return false, err
-	}
-
-	// if trie is unchanged then we didn't add the key
-	if keysNext == keys {
-		return false, nil
-	}
-	rt.keys.Store(keysNext)
-	return true, nil
+	return rt.keys.Add(kk, node)
 }
 
 // RemoveKey tries to remove a peer identified by its Kademlia key from the
@@ -67,21 +46,7 @@ func (rt *TrieRT) RemoveKey(ctx context.Context, kk key.KadKey) (bool, error) {
 	if kk.Size() != rt.self.Size() {
 		return false, trie.ErrMismatchedKeyLength
 	}
-	rt.keymu.Lock()
-	defer rt.keymu.Unlock()
-	// load the old trie, derive a mutated variant and store it in place of the original
-	keys := rt.keys.Load().(*nodeTrie)
-	keysNext, err := trie.Remove(keys, kk)
-	if err != nil {
-		return false, err
-	}
-	// if trie is unchanged then we didn't remove the key
-	if keysNext == keys {
-		return false, nil
-	}
-
-	rt.keys.Store(keysNext)
-	return true, nil
+	return rt.keys.Remove(kk)
 }
 
 // NearestPeers returns the n closest peers to a given key
@@ -90,8 +55,7 @@ func (rt *TrieRT) NearestPeers(ctx context.Context, kk key.KadKey, n int) ([]add
 		return nil, trie.ErrMismatchedKeyLength
 	}
 
-	keys := rt.keys.Load().(*nodeTrie)
-	closestEntries := closestAtDepth(kk, keys, 0, n)
+	closestEntries := closestAtDepth(kk, rt.keys, 0, n)
 	if len(closestEntries) == 0 {
 		return []address.NodeID{}, nil
 	}
@@ -121,6 +85,10 @@ func closestAtDepth(kk key.KadKey, t *nodeTrie, depth int, n int) []entry {
 		return nil
 	}
 
+	if depth > kk.BitLen() {
+		return nil
+	}
+
 	// Find the closest direction.
 	dir := kk.BitAt(depth)
 	// Add peers from the closest direction first
@@ -137,10 +105,7 @@ func (rt *TrieRT) Find(ctx context.Context, kk key.KadKey) (address.NodeID, erro
 		return nil, trie.ErrMismatchedKeyLength
 	}
 
-	keys := rt.keys.Load().(*nodeTrie)
-
-	found, node := trie.Find(keys, kk)
-
+	found, node := trie.Find(rt.keys, kk)
 	if found {
 		return node, nil
 	}
@@ -150,14 +115,12 @@ func (rt *TrieRT) Find(ctx context.Context, kk key.KadKey) (address.NodeID, erro
 
 // Size returns the number of peers contained in the table.
 func (rt *TrieRT) Size() int {
-	keys := rt.keys.Load().(*nodeTrie)
-	return keys.Size()
+	return rt.keys.Size()
 }
 
 // CplSize returns the number of peers in the table whose longest common prefix with the table's key is of length cpl.
 func (rt *TrieRT) CplSize(cpl int) int {
-	keys := rt.keys.Load().(*nodeTrie)
-	n, err := countCpl(keys, rt.self, cpl, 0)
+	n, err := countCpl(rt.keys, rt.self, cpl, 0)
 	if err != nil {
 		return 0
 	}
@@ -174,6 +137,10 @@ func countCpl(t *nodeTrie, kk key.KadKey, cpl int, depth int) (int, error) {
 		if keyCpl == cpl {
 			return 1, nil
 		}
+		return 0, nil
+	}
+
+	if depth > kk.BitLen() {
 		return 0, nil
 	}
 
