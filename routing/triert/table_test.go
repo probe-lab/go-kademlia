@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/plprobelab/go-kademlia/internal/testutil"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/key/keyutil"
 	"github.com/plprobelab/go-kademlia/key/trie"
@@ -373,7 +374,7 @@ func benchmarkBuildTable(n int) func(b *testing.B) {
 				rt.AddPeer(context.Background(), node)
 			}
 		}
-		b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(len(nodes)), "ns/node")
+		testutil.ReportTimePerItemMetric(b, len(nodes), "node")
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/plprobelab/go-kademlia/internal/testutil"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/key/keyutil"
 	"github.com/stretchr/testify/require"
@@ -537,7 +538,7 @@ func benchmarkBuildTrieMutable(n int) func(b *testing.B) {
 				tr.Add(kk, nil)
 			}
 		}
-		b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(n), "ns/key")
+		testutil.ReportTimePerItemMetric(b, n, "key")
 	}
 }
 
@@ -555,7 +556,7 @@ func benchmarkBuildTrieImmutable(n int) func(b *testing.B) {
 				tr, _ = Add(tr, kk, nil)
 			}
 		}
-		b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(n), "ns/key")
+		testutil.ReportTimePerItemMetric(b, n, "key")
 	}
 }
 
@@ -587,7 +588,7 @@ func benchmarkAddMutable(n int) func(b *testing.B) {
 				trclone.Add(kk, nil)
 			}
 		}
-		b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(len(additions)), "ns/key")
+		testutil.ReportTimePerItemMetric(b, len(additions), "key")
 	}
 }
 
@@ -614,7 +615,7 @@ func benchmarkAddImmutable(n int) func(b *testing.B) {
 				tr, _ = Add(tr, kk, nil)
 			}
 		}
-		b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(len(additions)), "ns/key")
+		testutil.ReportTimePerItemMetric(b, len(additions), "key")
 	}
 }
 
@@ -646,7 +647,7 @@ func benchmarkRemoveMutable(n int) func(b *testing.B) {
 				trclone.Remove(kk)
 			}
 		}
-		b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(len(removals)), "ns/key")
+		testutil.ReportTimePerItemMetric(b, len(removals), "key")
 	}
 }
 
@@ -673,7 +674,7 @@ func benchmarkRemoveImmutable(n int) func(b *testing.B) {
 				tr, _ = Remove(tr, kk)
 			}
 		}
-		b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(len(removals)), "ns/key")
+		testutil.ReportTimePerItemMetric(b, len(removals), "key")
 	}
 }
 
