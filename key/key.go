@@ -2,7 +2,9 @@ package key
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math"
+	"strings"
 )
 
 type KadKey []byte
@@ -24,6 +26,15 @@ func shortLong(a, b KadKey) (min, max KadKey) {
 		return a, b
 	}
 	return b, a
+}
+
+// BitString returns a bit representation of the key, in descending order of significance.
+func (k KadKey) BitString() string {
+	sb := new(strings.Builder)
+	for _, b := range k {
+		sb.WriteString(fmt.Sprintf("%08b", b))
+	}
+	return sb.String()
 }
 
 func (a KadKey) Xor(b KadKey) KadKey {
@@ -73,5 +84,25 @@ func (a KadKey) Compare(b KadKey) int {
 }
 
 func (a KadKey) Equal(b KadKey) bool {
+	if a.Size() != b.Size() {
+		return false
+	}
 	return a.Compare(b) == 0
+}
+
+// BitLen returns the length of the key in bits
+func (k KadKey) BitLen() int {
+	return len(k) * 8
+}
+
+// BitAt returns the value of the i'th bit of the key from most significant to least. It is equivalent to (key>>(bitlen-i-1))&1.
+func (k KadKey) BitAt(i int) int {
+	if i < 0 || i > k.BitLen()-1 {
+		panic("BitAt: index out of range")
+	}
+	if k[i/8]&(byte(1)<<(7-i%8)) == 0 {
+		return 0
+	} else {
+		return 1
+	}
 }

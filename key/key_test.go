@@ -111,3 +111,20 @@ func TestCompare(t *testing.T) {
 	require.Equal(t, 0, key.Compare([]byte{0x80, 0x00, 0x00, 0x00}))        // a == b -> 0
 	require.Equal(t, -1, key.Compare([]byte{0x80, 0x00, 0x00, 0x00, 0x00})) // a is prefix of b -> -1
 }
+
+func TestBitAt(t *testing.T) {
+	kk := KadKey([]byte{0b10010011, 0b11110100})
+	require.Equal(t, 1, kk.BitAt(0))
+	require.Equal(t, 0, kk.BitAt(1))
+	require.Equal(t, 0, kk.BitAt(2))
+	require.Equal(t, 1, kk.BitAt(3))
+	require.Equal(t, 0, kk.BitAt(4))
+	require.Equal(t, 0, kk.BitAt(5))
+	require.Equal(t, 1, kk.BitAt(6))
+	require.Equal(t, 1, kk.BitAt(7))
+	require.Equal(t, 1, kk.BitAt(8))
+	require.Equal(t, 0, kk.BitAt(15))
+
+	require.Panics(t, func() { kk.BitAt(-1) })
+	require.Panics(t, func() { kk.BitAt(16) })
+}
