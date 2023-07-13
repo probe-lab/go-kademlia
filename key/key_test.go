@@ -124,4 +124,7 @@ func TestBitAt(t *testing.T) {
 	require.Equal(t, 1, kk.BitAt(7))
 	require.Equal(t, 1, kk.BitAt(8))
 	require.Equal(t, 0, kk.BitAt(15))
+
+	require.Panics(t, func() { kk.BitAt(-1) })
+	require.Panics(t, func() { kk.BitAt(16) })
 }
