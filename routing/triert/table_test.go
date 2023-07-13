@@ -40,11 +40,17 @@ var (
 	node9  = NewNode("QmPeer9", key9)
 	node10 = NewNode("QmPeer10", key10)
 	node11 = NewNode("QmPeer11", key11)
+
+	testNodes = []address.NodeID{
+		node1, node2, node3, node4, node5, node6,
+		node7, node8, node9, node10, node11,
+	}
 )
 
 func TestAddPeer(t *testing.T) {
 	t.Run("one", func(t *testing.T) {
-		rt := New(key0)
+		rt, err := New(key0, nil)
+		require.NoError(t, err)
 		success, err := rt.AddPeer(context.Background(), node1)
 		require.NoError(t, err)
 		require.True(t, success)
@@ -52,7 +58,8 @@ func TestAddPeer(t *testing.T) {
 	})
 
 	t.Run("ignore duplicate", func(t *testing.T) {
-		rt := New(key0)
+		rt, err := New(key0, nil)
+		require.NoError(t, err)
 		success, err := rt.AddPeer(context.Background(), node1)
 		require.NoError(t, err)
 		require.True(t, success)
@@ -65,7 +72,8 @@ func TestAddPeer(t *testing.T) {
 	})
 
 	t.Run("many", func(t *testing.T) {
-		rt := New(key0)
+		rt, err := New(key0, nil)
+		require.NoError(t, err)
 		success, err := rt.AddPeer(context.Background(), node1)
 		require.NoError(t, err)
 		require.True(t, success)
@@ -103,7 +111,8 @@ func TestAddPeer(t *testing.T) {
 }
 
 func TestRemovePeer(t *testing.T) {
-	rt := New(key0)
+	rt, err := New(key0, nil)
+	require.NoError(t, err)
 	success, err := rt.AddPeer(context.Background(), node1)
 	require.NoError(t, err)
 	require.True(t, success)
@@ -123,7 +132,8 @@ func TestRemovePeer(t *testing.T) {
 
 func TestFindPeer(t *testing.T) {
 	t.Run("known peer", func(t *testing.T) {
-		rt := New(key0)
+		rt, err := New(key0, nil)
+		require.NoError(t, err)
 		success, err := rt.AddPeer(context.Background(), node1)
 		require.NoError(t, err)
 		require.True(t, success)
@@ -135,14 +145,16 @@ func TestFindPeer(t *testing.T) {
 	})
 
 	t.Run("unknown peer", func(t *testing.T) {
-		rt := New(key0)
+		rt, err := New(key0, nil)
+		require.NoError(t, err)
 		got, err := rt.Find(context.Background(), key2)
 		require.NoError(t, err)
 		require.Nil(t, got)
 	})
 
 	t.Run("removed peer", func(t *testing.T) {
-		rt := New(key0)
+		rt, err := New(key0, nil)
+		require.NoError(t, err)
 		success, err := rt.AddPeer(context.Background(), node1)
 		require.NoError(t, err)
 		require.True(t, success)
@@ -165,7 +177,8 @@ func TestFindPeer(t *testing.T) {
 func TestNearestPeers(t *testing.T) {
 	ctx := context.Background()
 
-	rt := New(key0)
+	rt, err := New(key0, nil)
+	require.NoError(t, err)
 	rt.AddPeer(ctx, node1)
 	rt.AddPeer(ctx, node2)
 	rt.AddPeer(ctx, node3)
@@ -196,7 +209,8 @@ func TestInvalidKeys(t *testing.T) {
 	incompatKey := key.KadKey(make([]byte, 4)) // key is shorter (4 bytes only)
 	incompatNode := NewNode("inv", incompatKey)
 
-	rt := New(key0)
+	rt, err := New(key0, nil)
+	require.NoError(t, err)
 
 	t.Run("add peer", func(t *testing.T) {
 		success, err := rt.AddPeer(ctx, incompatNode)
@@ -225,7 +239,8 @@ func TestInvalidKeys(t *testing.T) {
 
 func TestCplSize(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		rt := New(key0)
+		rt, err := New(key0, nil)
+		require.NoError(t, err)
 		require.Equal(t, 0, rt.Size())
 		require.Equal(t, 0, rt.CplSize(1))
 		require.Equal(t, 0, rt.CplSize(2))
@@ -235,7 +250,8 @@ func TestCplSize(t *testing.T) {
 
 	t.Run("cpl 1", func(t *testing.T) {
 		ctx := context.Background()
-		rt := New(key0)
+		rt, err := New(key0, nil)
+		require.NoError(t, err)
 
 		success, err := rt.AddPeer(ctx, NewNode("cpl1a", keyutil.RandomWithPrefix("01", 32)))
 		require.NoError(t, err)
@@ -252,7 +268,8 @@ func TestCplSize(t *testing.T) {
 
 	t.Run("cpl 2", func(t *testing.T) {
 		ctx := context.Background()
-		rt := New(key0)
+		rt, err := New(key0, nil)
+		require.NoError(t, err)
 
 		success, err := rt.AddPeer(ctx, NewNode("cpl2a", keyutil.RandomWithPrefix("001", 32)))
 		require.NoError(t, err)
@@ -270,7 +287,8 @@ func TestCplSize(t *testing.T) {
 
 	t.Run("cpl 3", func(t *testing.T) {
 		ctx := context.Background()
-		rt := New(key0)
+		rt, err := New(key0, nil)
+		require.NoError(t, err)
 
 		success, err := rt.AddPeer(ctx, NewNode("cpl3a", keyutil.RandomWithPrefix("0001", 32)))
 		require.NoError(t, err)
@@ -294,7 +312,8 @@ func TestCplSize(t *testing.T) {
 
 	t.Run("cpl mixed", func(t *testing.T) {
 		ctx := context.Background()
-		rt := New(key0)
+		rt, err := New(key0, nil)
+		require.NoError(t, err)
 
 		success, err := rt.AddPeer(ctx, NewNode("cpl1a", keyutil.RandomWithPrefix("01", 32)))
 		require.NoError(t, err)
@@ -328,6 +347,34 @@ func TestCplSize(t *testing.T) {
 		require.Equal(t, 2, rt.CplSize(2))
 		require.Equal(t, 4, rt.CplSize(3))
 	})
+}
+
+func TestKeyFilter(t *testing.T) {
+	ctx := context.Background()
+	cfg := DefaultConfig()
+	cfg.KeyFilter = func(rt *TrieRT, kk key.KadKey) bool {
+		return !kk.Equal(key2) // don't allow key2 to be added
+	}
+	rt, err := New(key0, cfg)
+
+	// can't add key2
+	success, err := rt.AddPeer(ctx, node2)
+	require.NoError(t, err)
+	require.False(t, success)
+
+	got, err := rt.Find(ctx, key2)
+	require.NoError(t, err)
+	require.Nil(t, got)
+
+	// can add other key
+	success, err = rt.AddPeer(ctx, node1)
+	require.NoError(t, err)
+	require.True(t, success)
+
+	want := node1
+	got, err = rt.Find(ctx, key1)
+	require.NoError(t, err)
+	require.Equal(t, want, got)
 }
 
 func BenchmarkBuildTable(b *testing.B) {
@@ -369,7 +416,10 @@ func benchmarkBuildTable(n int) func(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			rt := New(key0)
+			rt, err := New(key0, nil)
+			if err != nil {
+				b.Fatalf("unexpected error creating table: %v", err)
+			}
 			for _, node := range nodes {
 				rt.AddPeer(context.Background(), node)
 			}
@@ -384,7 +434,10 @@ func benchmarkFindPositive(n int) func(b *testing.B) {
 		for i := 0; i < n; i++ {
 			keys[i] = keyutil.Random(32)
 		}
-		rt := New(key0)
+		rt, err := New(key0, nil)
+		if err != nil {
+			b.Fatalf("unexpected error creating table: %v", err)
+		}
 		for _, kk := range keys {
 			rt.AddPeer(context.Background(), kadid.NewKadID(kk))
 		}
@@ -402,7 +455,10 @@ func benchmarkFindNegative(n int) func(b *testing.B) {
 		for i := 0; i < n; i++ {
 			keys[i] = keyutil.Random(32)
 		}
-		rt := New(key0)
+		rt, err := New(key0, nil)
+		if err != nil {
+			b.Fatalf("unexpected error creating table: %v", err)
+		}
 		for _, kk := range keys {
 			rt.AddPeer(context.Background(), kadid.NewKadID(kk))
 		}
@@ -430,7 +486,10 @@ func benchmarkNearestPeers(n int) func(b *testing.B) {
 		for i := 0; i < n; i++ {
 			keys[i] = keyutil.Random(32)
 		}
-		rt := New(key0)
+		rt, err := New(key0, nil)
+		if err != nil {
+			b.Fatalf("unexpected error creating table: %v", err)
+		}
 		for _, kk := range keys {
 			rt.AddPeer(context.Background(), kadid.NewKadID(kk))
 		}
@@ -448,7 +507,10 @@ func benchmarkChurn(n int) func(b *testing.B) {
 		for i := 0; i < n; i++ {
 			universe[i] = kadid.NewKadID(keyutil.Random(32))
 		}
-		rt := New(key0)
+		rt, err := New(key0, nil)
+		if err != nil {
+			b.Fatalf("unexpected error creating table: %v", err)
+		}
 		// Add a portion of the universe to the routing table
 		for i := 0; i < len(universe)/4; i++ {
 			rt.AddPeer(context.Background(), universe[i])

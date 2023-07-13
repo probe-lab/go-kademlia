@@ -2,6 +2,7 @@ package triert
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/key/trie"
@@ -11,37 +12,58 @@ import (
 // TrieRT is a routing table backed by a XOR Trie which offers good scalablity and performance
 // for large networks.
 type TrieRT struct {
-	self key.KadKey
+	self      key.KadKey
+	keyFilter KeyFilterFunc
 
 	keys *nodeTrie
 }
 
 type nodeTrie = trie.Trie[address.NodeID]
 
-func New(self key.KadKey) *TrieRT {
+// New creates a new TrieRT using the supplied key as the local node's Kademlia key.
+// If cfg is nil, the default config is used.
+func New(self key.KadKey, cfg *Config) (*TrieRT, error) {
 	rt := &TrieRT{
 		self: self,
 		keys: &nodeTrie{},
 	}
-	return rt
+	if err := rt.apply(cfg); err != nil {
+		return nil, fmt.Errorf("apply config: %w", err)
+	}
+	return rt, nil
 }
 
+func (rt *TrieRT) apply(cfg *Config) error {
+	if cfg == nil {
+		cfg = DefaultConfig()
+	}
+
+	rt.keyFilter = cfg.KeyFilter
+
+	return nil
+}
+
+// Self returns the local node's Kademlia key.
 func (rt *TrieRT) Self() key.KadKey {
 	return rt.self
 }
 
-// AddPeer tries to add a peer to the routing table
+// AddPeer tries to add a peer to the routing table.
 func (rt *TrieRT) AddPeer(ctx context.Context, node address.NodeID) (bool, error) {
 	kk := node.Key()
 	if kk.Size() != rt.self.Size() {
 		return false, trie.ErrMismatchedKeyLength
 	}
 
+	if rt.keyFilter != nil && !rt.keyFilter(rt, kk) {
+		return false, nil
+	}
+
 	return rt.keys.Add(kk, node)
 }
 
 // RemoveKey tries to remove a peer identified by its Kademlia key from the
-// routing table
+// routing table. It returns true if the key was found to be present in the table and was removed.
 func (rt *TrieRT) RemoveKey(ctx context.Context, kk key.KadKey) (bool, error) {
 	if kk.Size() != rt.self.Size() {
 		return false, trie.ErrMismatchedKeyLength
@@ -49,7 +71,7 @@ func (rt *TrieRT) RemoveKey(ctx context.Context, kk key.KadKey) (bool, error) {
 	return rt.keys.Remove(kk)
 }
 
-// NearestPeers returns the n closest peers to a given key
+// NearestPeers returns the n closest peers to a given key.
 func (rt *TrieRT) NearestPeers(ctx context.Context, kk key.KadKey, n int) ([]address.NodeID, error) {
 	if kk.Size() != rt.self.Size() {
 		return nil, trie.ErrMismatchedKeyLength
@@ -62,15 +84,15 @@ func (rt *TrieRT) NearestPeers(ctx context.Context, kk key.KadKey, n int) ([]add
 
 	nodes := make([]address.NodeID, 0, len(closestEntries))
 	for _, c := range closestEntries {
-		nodes = append(nodes, c.Data)
+		nodes = append(nodes, c.data)
 	}
 
 	return nodes, nil
 }
 
 type entry struct {
-	Key  key.KadKey
-	Data address.NodeID
+	key  key.KadKey
+	data address.NodeID
 }
 
 func closestAtDepth(kk key.KadKey, t *nodeTrie, depth int, n int) []entry {
@@ -78,7 +100,7 @@ func closestAtDepth(kk key.KadKey, t *nodeTrie, depth int, n int) []entry {
 		if t.HasKey() {
 			// We've found a leaf
 			return []entry{
-				{Key: t.Key(), Data: t.Data()},
+				{key: t.Key(), data: t.Data()},
 			}
 		}
 		// We've found an empty node?
@@ -116,6 +138,11 @@ func (rt *TrieRT) Find(ctx context.Context, kk key.KadKey) (address.NodeID, erro
 // Size returns the number of peers contained in the table.
 func (rt *TrieRT) Size() int {
 	return rt.keys.Size()
+}
+
+// Cpl returns the longest common prefix length the supplied key shares with the table's key.
+func (rt *TrieRT) Cpl(kk key.KadKey) int {
+	return rt.self.CommonPrefixLength(kk)
 }
 
 // CplSize returns the number of peers in the table whose longest common prefix with the table's key is of length cpl.
