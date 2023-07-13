@@ -1,4 +1,4 @@
-package keyutil
+package testutil
 
 import (
 	"encoding/binary"

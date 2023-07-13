@@ -6,7 +6,6 @@ import (
 
 	"github.com/plprobelab/go-kademlia/internal/testutil"
 	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/key/keyutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -213,7 +212,7 @@ func TestAddRejectsMismatchedKeyLength(t *testing.T) {
 		t.Fatalf("unexpected error during from keys: %v", err)
 	}
 
-	added, err := tr.Add(keyutil.Random(5), nil)
+	added, err := tr.Add(testutil.Random(5), nil)
 	require.ErrorIs(t, err, ErrMismatchedKeyLength)
 	require.False(t, added)
 
@@ -228,7 +227,7 @@ func TestImmutableAddRejectsMismatchedKeyLength(t *testing.T) {
 		t.Fatalf("unexpected error during from keys: %v", err)
 	}
 
-	trNext, err := Add(tr, keyutil.Random(5), nil)
+	trNext, err := Add(tr, testutil.Random(5), nil)
 	require.ErrorIs(t, err, ErrMismatchedKeyLength)
 
 	// trie has not been changed
@@ -332,7 +331,7 @@ func TestRemoveRejectsMismatchedKeyLength(t *testing.T) {
 		t.Fatalf("unexpected error during from keys: %v", err)
 	}
 
-	removed, err := tr.Remove(keyutil.Random(5))
+	removed, err := tr.Remove(testutil.Random(5))
 	require.ErrorIs(t, err, ErrMismatchedKeyLength)
 	require.False(t, removed)
 
@@ -347,7 +346,7 @@ func TestImmutableRemoveRejectsMismatchedKeyLength(t *testing.T) {
 		t.Fatalf("unexpected error during from keys: %v", err)
 	}
 
-	trNext, err := Remove(tr, keyutil.Random(5))
+	trNext, err := Remove(tr, testutil.Random(5))
 	require.ErrorIs(t, err, ErrMismatchedKeyLength)
 
 	// trie has not been changed
@@ -456,7 +455,7 @@ func TestFindMismatchedKeyLength(t *testing.T) {
 		t.Fatalf("unexpected error during from keys: %v", err)
 	}
 
-	found, _ := Find(tr, keyutil.Random(5))
+	found, _ := Find(tr, testutil.Random(5))
 	require.False(t, found)
 }
 
@@ -528,7 +527,7 @@ func benchmarkBuildTrieMutable(n int) func(b *testing.B) {
 	return func(b *testing.B) {
 		keys := make([]key.KadKey, n)
 		for i := 0; i < n; i++ {
-			keys[i] = keyutil.Random(32)
+			keys[i] = testutil.Random(32)
 		}
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -546,7 +545,7 @@ func benchmarkBuildTrieImmutable(n int) func(b *testing.B) {
 	return func(b *testing.B) {
 		keys := make([]key.KadKey, n)
 		for i := 0; i < n; i++ {
-			keys[i] = keyutil.Random(32)
+			keys[i] = testutil.Random(32)
 		}
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -564,7 +563,7 @@ func benchmarkAddMutable(n int) func(b *testing.B) {
 	return func(b *testing.B) {
 		keys := make([]key.KadKey, n)
 		for i := 0; i < n; i++ {
-			keys[i] = keyutil.Random(32)
+			keys[i] = testutil.Random(32)
 		}
 		tr := New[any]()
 		for _, kk := range keys {
@@ -576,7 +575,7 @@ func benchmarkAddMutable(n int) func(b *testing.B) {
 		// see https://github.com/golang/go/issues/27217
 		additions := make([]key.KadKey, n/4)
 		for i := range additions {
-			additions[i] = keyutil.Random(32)
+			additions[i] = testutil.Random(32)
 		}
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -596,7 +595,7 @@ func benchmarkAddImmutable(n int) func(b *testing.B) {
 	return func(b *testing.B) {
 		keys := make([]key.KadKey, n)
 		for i := 0; i < n; i++ {
-			keys[i] = keyutil.Random(32)
+			keys[i] = testutil.Random(32)
 		}
 		trBase := New[any]()
 		for _, kk := range keys {
@@ -605,7 +604,7 @@ func benchmarkAddImmutable(n int) func(b *testing.B) {
 
 		additions := make([]key.KadKey, n/4)
 		for i := range additions {
-			additions[i] = keyutil.Random(32)
+			additions[i] = testutil.Random(32)
 		}
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -623,7 +622,7 @@ func benchmarkRemoveMutable(n int) func(b *testing.B) {
 	return func(b *testing.B) {
 		keys := make([]key.KadKey, n)
 		for i := 0; i < n; i++ {
-			keys[i] = keyutil.Random(32)
+			keys[i] = testutil.Random(32)
 		}
 		tr := New[any]()
 		for _, kk := range keys {
@@ -655,7 +654,7 @@ func benchmarkRemoveImmutable(n int) func(b *testing.B) {
 	return func(b *testing.B) {
 		keys := make([]key.KadKey, n)
 		for i := 0; i < n; i++ {
-			keys[i] = keyutil.Random(32)
+			keys[i] = testutil.Random(32)
 		}
 		trBase := New[any]()
 		for _, kk := range keys {
@@ -682,7 +681,7 @@ func benchmarkFindPositive(n int) func(b *testing.B) {
 	return func(b *testing.B) {
 		keys := make([]key.KadKey, n)
 		for i := 0; i < n; i++ {
-			keys[i] = keyutil.Random(32)
+			keys[i] = testutil.Random(32)
 		}
 		tr := New[any]()
 		for _, kk := range keys {
@@ -700,7 +699,7 @@ func benchmarkFindNegative(n int) func(b *testing.B) {
 	return func(b *testing.B) {
 		keys := make([]key.KadKey, n)
 		for i := 0; i < n; i++ {
-			keys[i] = keyutil.Random(32)
+			keys[i] = testutil.Random(32)
 		}
 		tr := New[any]()
 		for _, kk := range keys {
@@ -708,7 +707,7 @@ func benchmarkFindNegative(n int) func(b *testing.B) {
 		}
 		unknown := make([]key.KadKey, n)
 		for i := 0; i < n; i++ {
-			kk := keyutil.Random(32)
+			kk := testutil.Random(32)
 			if found, _ := Find(tr, kk); found {
 				continue
 			}
@@ -741,7 +740,7 @@ func newKeySetOfLength(n int, l int) *keySet {
 	set := make([]key.KadKey, 0, n)
 	seen := make(map[string]bool)
 	for len(set) < n {
-		kk := keyutil.Random(l)
+		kk := testutil.Random(l)
 		if seen[kk.String()] {
 			continue
 		}
@@ -759,9 +758,9 @@ func newKeyNotInSet(l int, ks *keySet) key.KadKey {
 		seen[ks.Keys[i].String()] = true
 	}
 
-	kk := keyutil.Random(l)
+	kk := testutil.Random(l)
 	for seen[kk.String()] {
-		kk = keyutil.Random(l)
+		kk = testutil.Random(l)
 	}
 
 	return kk

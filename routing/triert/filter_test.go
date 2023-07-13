@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/plprobelab/go-kademlia/key/keyutil"
+	"github.com/plprobelab/go-kademlia/internal/testutil"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/stretchr/testify/require"
 )
@@ -20,7 +20,7 @@ func TestBucketLimit20(t *testing.T) {
 
 	nodes := make([]address.NodeID, 21)
 	for i := range nodes {
-		kk := keyutil.RandomWithPrefix("000100", 32)
+		kk := testutil.RandomWithPrefix("000100", 32)
 		nodes[i] = NewNode(fmt.Sprintf("QmPeer%d", i), kk)
 	}
 
@@ -37,7 +37,7 @@ func TestBucketLimit20(t *testing.T) {
 	require.False(t, success)
 
 	// add peer with different cpl
-	kk := keyutil.RandomWithPrefix("0000100", 32)
+	kk := testutil.RandomWithPrefix("0000100", 32)
 	node22 := NewNode("QmPeer22", kk)
 	success, err = rt.AddPeer(ctx, node22)
 	require.NoError(t, err)
