@@ -40,11 +40,6 @@ var (
 	node9  = NewNode("QmPeer9", key9)
 	node10 = NewNode("QmPeer10", key10)
 	node11 = NewNode("QmPeer11", key11)
-
-	testNodes = []address.NodeID{
-		node1, node2, node3, node4, node5, node6,
-		node7, node8, node9, node10, node11,
-	}
 )
 
 func TestAddPeer(t *testing.T) {
@@ -356,6 +351,7 @@ func TestKeyFilter(t *testing.T) {
 		return !kk.Equal(key2) // don't allow key2 to be added
 	}
 	rt, err := New(key0, cfg)
+	require.NoError(t, err)
 
 	// can't add key2
 	success, err := rt.AddPeer(ctx, node2)
