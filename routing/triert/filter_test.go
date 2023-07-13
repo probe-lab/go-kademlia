@@ -20,7 +20,7 @@ func TestBucketLimit20(t *testing.T) {
 
 	nodes := make([]address.NodeID, 21)
 	for i := range nodes {
-		kk := testutil.RandomWithPrefix("000100", 32)
+		kk := testutil.RandomWithPrefix("000100", 256)
 		nodes[i] = NewNode(fmt.Sprintf("QmPeer%d", i), kk)
 	}
 
@@ -37,7 +37,7 @@ func TestBucketLimit20(t *testing.T) {
 	require.False(t, success)
 
 	// add peer with different cpl
-	kk := testutil.RandomWithPrefix("0000100", 32)
+	kk := testutil.RandomWithPrefix("0000100", 256)
 	node22 := NewNode("QmPeer22", kk)
 	success, err = rt.AddPeer(ctx, node22)
 	require.NoError(t, err)
