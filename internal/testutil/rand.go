@@ -18,6 +18,7 @@ func Random(l int) key.KadKey {
 }
 
 // RandomWithPrefix returns a KadKey of length l having a prefix equal to the bit pattern held in s.
+// A prefix of up to 64 bits is supported.
 func RandomWithPrefix(s string, l int) key.KadKey {
 	kk := Random(l)
 	if s == "" {
@@ -27,6 +28,8 @@ func RandomWithPrefix(s string, l int) key.KadKey {
 	bits := len(s)
 	if bits > 64 {
 		panic("RandomWithPrefix: prefix too long")
+	} else if bits > l*8 {
+		panic("RandomWithPrefix: prefix longer than key length")
 	}
 	n, err := strconv.ParseInt(s, 2, 64)
 	if err != nil {
