@@ -4,6 +4,7 @@ import (
 	"container/heap"
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/plprobelab/go-kademlia/key"
@@ -18,7 +19,7 @@ type QueryPool struct {
 	timeout     time.Duration
 	concurrency int // the 'α' parameter defined by Kademlia
 	replication int // the 'k' parameter defined by Kademlia
-	queries     map[uint64]*Query
+	queries     map[QueryID]*Query
 	nextID      uint64
 }
 
@@ -29,7 +30,7 @@ func NewQueryPool(self *FakeNode, mr *MessageRouter) *QueryPool {
 		timeout:     time.Minute,
 		concurrency: 3,
 		replication: 20,
-		queries:     make(map[uint64]*Query),
+		queries:     make(map[QueryID]*Query),
 		nextID:      1,
 	}
 }
@@ -38,6 +39,7 @@ var _ task.Task = (*QueryPool)(nil)
 
 // Advance advances the state of the query pool by attempting to advance one of its queries
 func (p *QueryPool) Advance(ctx context.Context) (rstate task.State) {
+	trace("QueryPool.Advance")
 	defer func() {
 		traceReturnState("QueryPool.Advance", rstate)
 	}()
@@ -53,7 +55,13 @@ func (p *QueryPool) Advance(ctx context.Context) (rstate task.State) {
 		case *PeerIterStateWaiting:
 			return &QueryPoolWaiting{
 				QueryID: qid,
+				Stats:   query.stats,
+			}
+		case *PeerIterStateWaitingMessage:
+			return &QueryPoolWaitingMessage{
+				QueryID: qid,
 				NodeID:  st.NodeID,
+				Message: query.msg,
 				Stats:   query.stats,
 			}
 		case *PeerIterStateFinished:
@@ -86,7 +94,8 @@ func (p *QueryPool) Advance(ctx context.Context) (rstate task.State) {
 }
 
 // AddQuery adds a query to the pool, returning the new query id
-func (qp *QueryPool) AddQuery(ctx context.Context, target key.KadKey) (uint64, error) {
+func (qp *QueryPool) AddQuery(ctx context.Context, target key.KadKey, msg message.MinKadRequestMessage) (QueryID, error) {
+	trace("QueryPool.AddQuery")
 	knownClosestPeers, err := qp.self.Closest(ctx, target, qp.replication)
 	if err != nil {
 		return 0, nil
@@ -94,17 +103,39 @@ func (qp *QueryPool) AddQuery(ctx context.Context, target key.KadKey) (uint64, e
 
 	iter := NewClosestPeersIter(target, qp.mr, knownClosestPeers, qp.replication, qp.concurrency, qp.timeout)
 	id := qp.nextQueryID()
+	// TODO: lock queries
 	qp.queries[id] = &Query{
 		id:   id,
 		iter: iter,
+		msg:  msg,
 	}
 	return id, nil
 }
 
-func (q *QueryPool) nextQueryID() uint64 {
+func (qp *QueryPool) StopQuery(ctx context.Context, queryID QueryID) error {
+	trace("QueryPool.StopQuery")
+	// TODO: lock queries
+	query, ok := qp.queries[queryID]
+	if !ok {
+		return fmt.Errorf("unknown query")
+	}
+	query.Cancel(ctx)
+	return nil
+}
+
+func (qp *QueryPool) onMessageSuccess(ctx context.Context, queryID QueryID, node address.NodeID, resp message.MinKadResponseMessage) {
+	// TODO: lock queries
+	query, ok := qp.queries[queryID]
+	if !ok {
+		return // unknown query
+	}
+	query.onMessageSuccess(ctx, node, resp)
+}
+
+func (q *QueryPool) nextQueryID() QueryID {
 	id := q.nextID
 	q.nextID++
-	return id
+	return QueryID(id)
 }
 
 func (q *QueryPool) Cancel(context.Context) {
@@ -112,8 +143,9 @@ func (q *QueryPool) Cancel(context.Context) {
 }
 
 type Query struct {
-	id    uint64
+	id    QueryID
 	iter  PeerIter
+	msg   message.MinKadRequestMessage
 	stats QueryStats
 }
 
@@ -121,6 +153,7 @@ var _ task.Task = (*Query)(nil)
 
 // Advance advances the state of the query by attempting to advance its iterator
 func (q *Query) Advance(ctx context.Context) task.State {
+	trace("Query.Advance")
 	state := q.iter.Advance(ctx)
 	if _, ok := state.(*PeerIterStateWaiting); ok {
 		q.stats.Requests++
@@ -128,8 +161,13 @@ func (q *Query) Advance(ctx context.Context) task.State {
 	return state
 }
 
-func (q *Query) Cancel(context.Context) {
-	panic("not implemented")
+func (q *Query) Cancel(ctx context.Context) {
+	trace("Query.Cancel")
+	q.iter.Cancel(ctx)
+}
+
+func (q *Query) onMessageSuccess(ctx context.Context, node address.NodeID, resp message.MinKadResponseMessage) {
+	q.iter.OnMessageSuccess(ctx, node, resp)
 }
 
 type QueryStats struct {
@@ -147,26 +185,33 @@ type QueryPoolIdle struct{}
 
 // QueryPoolWaiting indicates that at least one query is waiting for results.
 type QueryPoolWaiting struct {
-	QueryID uint64
+	QueryID QueryID
+	Stats   QueryStats
+}
+
+// QueryPoolWaitingMessage indicates that at a query is waiting to message a peer.
+type QueryPoolWaitingMessage struct {
+	QueryID QueryID
 	NodeID  address.NodeID
+	Message message.MinKadRequestMessage
 	Stats   QueryStats
 }
 
 // QueryPoolWaitingWithCapacity indicates that at least one query is waiting for results but it is not at capacity.
 type QueryPoolWaitingWithCapacity struct {
-	QueryID uint64
+	QueryID QueryID
 	Stats   QueryStats
 }
 
 // QueryPoolFinished indicates that a query has finished.
 type QueryPoolFinished struct {
-	QueryID uint64
+	QueryID QueryID
 	Stats   QueryStats
 }
 
 // QueryPoolTimeout indicates that at a query has timed out.
 type QueryPoolTimeout struct {
-	QueryID uint64
+	QueryID QueryID
 	Stats   QueryStats
 }
 
@@ -175,10 +220,14 @@ type QueryPoolTimeout struct {
 // PeerIterStateFinished indicates that the PeerIter has finished.
 type PeerIterStateFinished struct{}
 
-// PeerIterStateWaiting indicates that the PeerIter is waiting for results from a specific peer.
-type PeerIterStateWaiting struct {
-	NodeID address.NodeID
+// PeerIterStateWaitingMessage indicates that the PeerIter is waiting to send a message to a peer.
+type PeerIterStateWaitingMessage struct {
+	NodeID  address.NodeID
+	Message message.MinKadRequestMessage
 }
+
+// PeerIterStateWaiting indicates that the PeerIter is waiting for results from one or more peers.
+type PeerIterStateWaiting struct{}
 
 // PeerIterStateWaiting indicates that the PeerIter is waiting for results and is at capacity.
 type PeerIterStateWaitingAtCapacity struct{}
@@ -189,6 +238,7 @@ type PeerIterStateWaitingWithCapacity struct{}
 // A PeerIter iterates peers according to some strategy.
 type PeerIter interface {
 	task.Task
+	OnMessageSuccess(context.Context, address.NodeID, message.MinKadResponseMessage)
 }
 
 type ClosestPeersIter struct {
@@ -198,6 +248,7 @@ type ClosestPeersIter struct {
 	mr *MessageRouter
 
 	// current state of the iterator
+	mu    sync.Mutex
 	state task.State
 
 	// The closest peers to the target, ordered by increasing distance.
@@ -216,7 +267,7 @@ type ClosestPeersIter struct {
 	inFlight int
 }
 
-func NewClosestPeersIter(target key.KadKey, mr *MessageRouter, knownClosestPeers []address.NodeAddr, numResults int, concurrency int, timeout time.Duration) *ClosestPeersIter {
+func NewClosestPeersIter(target key.KadKey, mr *MessageRouter, knownClosestPeers []address.NodeID, numResults int, concurrency int, timeout time.Duration) *ClosestPeersIter {
 	iter := &ClosestPeersIter{
 		target:      target,
 		mr:          mr,
@@ -229,10 +280,10 @@ func NewClosestPeersIter(target key.KadKey, mr *MessageRouter, knownClosestPeers
 
 	trace("NewClosestPeersIter number of known closest peers=%d", len(knownClosestPeers))
 
-	for _, addr := range knownClosestPeers {
+	for _, node := range knownClosestPeers {
 		heap.Push(iter.peerlist, &PeerInfo{
-			Distance: target.Xor(addr.NodeID().Key()),
-			Addr:     addr,
+			Distance: target.Xor(node.Key()),
+			NodeID:   node,
 			State:    &PeerStateNotContacted{},
 		})
 	}
@@ -245,8 +296,11 @@ func (pi *ClosestPeersIter) Advance(ctx context.Context) (rstate task.State) {
 		traceCurrentState("ClosestPeersIter.Advance.exit", pi.state)
 		traceReturnState("ClosestPeersIter.Advance", rstate)
 	}()
-	traceCurrentState("ClosestPeersIter.Advance.entry", pi.state)
-	if _, ok := pi.state.(*ClosestPeersIterStateFinished); ok {
+	pi.mu.Lock()
+	st := pi.state
+	pi.mu.Unlock()
+	traceCurrentState("ClosestPeersIter.Advance.entry", st)
+	if _, ok := st.(*ClosestPeersIterStateFinished); ok {
 		return &PeerIterStateFinished{}
 	}
 
@@ -275,7 +329,7 @@ func (pi *ClosestPeersIter) Advance(ctx context.Context) (rstate task.State) {
 		case *PeerStateSucceeded:
 			successes++
 			if !progressing && successes >= pi.numResults {
-				pi.state = &ClosestPeersIterStateFinished{}
+				pi.setState(&ClosestPeersIterStateFinished{})
 				return &PeerIterStateFinished{}
 			}
 
@@ -285,10 +339,10 @@ func (pi *ClosestPeersIter) Advance(ctx context.Context) (rstate task.State) {
 				p.State = &PeerStateWaiting{Deadline: deadline}
 				pi.inFlight++
 
-				pi.mr.SendMessage(ctx, p.Addr, &FindNodeRequest{Key: pi.target}, pi.onSuccess, pi.onFailure)
-
 				// TODO: send find nodes to peer
-				return &PeerIterStateWaiting{}
+				return &PeerIterStateWaitingMessage{
+					NodeID: p.NodeID,
+				}
 
 			}
 			return &PeerIterStateWaitingAtCapacity{}
@@ -308,11 +362,13 @@ func (pi *ClosestPeersIter) Advance(ctx context.Context) (rstate task.State) {
 
 	// The iterator is finished because all available peers have been contacted
 	// and the iterator is not waiting for any more results.
-	pi.state = &ClosestPeersIterStateFinished{}
+	pi.setState(&ClosestPeersIterStateFinished{})
 	return &PeerIterStateFinished{}
 }
 
 func (pi *ClosestPeersIter) IsAtCapacity() bool {
+	pi.mu.Lock()
+	defer pi.mu.Unlock()
 	switch pi.state.(type) {
 	case *ClosestPeersIterStateStalled:
 		// TODO: if stalled then we should contact all remaining nodes that have not already been queried
@@ -327,93 +383,96 @@ func (pi *ClosestPeersIter) IsAtCapacity() bool {
 }
 
 func (pi *ClosestPeersIter) Cancel(ctx context.Context) {
-	panic("not implemented")
+	pi.setState(&ClosestPeersIterStateFinished{})
 }
 
-// Callback for delivering the result of a successful request to a peer.
-func (pi *ClosestPeersIter) onSuccess(ctx context.Context, addr address.NodeAddr, msg message.MinKadResponseMessage) {
-	if _, ok := pi.state.(*ClosestPeersIterStateFinished); ok {
-		return
-	}
-
-	switch tmsg := msg.(type) {
-	case *FindNodeResponse:
-		for _, p := range *pi.peerlist {
-			if !p.Addr.NodeID().Key().Equal(addr.NodeID().Key()) {
-				continue
-			}
-			switch st := p.State.(type) {
-			case *PeerStateWaiting:
-				pi.inFlight--
-			case *PeerStateUnresponsive:
-
-			case *PeerStateNotContacted:
-				// ignore duplicate or late response
-				return
-			case *PeerStateFailed:
-				// ignore duplicate or late response
-				return
-			case *PeerStateSucceeded:
-				// ignore duplicate or late response
-				return
-			default:
-				panic(fmt.Sprintf("unexpected state: %T", st))
-			}
-
-			// add closer peers to list
-			for _, cp := range tmsg.CloserPeers {
-				trace("found closer peer: %v", cp)
-				if pi.peerlist.Exists(cp.NodeID()) {
-					// ignore known peers
-					trace("ignoring closer peer: %v", cp)
-					continue
-				}
-				heap.Push(pi.peerlist, &PeerInfo{
-					Distance: pi.target.Xor(cp.NodeID().Key()),
-					Addr:     cp,
-					State:    &PeerStateNotContacted{},
-				})
-			}
-			p.State = &PeerStateSucceeded{}
-		}
-	default:
-		// ignore unknown message
-
-	}
+func (pi *ClosestPeersIter) setState(st task.State) {
+	pi.mu.Lock()
+	defer pi.mu.Unlock()
+	pi.state = st
 }
 
-// Callback for informing the iterator about a failed request to a peer.
-func (pi *ClosestPeersIter) onFailure(ctx context.Context, addr address.NodeAddr, err error) {
-	if _, ok := pi.state.(*ClosestPeersIterStateFinished); ok {
+// Callback for delivering the result of a successful request to a node.
+func (pi *ClosestPeersIter) OnMessageSuccess(ctx context.Context, node address.NodeID, msg message.MinKadResponseMessage) {
+	pi.mu.Lock()
+	st := pi.state
+	pi.mu.Unlock()
+	if _, ok := st.(*ClosestPeersIterStateFinished); ok {
 		return
 	}
 
 	for _, p := range *pi.peerlist {
-		if !p.Addr.NodeID().Key().Equal(addr.NodeID().Key()) {
+		if !p.NodeID.Key().Equal(node.Key()) {
 			continue
 		}
-
-		// found the peer
-
 		switch st := p.State.(type) {
 		case *PeerStateWaiting:
 			pi.inFlight--
-			p.State = &PeerStateFailed{}
 		case *PeerStateUnresponsive:
-			p.State = &PeerStateFailed{}
+
 		case *PeerStateNotContacted:
-			// should not happen
+			// ignore duplicate or late response
+			return
 		case *PeerStateFailed:
-			// should not happen
+			// ignore duplicate or late response
+			return
 		case *PeerStateSucceeded:
-			// should not happen
+			// ignore duplicate or late response
+			return
 		default:
 			panic(fmt.Sprintf("unexpected state: %T", st))
-
 		}
-		return
+
+		// add closer peers to list
+		for _, cn := range msg.CloserNodes() {
+			trace("found closer node: %v", cn)
+			if pi.peerlist.Exists(cn.NodeID()) {
+				// ignore known node
+				trace("ignoring closer node: %v", cn)
+				continue
+			}
+			heap.Push(pi.peerlist, &PeerInfo{
+				Distance: pi.target.Xor(cn.NodeID().Key()),
+				NodeID:   cn.NodeID(),
+				State:    &PeerStateNotContacted{},
+			})
+		}
+		p.State = &PeerStateSucceeded{}
 	}
 }
+
+// // Callback for informing the iterator about a failed request to a peer.
+// func (pi *ClosestPeersIter) onFailure(ctx context.Context, addr address.NodeAddr, err error) {
+// 	if _, ok := pi.state.(*ClosestPeersIterStateFinished); ok {
+// 		return
+// 	}
+
+// 	for _, p := range *pi.peerlist {
+// 		if !p.Addr.NodeID().Key().Equal(addr.NodeID().Key()) {
+// 			continue
+// 		}
+
+// 		// found the peer
+
+// 		switch st := p.State.(type) {
+// 		case *PeerStateWaiting:
+// 			pi.inFlight--
+// 			p.State = &PeerStateFailed{}
+// 		case *PeerStateUnresponsive:
+// 			p.State = &PeerStateFailed{}
+// 		case *PeerStateNotContacted:
+// 			// should not happen
+// 		case *PeerStateFailed:
+// 			// should not happen
+// 		case *PeerStateSucceeded:
+// 			// should not happen
+// 		default:
+// 			panic(fmt.Sprintf("unexpected state: %T", st))
+
+// 		}
+// 		return
+// 	}
+// }
 
 // States for ClosestPeersIter
 
@@ -430,7 +489,7 @@ type ClosestPeersIterStateIterating struct{}
 type PeerInfo struct {
 	Distance key.KadKey
 	State    task.State
-	Addr     address.NodeAddr
+	NodeID   address.NodeID
 }
 
 // PeerList is a list of peer infos ordered by distance. Manage using heap operations.
@@ -461,7 +520,7 @@ func (pq *PeerList) Pop() any {
 func (pq *PeerList) Exists(id address.NodeID) bool {
 	// slow and naieve for now
 	for _, p := range *pq {
-		if p.Addr.NodeID().Key().Equal(id.Key()) {
+		if p.NodeID.Key().Equal(id.Key()) {
 			return true
 		}
 	}

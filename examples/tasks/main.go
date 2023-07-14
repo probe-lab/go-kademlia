@@ -18,43 +18,21 @@ func main() {
 
 	nodes, mr := setupSimulation(ctx)
 
-	qp := NewQueryPool(nodes[0], mr)
+	kad := NewKademliaHandler(nodes[0], mr)
+
+	ih := NewIpfsDht(kad)
+	ih.Start(ctx)
 
 	// A (ids[0]) is looking for D (ids[3])
 	// A will first ask B, B will reply with C's address (and A's address)
 	// A will then ask C, C will reply with D's address (and B's address)
 
-	target := nodes[3].Key()
-
-	queryID, err := qp.AddQuery(ctx, target)
+	addr, err := ih.FindNode(context.Background(), nodes[3].NodeID())
 	if err != nil {
-		panic(err.Error())
+		fmt.Printf("FindNode failed with error: %v\n", err)
+		return
 	}
-	trace("Query id is %d", queryID)
-
-	// continually advance the query pool state machine until we reach a terminal state
-loop:
-	for {
-
-		state := qp.Advance(ctx)
-		traceReturnState("main", state)
-		switch st := state.(type) {
-		case *QueryPoolWaiting:
-			trace("Query pool is waiting for %d", st.QueryID)
-		case *QueryPoolWaitingWithCapacity:
-			trace("Query pool is waiting for one or more queries")
-		case *QueryPoolFinished:
-			trace("Query pool has finished query %d", st.QueryID)
-			trace("Stats: %+v", st.Stats)
-		case *QueryPoolTimeout:
-			trace("Query pool has timed out query %d", st.QueryID)
-		case *QueryPoolIdle:
-			trace("Query pool has no further work, exiting this demo")
-			break loop
-		default:
-			panic(fmt.Sprintf("unexpected state: %T", st))
-		}
-	}
+	fmt.Printf("FindNode found address for: %s\n", addr.NodeID().String())
 }
 
 const (
@@ -108,13 +86,11 @@ func setupSimulation(ctx context.Context) ([]*FakeNode, *MessageRouter) {
 
 // connectNodes adds nodes to each other's peerstores and routing tables
 func connectNodes(ctx context.Context, a, b *FakeNode) {
-	// add n1 to n0's peerstore and routing table
-	a.rt.AddPeer(ctx, b.NodeID())
-	a.peerstore[b.NodeID()] = b.Addr()
+	// add b to a's peerstore and routing table
+	a.AddNodeAddr(ctx, b.Addr())
 
-	// add n0 to n1's peerstore and routing table
-	b.rt.AddPeer(ctx, b.NodeID())
-	b.peerstore[a.NodeID()] = a.Addr()
+	// add a to b's peerstore and routing table
+	b.AddNodeAddr(ctx, a.Addr())
 }
 
 func traceReturnState(loc string, st task.State) {
@@ -128,3 +104,11 @@ func traceCurrentState(loc string, st task.State) {
 func trace(f string, args ...any) {
 	fmt.Println(fmt.Sprintf(f, args...))
 }
+
+type QueryID uint64
+
+const InvalidQueryID QueryID = 0
+
+type RoutingUpdate any
+
+type Event any

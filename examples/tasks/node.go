@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -29,32 +30,37 @@ func (f *FakeNode) NodeID() address.NodeID {
 	return f.addr.NodeID()
 }
 
-func (f *FakeNode) Closest(ctx context.Context, kk key.KadKey, n int) ([]address.NodeAddr, error) {
-	nearest, err := f.rt.NearestPeers(ctx, kk, n)
-	if err != nil {
-		return nil, fmt.Errorf("failed to look up closer peers: %w", err)
-	}
+func (f *FakeNode) AddNodeAddr(ctx context.Context, addr address.NodeAddr) {
+	f.rt.AddPeer(ctx, addr.NodeID())
+	f.peerstore[addr.NodeID()] = addr
+}
 
-	addrs := make([]address.NodeAddr, 0, len(nearest))
-	for i := range nearest {
-		addr, ok := f.peerstore[nearest[i]]
-		if !ok {
-			continue
-		}
-		addrs = append(addrs, addr)
-	}
+func (f *FakeNode) AddressOf(id address.NodeID) address.NodeAddr {
+	return f.peerstore[id]
+}
 
-	return addrs, nil
+func (f *FakeNode) Closest(ctx context.Context, kk key.KadKey, n int) ([]address.NodeID, error) {
+	return f.rt.NearestPeers(ctx, kk, n)
 }
 
 func (f *FakeNode) HandleMessage(ctx context.Context, msg message.MinKadRequestMessage) (message.MinKadResponseMessage, error) {
 	switch tmsg := msg.(type) {
 	case *FindNodeRequest:
-		closer, err := f.Closest(ctx, tmsg.Key, 2)
+		closer, err := f.Closest(ctx, tmsg.NodeID.Key(), 2)
 		if err != nil {
 			return nil, fmt.Errorf("failed to look up closer peers: %w", err)
 		}
-		return &FindNodeResponse{Key: tmsg.Key, CloserPeers: closer}, nil
+
+		addrs := make([]address.NodeAddr, 0, len(closer))
+		for i := range closer {
+			addr, ok := f.peerstore[closer[i]]
+			if !ok {
+				continue
+			}
+			addrs = append(addrs, addr)
+		}
+
+		return &FindNodeResponse{NodeID: tmsg.NodeID, CloserPeers: addrs}, nil
 	default:
 		return nil, fmt.Errorf("unsupported message type: %T", tmsg)
 	}
@@ -76,33 +82,26 @@ func NewMessageRouter(nodes []*FakeNode) *MessageRouter {
 	return mr
 }
 
-func (r *MessageRouter) SendMessage(ctx context.Context, addr address.NodeAddr, msg message.MinKadRequestMessage, onSuccess func(context.Context, address.NodeAddr, message.MinKadResponseMessage), onFailure func(context.Context, address.NodeAddr, error)) {
-	go func() {
-		n, ok := r.nodes[addr.NodeID()]
-		if !ok {
-			onFailure(ctx, addr, fmt.Errorf("unroutable address"))
-			return
-		}
+var ErrNoKnownAddress = errors.New("no known address")
 
-		// this would be a network request in reality so fake a tiny delay
-		time.Sleep(time.Millisecond)
+func (r *MessageRouter) SendMessage(ctx context.Context, addr address.NodeAddr, msg message.MinKadRequestMessage) (message.MinKadResponseMessage, error) {
+	n, ok := r.nodes[addr.NodeID()]
+	if !ok {
+		return nil, ErrNoKnownAddress
+	}
 
-		resp, err := n.HandleMessage(ctx, msg)
-		if err != nil {
-			onFailure(ctx, addr, fmt.Errorf("node responded with error: %w", err))
-			return
-		}
+	// this would be a network request in reality so fake a tiny delay
+	time.Sleep(time.Millisecond)
 
-		onSuccess(ctx, addr, resp)
-	}()
+	return n.HandleMessage(ctx, msg)
 }
 
 type FindNodeRequest struct {
-	Key key.KadKey
+	NodeID address.NodeID
 }
 
 func (r FindNodeRequest) Target() key.KadKey {
-	return r.Key
+	return r.NodeID.Key()
 }
 
 func (FindNodeRequest) EmptyResponse() message.MinKadResponseMessage {
@@ -110,7 +109,7 @@ func (FindNodeRequest) EmptyResponse() message.MinKadResponseMessage {
 }
 
 type FindNodeResponse struct {
-	Key         key.KadKey
+	NodeID      address.NodeID // node we were looking for
 	CloserPeers []address.NodeAddr
 }
 
