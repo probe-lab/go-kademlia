@@ -85,7 +85,7 @@ func (d *IpfsDht) FindNode(ctx context.Context, node address.NodeID) (address.No
 				return nil, fmt.Errorf("query was unexpectedly stopped")
 			}
 			trace("IpfsHandler.FindNode: got event from kademlia")
-			// we got a response from the query
+			// we got a response from a message sent by query
 			switch tresp := resp.(type) {
 			case *FindNodeResponse:
 				// interpret the response

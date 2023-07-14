@@ -60,6 +60,10 @@ func (k *KademliaHandler) mainloop(ctx context.Context) {
 
 		trace("KademliaHandler.mainloop: advancing query state machine")
 		// attempt to advance the query state machine
+		// TODO: consider passing event to the Advance method so the event gets handled inside the state machine
+		// instead of calling methods that change state (for example onMessageSuccess calls all the way down to the
+		// peer iterator, but maybe the event could be passed down through each Advance call). This would make
+		// locking simpler.
 		state := k.qp.Advance(ctx)
 		traceReturnState("main", state)
 		switch st := state.(type) {
