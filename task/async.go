@@ -12,7 +12,7 @@ type AsyncTask struct {
 	cancelled atomic.Bool
 }
 
-var _ Task = (*AsyncTask)(nil)
+var _ Task[State] = (*AsyncTask)(nil)
 
 // Async starts r in a gorutine by calling r.Run and returns an AsyncTask to track completion of r's work.
 func Async(ctx context.Context, r Runnable) *AsyncTask {

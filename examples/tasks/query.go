@@ -13,6 +13,8 @@ import (
 	"github.com/plprobelab/go-kademlia/task"
 )
 
+var _ task.Task[QueryPoolState] = (*QueryPool)(nil)
+
 type QueryPool struct {
 	self        *FakeNode
 	mr          *MessageRouter
@@ -35,10 +37,8 @@ func NewQueryPool(self *FakeNode, mr *MessageRouter) *QueryPool {
 	}
 }
 
-var _ task.Task = (*QueryPool)(nil)
-
 // Advance advances the state of the query pool by attempting to advance one of its queries
-func (p *QueryPool) Advance(ctx context.Context) (rstate task.State) {
+func (p *QueryPool) Advance(ctx context.Context) (rstate QueryPoolState) {
 	trace("QueryPool.Advance")
 	defer func() {
 		traceReturnState("QueryPool.Advance", rstate)
@@ -142,6 +142,8 @@ func (q *QueryPool) Cancel(context.Context) {
 	panic("not implemented")
 }
 
+var _ task.Task[QueryState] = (*Query)(nil)
+
 type Query struct {
 	id    QueryID
 	iter  PeerIter
@@ -149,10 +151,13 @@ type Query struct {
 	stats QueryStats
 }
 
-var _ task.Task = (*Query)(nil)
+type QueryState interface {
+	// TODO: decide whether to introduce specific QueryStates
+	PeerIterState
+}
 
 // Advance advances the state of the query by attempting to advance its iterator
-func (q *Query) Advance(ctx context.Context) task.State {
+func (q *Query) Advance(ctx context.Context) QueryState {
 	trace("Query.Advance")
 	state := q.iter.Advance(ctx)
 	if _, ok := state.(*PeerIterStateWaiting); ok {
@@ -261,9 +266,11 @@ func (*PeerIterStateWaitingWithCapacity) peerIterState() {}
 
 // A PeerIter iterates peers according to some strategy.
 type PeerIter interface {
-	task.Task
+	task.Task[PeerIterState]
 	OnMessageSuccess(context.Context, address.NodeID, message.MinKadResponseMessage)
 }
+
+var _ PeerIter = (*ClosestPeersIter)(nil)
 
 type ClosestPeersIter struct {
 	// The target whose distance to any peer determines the position of the peer in the iterator.
@@ -315,7 +322,7 @@ func NewClosestPeersIter(target key.KadKey, mr *MessageRouter, knownClosestPeers
 	return iter
 }
 
-func (pi *ClosestPeersIter) Advance(ctx context.Context) (rstate task.State) {
+func (pi *ClosestPeersIter) Advance(ctx context.Context) (rstate PeerIterState) {
 	defer func() {
 		traceCurrentState("ClosestPeersIter.Advance.exit", pi.state)
 		traceReturnState("ClosestPeersIter.Advance", rstate)

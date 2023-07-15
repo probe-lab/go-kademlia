@@ -35,9 +35,9 @@ func (pstate) String() string {
 }
 
 // A Task represents a state machine that is performing work.
-type Task interface {
+type Task[T State] interface {
 	// Advance signals the task to advance its work to the next state.
-	Advance(context.Context) State
+	Advance(context.Context) T
 
 	// Cancel signals the Task to stop work.
 	// After a call to Cancel, Advance must always return Stopped
