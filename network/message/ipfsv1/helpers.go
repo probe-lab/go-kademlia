@@ -14,12 +14,12 @@ import (
 	"github.com/multiformats/go-multiaddr"
 )
 
-var (
-	ErrNoValidAddresses = errors.New("no valid addresses")
-)
+var ErrNoValidAddresses = errors.New("no valid addresses")
 
-var _ message.ProtoKadRequestMessage = (*Message)(nil)
-var _ message.ProtoKadResponseMessage = (*Message)(nil)
+var (
+	_ message.ProtoKadRequestMessage  = (*Message)(nil)
+	_ message.ProtoKadResponseMessage = (*Message)(nil)
+)
 
 func FindPeerRequest(p *peerid.PeerID) *Message {
 	marshalledPeerid, _ := p.MarshalBinary()
@@ -41,7 +41,7 @@ func (msg *Message) Target() key.KadKey {
 	if err != nil {
 		return nil
 	}
-	return peerid.PeerID{ID: p}.Key()
+	return peerid.NewPeerID(p).Key()
 }
 
 func (msg *Message) EmptyResponse() message.MinKadResponseMessage {

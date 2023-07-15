@@ -41,11 +41,14 @@ type Libp2pEndpoint struct {
 	readers sync.Pool
 }
 
-var _ endpoint.NetworkedEndpoint = (*Libp2pEndpoint)(nil)
-var _ endpoint.ServerEndpoint = (*Libp2pEndpoint)(nil)
+var (
+	_ endpoint.NetworkedEndpoint = (*Libp2pEndpoint)(nil)
+	_ endpoint.ServerEndpoint    = (*Libp2pEndpoint)(nil)
+)
 
 func NewLibp2pEndpoint(ctx context.Context, host host.Host,
-	sched scheduler.Scheduler) *Libp2pEndpoint {
+	sched scheduler.Scheduler,
+) *Libp2pEndpoint {
 	return &Libp2pEndpoint{
 		ctx:     ctx,
 		host:    host,
@@ -63,7 +66,8 @@ func getPeerID(id address.NodeID) (*peerid.PeerID, error) {
 }
 
 func (e *Libp2pEndpoint) AsyncDialAndReport(ctx context.Context,
-	id address.NodeID, reportFn DialReportFn) error {
+	id address.NodeID, reportFn DialReportFn,
+) error {
 	p, err := getPeerID(id)
 	if err != nil {
 		return err
@@ -128,7 +132,8 @@ func (e *Libp2pEndpoint) DialPeer(ctx context.Context, id address.NodeID) error 
 }
 
 func (e *Libp2pEndpoint) MaybeAddToPeerstore(ctx context.Context,
-	id address.NodeAddr, ttl time.Duration) error {
+	id address.NodeAddr, ttl time.Duration,
+) error {
 	_, span := util.StartSpan(ctx, "Libp2pEndpoint.MaybeAddToPeerstore",
 		trace.WithAttributes(attribute.String("PeerID", id.NodeID().String())))
 	defer span.End()
@@ -150,8 +155,8 @@ func (e *Libp2pEndpoint) MaybeAddToPeerstore(ctx context.Context,
 func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 	protoID address.ProtocolID, n address.NodeID, req message.MinKadMessage,
 	resp message.MinKadMessage, timeout time.Duration,
-	responseHandlerFn endpoint.ResponseHandlerFn) error {
-
+	responseHandlerFn endpoint.ResponseHandlerFn,
+) error {
 	_, span := util.StartSpan(ctx,
 		"Libp2pEndpoint.SendRequestHandleResponse", trace.WithAttributes(
 			attribute.String("PeerID", n.String()),
@@ -276,7 +281,7 @@ func (e *Libp2pEndpoint) PeerInfo(id address.NodeID) (peer.AddrInfo, error) {
 }
 
 func (e *Libp2pEndpoint) KadKey() key.KadKey {
-	return peerid.PeerID{ID: e.host.ID()}.Key()
+	return peerid.NewPeerID(e.host.ID()).Key()
 }
 
 func (e *Libp2pEndpoint) NetworkAddress(n address.NodeID) (address.NodeAddr, error) {
@@ -288,8 +293,8 @@ func (e *Libp2pEndpoint) NetworkAddress(n address.NodeID) (address.NodeAddr, err
 }
 
 func (e *Libp2pEndpoint) AddRequestHandler(protoID address.ProtocolID,
-	req message.MinKadMessage, reqHandler endpoint.RequestHandlerFn) error {
-
+	req message.MinKadMessage, reqHandler endpoint.RequestHandlerFn,
+) error {
 	protoReq, ok := req.(message.ProtoKadMessage)
 	if !ok {
 		return ErrRequireProtoKadMessage
@@ -326,7 +331,7 @@ func (e *Libp2pEndpoint) AddRequestHandler(protoID address.ProtocolID,
 				requester := addrinfo.NewAddrInfo(
 					e.host.Peerstore().PeerInfo(s.Conn().RemotePeer()),
 				)
-				resp, err := reqHandler(ctx, requester, req)
+				resp, err := reqHandler(ctx, requester.NodeID(), req)
 				if err != nil {
 					span.RecordError(err)
 					return
@@ -347,7 +352,6 @@ func (e *Libp2pEndpoint) AddRequestHandler(protoID address.ProtocolID,
 				}
 			}
 		}))
-
 	}
 	e.host.SetStreamHandler(protocol.ID(protoID), streamHandler)
 	return nil

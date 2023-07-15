@@ -45,7 +45,7 @@ func TestSimMessageHandling(t *testing.T) {
 	peerstoreTTL := time.Second // doesn't matter as we use fakeendpoint
 	numberOfCloserPeersToSend := 4
 
-	self := kadid.KadID{KadKey: []byte{0x00}} // 0000 0000
+	self := kadid.NewKadID([]byte{0x00}) // 0000 0000
 
 	router := fakeendpoint.NewFakeRouter()
 	sched := simplescheduler.NewSimpleScheduler(clk)
@@ -64,7 +64,7 @@ func TestSimMessageHandling(t *testing.T) {
 	s0 := NewBasicServer(rt, fakeEndpoint, WithPeerstoreTTL(peerstoreTTL),
 		WithNumberUsefulCloserPeers(numberOfCloserPeersToSend))
 
-	requester := kadid.KadID{KadKey: []byte{0b00000001}} // 0000 0001
+	requester := kadid.NewKadID([]byte{0b00000001}) // 0000 0001
 	fakeEndpoint.MaybeAddToPeerstore(ctx, requester, peerstoreTTL)
 
 	req0 := simmessage.NewSimRequest([]byte{0b00000000})
@@ -130,7 +130,7 @@ func TestInvalidSimRequests(t *testing.T) {
 	clk := clock.New()
 	router := fakeendpoint.NewFakeRouter()
 
-	self := kadid.KadID{KadKey: []byte{0x00}} // 0000 0000
+	self := kadid.NewKadID([]byte{0x00}) // 0000 0000
 
 	// create a valid server
 	sched := simplescheduler.NewSimpleScheduler(clk)
@@ -149,7 +149,7 @@ func TestInvalidSimRequests(t *testing.T) {
 	s = NewBasicServer(rt, fakeEndpoint)
 	require.NotNil(t, s)
 
-	requester := kadid.KadID{KadKey: []byte{0b00000001}} // 0000 0001
+	requester := kadid.NewKadID([]byte{0b00000001}) // 0000 0001
 
 	// invalid message format (not a SimMessage)
 	req0 := struct{}{}
@@ -177,7 +177,7 @@ func TestSimRequestNoNetworkAddress(t *testing.T) {
 	clk := clock.New()
 	router := fakeendpoint.NewFakeRouter()
 
-	var self = kadid.KadID{KadKey: make([]byte, keylen)} // 0000 0000
+	self := kadid.NewKadID(make([]byte, keylen)) // 0000 0000
 
 	// create a valid server
 	sched := simplescheduler.NewSimpleScheduler(clk)
@@ -201,7 +201,7 @@ func TestSimRequestNoNetworkAddress(t *testing.T) {
 
 	require.NotNil(t, s)
 
-	requester := kadid.KadID{KadKey: append([]byte{0x80}, make([]byte, keylen-1)...)}
+	requester := kadid.NewKadID(append([]byte{0x80}, make([]byte, keylen-1)...))
 
 	// sim request message (for any key)
 	req := simmessage.NewSimRequest(requester.Key())
@@ -304,7 +304,8 @@ type invalidEndpoint struct{}
 var _ endpoint.Endpoint = (*invalidEndpoint)(nil)
 
 func (e *invalidEndpoint) MaybeAddToPeerstore(context.Context, address.NodeAddr,
-	time.Duration) error {
+	time.Duration,
+) error {
 	return nil
 }
 

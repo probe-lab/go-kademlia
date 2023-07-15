@@ -36,7 +36,7 @@ func (ka *KadAddr) RemoveAddr(addr string) {
 }
 
 func (ka *KadAddr) NodeID() address.NodeID {
-	return ka.id
+	return ka.id.NodeID()
 }
 
 func (ka *KadAddr) Addresses() []address.Addr {

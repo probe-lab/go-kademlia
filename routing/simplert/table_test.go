@@ -48,7 +48,7 @@ func TestBasic(t *testing.T) {
 func TestAddPeer(t *testing.T) {
 	ctx := context.Background()
 
-	p := peerid.PeerID{ID: peer.ID("")}
+	p := peerid.NewPeerID(peer.ID(""))
 
 	rt := New(key0, 2)
 
@@ -138,7 +138,7 @@ func TestAddPeer(t *testing.T) {
 
 func TestRemovePeer(t *testing.T) {
 	ctx := context.Background()
-	p := peerid.PeerID{ID: peer.ID("")}
+	p := peerid.NewPeerID(peer.ID(""))
 
 	rt := New(key0, 2)
 	rt.addPeer(ctx, key1, p)
@@ -152,7 +152,7 @@ func TestRemovePeer(t *testing.T) {
 
 func TestFindPeer(t *testing.T) {
 	ctx := context.Background()
-	p := peerid.PeerID{ID: peer.ID("QmPeer")}
+	p := peerid.NewPeerID(peer.ID(""))
 
 	rt := New(key0, 2)
 	success, err := rt.addPeer(ctx, key1, p)
@@ -179,9 +179,9 @@ func TestFindPeer(t *testing.T) {
 func TestNearestPeers(t *testing.T) {
 	ctx := context.Background()
 
-	peerIds := make([]peerid.PeerID, 0, 12)
+	peerIds := make([]*peerid.PeerID, 0, 12)
 	for i := 0; i < 12; i++ {
-		peerIds = append(peerIds, peerid.PeerID{ID: peer.ID(fmt.Sprintf("QmPeer%d", i))})
+		peerIds = append(peerIds, peerid.NewPeerID(peer.ID(fmt.Sprintf("QmPeer%d", i))))
 	}
 
 	bucketSize := 5

@@ -542,14 +542,23 @@ func NewNode(id string, k key.KadKey) *node {
 	}
 }
 
-func (n node) String() string {
+func (n *node) String() string {
 	return n.id
 }
 
-func (n node) Key() key.KadKey {
+func (n *node) Key() key.KadKey {
 	return n.key
 }
 
-func (n node) NodeID() address.NodeID {
-	return &n
+func (n *node) NodeID() address.NodeID {
+	return n
+}
+
+func (n node) Equal(o address.NodeID) bool {
+	switch to := o.(type) {
+	case *node:
+		return n.id == to.id
+	default:
+		return false
+	}
 }
