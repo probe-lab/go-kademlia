@@ -180,6 +180,11 @@ type QueryStats struct {
 
 // States
 
+type QueryPoolState interface {
+	task.State
+	queryPoolState()
+}
+
 // QueryPoolIdle indicates that the pool is idle, i.e. there are no queries to process.
 type QueryPoolIdle struct{}
 
@@ -215,7 +220,19 @@ type QueryPoolTimeout struct {
 	Stats   QueryStats
 }
 
+// queryPoolState() ensures that only QueryPool states can be assigned to a QueryPoolState.
+func (*QueryPoolIdle) queryPoolState()                {}
+func (*QueryPoolWaiting) queryPoolState()             {}
+func (*QueryPoolWaitingMessage) queryPoolState()      {}
+func (*QueryPoolWaitingWithCapacity) queryPoolState() {}
+func (*QueryPoolFinished) queryPoolState()            {}
+func (*QueryPoolTimeout) queryPoolState()             {}
+
 // General Peer Iterator states
+type PeerIterState interface {
+	task.State
+	peerIterState()
+}
 
 // PeerIterStateFinished indicates that the PeerIter has finished.
 type PeerIterStateFinished struct{}
@@ -235,6 +252,13 @@ type PeerIterStateWaitingAtCapacity struct{}
 // PeerIterStateWaiting indicates that the PeerIter is waiting for results but has no further peers to contact.
 type PeerIterStateWaitingWithCapacity struct{}
 
+// peerIterState() ensures that only PeerIter states can be assigned to a PeerIterState.
+func (*PeerIterStateFinished) peerIterState()            {}
+func (*PeerIterStateWaitingMessage) peerIterState()      {}
+func (*PeerIterStateWaiting) peerIterState()             {}
+func (*PeerIterStateWaitingAtCapacity) peerIterState()   {}
+func (*PeerIterStateWaitingWithCapacity) peerIterState() {}
+
 // A PeerIter iterates peers according to some strategy.
 type PeerIter interface {
 	task.Task
@@ -249,7 +273,7 @@ type ClosestPeersIter struct {
 
 	// current state of the iterator
 	mu    sync.Mutex
-	state task.State
+	state ClosestPeersIterState
 
 	// The closest peers to the target, ordered by increasing distance.
 	peerlist *PeerList
@@ -386,7 +410,7 @@ func (pi *ClosestPeersIter) Cancel(ctx context.Context) {
 	pi.setState(&ClosestPeersIterStateFinished{})
 }
 
-func (pi *ClosestPeersIter) setState(st task.State) {
+func (pi *ClosestPeersIter) setState(st ClosestPeersIterState) {
 	pi.mu.Lock()
 	defer pi.mu.Unlock()
 	pi.state = st
@@ -476,6 +500,11 @@ func (pi *ClosestPeersIter) OnMessageSuccess(ctx context.Context, node address.N
 
 // States for ClosestPeersIter
 
+type ClosestPeersIterState interface {
+	task.State
+	closestPeersIterState()
+}
+
 // ClosestPeersIterStateFinished indicates the ClosestPeersIter has finished
 type ClosestPeersIterStateFinished struct{}
 
@@ -486,9 +515,14 @@ type ClosestPeersIterStateStalled struct{}
 // ClosestPeersIterStateIterating indicates the ClosestPeersIter is still making progress
 type ClosestPeersIterStateIterating struct{}
 
+// closestPeersIterState() ensures that only ClosestPeersIter states can be assigned to a ClosestPeersIterState.
+func (*ClosestPeersIterStateFinished) closestPeersIterState()  {}
+func (*ClosestPeersIterStateStalled) closestPeersIterState()   {}
+func (*ClosestPeersIterStateIterating) closestPeersIterState() {}
+
 type PeerInfo struct {
 	Distance key.KadKey
-	State    task.State
+	State    PeerState
 	NodeID   address.NodeID
 }
 
@@ -527,6 +561,11 @@ func (pq *PeerList) Exists(id address.NodeID) bool {
 	return false
 }
 
+type PeerState interface {
+	task.State
+	peerState()
+}
+
 // PeerStateNotContacted indicates that the peer has not been contacted yet.
 type PeerStateNotContacted struct{}
 
@@ -543,3 +582,10 @@ type PeerStateFailed struct{}
 
 // PeerStateSucceeded indicates that the attempt to contact the peer succeeded.
 type PeerStateSucceeded struct{}
+
+// peerState() ensures that only peer states can be assigned to a PeerState.
+func (*PeerStateNotContacted) peerState() {}
+func (*PeerStateWaiting) peerState()      {}
+func (*PeerStateUnresponsive) peerState() {}
+func (*PeerStateFailed) peerState()       {}
+func (*PeerStateSucceeded) peerState()    {}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/message"
@@ -14,8 +15,9 @@ type KademliaHandler struct {
 	qp             *QueryPool
 	mr             *MessageRouter
 	notify         chan struct{} // channel to notify there is potentially work to do
-	outboundEvents chan Event
-	inboundEvents  chan Event
+	outboundEvents chan KademliaHandlerEvent
+	inboundEvents  chan KademliaHandlerInternalEvent
+	startOnce      sync.Once
 }
 
 func NewKademliaHandler(node *FakeNode, mr *MessageRouter) *KademliaHandler {
@@ -25,13 +27,16 @@ func NewKademliaHandler(node *FakeNode, mr *MessageRouter) *KademliaHandler {
 		qp:             qp,
 		mr:             mr,
 		notify:         make(chan struct{}, 20),
-		outboundEvents: make(chan Event, 20),
-		inboundEvents:  make(chan Event, 20),
+		outboundEvents: make(chan KademliaHandlerEvent, 20),
+		inboundEvents:  make(chan KademliaHandlerInternalEvent, 20),
 	}
 }
 
-func (k *KademliaHandler) Start(ctx context.Context) <-chan Event {
-	go k.mainloop(ctx)
+func (k *KademliaHandler) Start(ctx context.Context) <-chan KademliaHandlerEvent {
+	// ensure there is only ever one mainloop
+	k.startOnce.Do(func() {
+		go k.mainloop(ctx)
+	})
 	return k.outboundEvents
 }
 
@@ -142,6 +147,11 @@ func (k *KademliaHandler) StopQuery(ctx context.Context, queryID QueryID) error 
 
 // Events emitted by the Kademlia Handler
 
+type KademliaHandlerEvent interface {
+	Event
+	kademliaHandlerEvent()
+}
+
 type KademliaRoutingUpdatedEvent struct{}
 
 type KademliaOutboundQueryProgressedEvent struct {
@@ -154,7 +164,18 @@ type KademliaUnroutablePeerEvent struct{}
 
 type KademliaRoutablePeerEvent struct{}
 
+// kademliaHandlerEvent() ensures that only KademliaHandler events can be assigned to a KademliaHandlerEvent.
+func (*KademliaRoutingUpdatedEvent) kademliaHandlerEvent()          {}
+func (*KademliaOutboundQueryProgressedEvent) kademliaHandlerEvent() {}
+func (*KademliaUnroutablePeerEvent) kademliaHandlerEvent()          {}
+func (*KademliaRoutablePeerEvent) kademliaHandlerEvent()            {}
+
 // Internal events for the Kademlia Handler
+
+type KademliaHandlerInternalEvent interface {
+	Event
+	kademliaHandlerInternalEvent()
+}
 
 type UnroutablePeerEvent struct {
 	NodeID address.NodeID
@@ -170,3 +191,7 @@ type MessageResponseEvent struct {
 	QueryID  QueryID
 	Response message.MinKadResponseMessage
 }
+
+func (*UnroutablePeerEvent) kademliaHandlerInternalEvent()  {}
+func (*MessageFailedEvent) kademliaHandlerInternalEvent()   {}
+func (*MessageResponseEvent) kademliaHandlerInternalEvent() {}
