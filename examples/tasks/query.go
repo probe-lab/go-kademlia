@@ -10,10 +10,9 @@ import (
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/message"
-	"github.com/plprobelab/go-kademlia/task"
 )
 
-var _ task.Task[QueryPoolState] = (*QueryPool)(nil)
+var _ Task[QueryPoolState] = (*QueryPool)(nil)
 
 type QueryPool struct {
 	self        *FakeNode
@@ -142,7 +141,7 @@ func (q *QueryPool) Cancel(context.Context) {
 	panic("not implemented")
 }
 
-var _ task.Task[QueryState] = (*Query)(nil)
+var _ Task[QueryState] = (*Query)(nil)
 
 type Query struct {
 	id    QueryID
@@ -186,7 +185,7 @@ type QueryStats struct {
 // States
 
 type QueryPoolState interface {
-	task.State
+	State
 	queryPoolState()
 }
 
@@ -235,7 +234,7 @@ func (*QueryPoolTimeout) queryPoolState()             {}
 
 // General Peer Iterator states
 type PeerIterState interface {
-	task.State
+	State
 	peerIterState()
 }
 
@@ -266,7 +265,7 @@ func (*PeerIterStateWaitingWithCapacity) peerIterState() {}
 
 // A PeerIter iterates peers according to some strategy.
 type PeerIter interface {
-	task.Task[PeerIterState]
+	Task[PeerIterState]
 	OnMessageSuccess(context.Context, address.NodeID, message.MinKadResponseMessage)
 }
 
@@ -508,7 +507,7 @@ func (pi *ClosestPeersIter) OnMessageSuccess(ctx context.Context, node address.N
 // States for ClosestPeersIter
 
 type ClosestPeersIterState interface {
-	task.State
+	State
 	closestPeersIterState()
 }
 
@@ -569,7 +568,7 @@ func (pq *PeerList) Exists(id address.NodeID) bool {
 }
 
 type PeerState interface {
-	task.State
+	State
 	peerState()
 }
 

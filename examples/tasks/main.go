@@ -10,7 +10,6 @@ import (
 	"github.com/plprobelab/go-kademlia/network/address/kadaddr"
 	"github.com/plprobelab/go-kademlia/network/address/kadid"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
-	"github.com/plprobelab/go-kademlia/task"
 )
 
 func main() {
@@ -93,11 +92,11 @@ func connectNodes(ctx context.Context, a, b *FakeNode) {
 	b.AddNodeAddr(ctx, a.Addr())
 }
 
-func traceReturnState(loc string, st task.State) {
+func traceReturnState(loc string, st State) {
 	trace("  %s: returning state=%T", loc, st)
 }
 
-func traceCurrentState(loc string, st task.State) {
+func traceCurrentState(loc string, st State) {
 	trace("  %s: current state=%T", loc, st)
 }
 
