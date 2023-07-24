@@ -11,7 +11,7 @@ import (
 
 // Key256 is a 256-bit Kademlia key.
 type Key256 struct {
-	bits *[32]byte // this is a pointer to keep the size of Key256 small since it is often passed as argument
+	b *[32]byte // this is a pointer to keep the size of Key256 small since it is often passed as argument
 }
 
 var _ kad.Key[Key256] = Key256{}
@@ -21,23 +21,23 @@ func NewKey256(data []byte) Key256 {
 	if len(data) != 32 {
 		panic("invalid data length for key")
 	}
-	var bits [32]byte
-	copy(bits[:], data)
-	return Key256{bits: &bits}
+	var b [32]byte
+	copy(b[:], data)
+	return Key256{b: &b}
 }
 
 // ZeroKey256 returns a 256-bit Kademlia key with all bits zeroed.
 func ZeroKey256() Key256 {
-	var bits [32]byte
-	return Key256{bits: &bits}
+	var b [32]byte
+	return Key256{b: &b}
 }
 
 // Bit returns the value of the i'th bit of the key from most significant to least.
 func (k Key256) Bit(i int) uint {
-	if k.bits == nil {
+	if k.b == nil {
 		return 0
 	}
-	if k.bits[i/8]&(byte(1)<<(7-i%8)) == 0 {
+	if k.b[i/8]&(byte(1)<<(7-i%8)) == 0 {
 		return 0
 	} else {
 		return 1
@@ -52,28 +52,28 @@ func (Key256) BitLen() int {
 // Xor returns the result of the eXclusive OR operation between the key and another key of the same type.
 func (k Key256) Xor(o Key256) Key256 {
 	var xored [32]byte
-	if k.bits != nil && o.bits != nil {
+	if k.b != nil && o.b != nil {
 		for i := 0; i < 32; i++ {
-			xored[i] = k.bits[i] ^ o.bits[i]
+			xored[i] = k.b[i] ^ o.b[i]
 		}
-	} else if k.bits != nil && o.bits == nil {
-		copy(xored[:], k.bits[:])
-	} else if k.bits == nil && o.bits != nil {
-		copy(xored[:], o.bits[:])
+	} else if k.b != nil && o.b == nil {
+		copy(xored[:], k.b[:])
+	} else if k.b == nil && o.b != nil {
+		copy(xored[:], o.b[:])
 	}
-	return Key256{bits: &xored}
+	return Key256{b: &xored}
 }
 
 // CommonPrefixLength returns the number of leading bits the key shares with another key of the same type.
 func (k Key256) CommonPrefixLength(o Key256) int {
-	if k.bits == nil || o.bits == nil {
+	if k.b == nil || o.b == nil {
 		return 256
 	}
 	var x byte
 	for i := 0; i < 32; i++ {
-		x = k.bits[i] ^ o.bits[i]
+		x = k.b[i] ^ o.b[i]
 		if x != 0 {
-			return i*8 + 7 - int(math.Log2(float64(x)))
+			return i*8 + 7 - int(math.Log2(float64(x))) // TODO: make this more efficient
 		}
 	}
 	return 256
@@ -81,15 +81,15 @@ func (k Key256) CommonPrefixLength(o Key256) int {
 
 // Compare compares the numeric value of the key with another key of the same type.
 func (k Key256) Compare(o Key256) int {
-	return bytes.Compare(k.bits[:], o.bits[:])
+	return bytes.Compare(k.b[:], o.b[:])
 }
 
 // HexString returns a string containing the hexadecimal representation of the key.
 func (k Key256) HexString() string {
-	if k.bits == nil {
+	if k.b == nil {
 		return ""
 	}
-	return hex.EncodeToString(k.bits[:])
+	return hex.EncodeToString(k.b[:])
 }
 
 // Key32 is a 32-bit Kademlia key, suitable for testing and simulation of small networks.
