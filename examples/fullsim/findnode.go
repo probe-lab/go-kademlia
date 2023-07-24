@@ -78,7 +78,7 @@ func findNode(ctx context.Context) {
 		// create a fake endpoint for the node, communicating through the router
 		eps[i] = sim.NewEndpoint(nodes[i].NodeID(), schedulers[i], router)
 		// create a server instance for the node
-		servers[i] = sim.NewServer[key.Key8](rts[i], eps[i], sim.DefaultConfig())
+		servers[i] = sim.NewServer[key.Key8](rts[i], eps[i], sim.DefaultServerConfig())
 		// add the server request handler for protoID to the endpoint
 		err := eps[i].AddRequestHandler(protoID, nil, servers[i].HandleRequest)
 		if err != nil {

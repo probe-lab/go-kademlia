@@ -24,9 +24,9 @@ type Server[K kad.Key[K]] struct {
 	numberOfCloserPeersToSend int
 }
 
-func NewServer[K kad.Key[K]](rt routing.Table[K], endpoint endpoint.Endpoint[K], cfg *Config) *Server[K] {
+func NewServer[K kad.Key[K]](rt routing.Table[K], endpoint endpoint.Endpoint[K], cfg *ServerConfig) *Server[K] {
 	if cfg == nil {
-		cfg = DefaultConfig()
+		cfg = DefaultServerConfig()
 	}
 	return &Server[K]{
 		rt:                        rt,
@@ -95,13 +95,13 @@ func (s *Server[K]) HandleFindNodeRequest(ctx context.Context,
 	return resp, nil
 }
 
-type Config struct {
+type ServerConfig struct {
 	PeerstoreTTL            time.Duration
 	NumberUsefulCloserPeers int
 }
 
-func DefaultConfig() *Config {
-	return &Config{
+func DefaultServerConfig() *ServerConfig {
+	return &ServerConfig{
 		PeerstoreTTL:            time.Second,
 		NumberUsefulCloserPeers: 4,
 	}

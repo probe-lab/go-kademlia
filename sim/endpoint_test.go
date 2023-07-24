@@ -100,7 +100,7 @@ func TestEndpoint(t *testing.T) {
 	sched0 := simplescheduler.NewSimpleScheduler(clk)
 	fakeEndpoint0 := NewEndpoint[key.Key256](node0, sched0, router)
 	rt0 := simplert.New(node0.Key(), 2)
-	serv0 := NewServer[key.Key256](rt0, fakeEndpoint0, DefaultConfig())
+	serv0 := NewServer[key.Key256](rt0, fakeEndpoint0, DefaultServerConfig())
 	err = fakeEndpoint0.AddRequestHandler(protoID, nil, serv0.HandleRequest)
 	require.NoError(t, err)
 	err = fakeEndpoint0.AddRequestHandler(protoID, nil, nil)

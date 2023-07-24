@@ -54,7 +54,7 @@ func TestMessageHandling(t *testing.T) {
 		require.True(t, success)
 	}
 
-	s0 := NewServer[key.Key8](rt, fakeEndpoint, &Config{
+	s0 := NewServer[key.Key8](rt, fakeEndpoint, &ServerConfig{
 		PeerstoreTTL:            peerstoreTTL,
 		NumberUsefulCloserPeers: numberOfCloserPeersToSend,
 	})
@@ -96,7 +96,7 @@ func TestMessageHandling(t *testing.T) {
 	}
 
 	numberOfCloserPeersToSend = 3
-	s1 := NewServer[key.Key8](rt, fakeEndpoint, &Config{
+	s1 := NewServer[key.Key8](rt, fakeEndpoint, &ServerConfig{
 		PeerstoreTTL:            peerstoreTTL,
 		NumberUsefulCloserPeers: numberOfCloserPeersToSend,
 	})
@@ -142,7 +142,7 @@ func TestInvalidSimRequests(t *testing.T) {
 		require.True(t, success)
 	}
 
-	s = NewServer[key.Key8](rt, fakeEndpoint, DefaultConfig())
+	s = NewServer[key.Key8](rt, fakeEndpoint, DefaultServerConfig())
 	require.NotNil(t, s)
 
 	requester := kadid.NewKadID(key.Key8(0b00000001)) // 0000 0001
@@ -181,7 +181,7 @@ func TestRequestNoNetworkAddress(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, success)
 
-	s := NewServer[key.Key8](rt, fakeEndpoint, DefaultConfig())
+	s := NewServer[key.Key8](rt, fakeEndpoint, DefaultServerConfig())
 	require.NotNil(t, s)
 
 	requester := kadid.NewKadID(key.Key8(0x80))

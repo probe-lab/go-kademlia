@@ -226,7 +226,7 @@ func simulationSetup(t *testing.T, ctx context.Context, n, bucketSize int,
 		ids[i] = kadaddr.NewKadAddr(kadid.NewKadID(key.Key8(uint8(i*spacing))), nil)
 		fendpoints[i] = sim.NewEndpoint(ids[i].NodeID(), scheds[i], router)
 		rts[i] = simplert.New(ids[i].NodeID().Key(), bucketSize)
-		cfg := sim.DefaultConfig()
+		cfg := sim.DefaultServerConfig()
 		cfg.NumberUsefulCloserPeers = bucketSize
 		servers[i] = sim.NewServer[key.Key8](rts[i], fendpoints[i], cfg)
 		fendpoints[i].AddRequestHandler(protoID, &sim.Message[key.Key8]{}, servers[i].HandleRequest)
