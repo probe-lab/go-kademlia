@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
@@ -33,11 +32,6 @@ func main() {
 	}
 	fmt.Printf("FindNode found address for: %s\n", addr.NodeID().String())
 }
-
-const (
-	peerstoreTTL = 10 * time.Minute                  // duration for which a peer is kept in the peerstore
-	protoID      = address.ProtocolID("/test/1.0.0") // protocol ID for the test
-)
 
 func setupSimulation(ctx context.Context) ([]*FakeNode[key.Key256], *MessageRouter[key.Key256]) {
 	// create node identifiers

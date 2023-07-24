@@ -97,20 +97,6 @@ func (tr *Trie[K, D]) shrink() {
 	}
 }
 
-func (tr *Trie[K, D]) firstNonEmptyLeaf() *Trie[K, D] {
-	if tr.IsLeaf() {
-		if tr.HasKey() {
-			return tr
-		}
-		return nil
-	}
-	f := tr.branch[0].firstNonEmptyLeaf()
-	if f != nil {
-		return f
-	}
-	return tr.branch[1].firstNonEmptyLeaf()
-}
-
 // Add attempts to add a key to the trie, mutating the trie.
 // Returns true if the key was added, false otherwise.
 func (tr *Trie[K, D]) Add(kk K, data D) (bool, error) {

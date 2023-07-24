@@ -9,8 +9,6 @@ import (
 	"github.com/plprobelab/go-kademlia/kad"
 )
 
-var keysize = 4
-
 func TestKey256(t *testing.T) {
 	tester := &KeyTester[Key256]{
 		// kt.Key0 is 00000...000
