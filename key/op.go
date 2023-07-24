@@ -39,7 +39,17 @@ func HexString[K kad.Key[K]](k K) string {
 	h := [...]byte{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'}
 
 	prebits := k.BitLen() % 4
-	// TODO: deal with initial nibble
+	if prebits > 0 {
+		// deal with initial nibble for key lengths that aren't a multiple of 4
+		var n byte
+		n |= byte(k.Bit(0))
+		for i := 1; i < prebits; i++ {
+			n <<= 1
+			n |= byte(k.Bit(i))
+		}
+		b.WriteByte(h[n])
+	}
+
 	for i := prebits; i < k.BitLen(); i += 4 {
 		var n byte
 		n |= byte(k.Bit(i)) << 3

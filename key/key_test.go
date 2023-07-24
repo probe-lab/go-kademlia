@@ -2,6 +2,7 @@ package key
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -63,6 +64,21 @@ func TestKey8(t *testing.T) {
 	tester.RunTests(t)
 }
 
+// TestBitStrKey7 tests a strange 7-bit Kademlia key
+func TestBitStrKey7(t *testing.T) {
+	tester := &KeyTester[BitStrKey]{
+		Key0:     BitStrKey("0000000"),
+		Key1:     BitStrKey("0000001"),
+		Key2:     BitStrKey("0000010"),
+		Key1xor2: BitStrKey("0000011"),
+		Key100:   BitStrKey("1000000"),
+		Key010:   BitStrKey("0100000"),
+		KeyX:     BitStrKey("1010110"),
+	}
+
+	tester.RunTests(t)
+}
+
 type KeyTester[K kad.Key[K]] struct {
 	// Key 0 is zero
 	Key0 K
@@ -93,7 +109,7 @@ func (kt *KeyTester[K]) RunTests(t *testing.T) {
 	t.Run("Compare", kt.TestCompare)
 	t.Run("Bit", kt.TestBit)
 	t.Run("BitString", kt.TestBitString)
-	// t.Run("HexString", kt.TestHexString)
+	t.Run("HexString", kt.TestHexString)
 }
 
 func (kt *KeyTester[K]) TestXor(t *testing.T) {
@@ -182,49 +198,97 @@ func (kt *KeyTester[K]) TestBitString(t *testing.T) {
 	}
 }
 
-// func (kt *KeyTester[K]) TestHexString(t *testing.T) {
-// 	str := HexString(kt.KeyX)
+func (kt *KeyTester[K]) TestHexString(t *testing.T) {
+	str := HexString(kt.KeyX)
+	t.Logf("HexString(%v)=%s", kt.KeyX, str)
 
-// 	bytelen := (kt.KeyX.BitLen() + 3) / 4
-// 	require.Equal(t, bytelen, len(str))
+	bitpos := kt.KeyX.BitLen() - 1
 
-// 	for i := 0; i < bytelen; i++ {
+	for i := len(str) - 1; i >= 0; i-- {
+		v, err := strconv.ParseInt(string(str[i]), 16, 8)
+		require.NoError(t, err)
+		mask := uint(0x1)
+		for b := 0; b < 4; b++ {
+			got := (uint(v) & mask) >> b
+			want := kt.KeyX.Bit(bitpos)
+			require.Equal(t, want, got, fmt.Sprintf("bit %d: (%04b & %04b)>>%d = %d, wanted kt.KeyX.Bit(%d)=%d", bitpos, uint(v), b, mask, (uint(v)&mask), bitpos, want))
+			bitpos--
+			if bitpos < 0 {
+				break
+			}
+			mask <<= 1
+		}
 
-// 		for j := 0; j < 8; j++ {
-// 			bitpos := kt.KeyX.BitLen() - (i*8 + j)
-// 			if bitpos >
-// 			require.GreaterOrEqual(t, kt.KeyX.BitLen(), bitpos)
+		if bitpos < 0 && i > 0 {
+			t.Errorf("hex string had length %d, but expected %d", len(str), (kt.KeyX.BitLen()+3)/4)
+			break
+		}
+	}
 
-// 		}
-// 	}
+	if bitpos >= 0 {
+		t.Errorf("hex string had length %d, but expected %d", len(str), (kt.KeyX.BitLen()+3)/4)
+	}
+}
 
-// 	// for i := 0; i < kt.KeyX.BitLen(); i++ {
-// 	// 	expected := byte('0')
-// 	// 	if kt.KeyX.Bit(i) == 1 {
-// 	// 		expected = byte('1')
-// 	// 	}
-// 	// }
-// }
+// BitStrKey is a key represented by a string of 1's and 0's
+type BitStrKey string
 
-// func TestHexString(t *testing.T) {
-// 	t.Run("bitlen32", func(t *testing.T) {
-// 		kk := NewByteKey([]byte{0b01100110, 0b11111111, 0b00000000, 0b10101010})
-// 		require.Equal(t, "66ff00aa", HexString(kk))
-// 	})
-// 	t.Run("bitlen8", func(t *testing.T) {
-// 		kk := NewByteKey([]byte{0b01100110})
-// 		require.Equal(t, "66", HexString(kk))
-// 	})
-// 	t.Run("bitlen8zero", func(t *testing.T) {
-// 		kk := NewByteKey([]byte{0})
-// 		require.Equal(t, "00", HexString(kk))
-// 	})
-// 	t.Run("bitlen12", func(t *testing.T) {
-// 		kk := newBitKey(12, 0b111111111111)
-// 		require.Equal(t, "fff", HexString(kk))
-// 	})
-// 	t.Run("bitlen20", func(t *testing.T) {
-// 		kk := newBitKey(20, 0b00001111111111110000)
-// 		require.Equal(t, "0fff0", HexString(kk))
-// 	})
-// }
+var _ kad.Key[BitStrKey] = BitStrKey("1010")
+
+func (k BitStrKey) BitLen() int {
+	return len(k)
+}
+
+func (k BitStrKey) Bit(i int) uint {
+	if i < 0 || i > len(k) {
+		panic(bitPanicMsg)
+	}
+	if k[i] == '1' {
+		return 1
+	} else if k[i] == '0' {
+		return 0
+	}
+	panic("BitStrKey: not a binary string")
+}
+
+func (k BitStrKey) Xor(o BitStrKey) BitStrKey {
+	if len(k) != len(o) {
+		panic("BitStrKey: other key has different length")
+	}
+	buf := make([]byte, len(k))
+	for i := range buf {
+		if k[i] != o[i] {
+			buf[i] = '1'
+		} else {
+			buf[i] = '0'
+		}
+	}
+	return BitStrKey(string(buf))
+}
+
+func (k BitStrKey) CommonPrefixLength(o BitStrKey) int {
+	if len(k) != len(o) {
+		panic("BitStrKey: other key has different length")
+	}
+	for i := 0; i < len(k); i++ {
+		if k[i] != o[i] {
+			return i
+		}
+	}
+	return len(k)
+}
+
+func (k BitStrKey) Compare(o BitStrKey) int {
+	if len(k) != len(o) {
+		panic("BitStrKey: other key has different length")
+	}
+	for i := 0; i < len(k); i++ {
+		if k[i] != o[i] {
+			if k[i] < o[i] {
+				return -1
+			}
+			return 1
+		}
+	}
+	return 0
+}
