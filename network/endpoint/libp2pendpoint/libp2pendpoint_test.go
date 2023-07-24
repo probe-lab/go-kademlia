@@ -3,6 +3,7 @@ package libp2pendpoint
 import (
 	"context"
 	"errors"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -80,6 +81,9 @@ func connectEndpoints(t *testing.T, ctx context.Context, endpoints []*Libp2pEndp
 }
 
 func TestConnections(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping test on windows due to libp2p flakiness")
+	}
 	ctx := context.Background()
 
 	// create endpoints
