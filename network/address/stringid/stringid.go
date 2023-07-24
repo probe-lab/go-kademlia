@@ -8,7 +8,7 @@ import (
 
 type StringID string
 
-var _ address.NodeAddr = (*StringID)(nil)
+var _ address.NodeAddr[key.Key256] = (*StringID)(nil)
 
 func NewStringID(s string) *StringID {
 	return (*StringID)(&s)
@@ -18,11 +18,11 @@ func (s StringID) String() string {
 	return string(s)
 }
 
-func (s StringID) Key() key.KadKey {
+func (s StringID) Key() key.Key256 {
 	return builder.StringKadID(s.String())
 }
 
-func (s StringID) NodeID() address.NodeID {
+func (s StringID) NodeID() address.NodeID[key.Key256] {
 	return &s
 }
 

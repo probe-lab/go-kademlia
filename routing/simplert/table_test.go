@@ -9,8 +9,6 @@ import (
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/peerid"
-	si "github.com/plprobelab/go-kademlia/network/address/stringid"
-	"github.com/plprobelab/go-kademlia/routing"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,18 +21,18 @@ func zeroBytes(n int) []byte {
 }
 
 var (
-	key0  = key.KadKey(zeroBytes(32))                          // 000000...000
-	key1  = key.KadKey(append([]byte{0x40}, zeroBytes(31)...)) // 010000...000
-	key2  = key.KadKey(append([]byte{0x80}, zeroBytes(31)...)) // 100000...000
-	key3  = key.KadKey(append([]byte{0xc0}, zeroBytes(31)...)) // 110000...000
-	key4  = key.KadKey(append([]byte{0xe0}, zeroBytes(31)...)) // 111000...000
-	key5  = key.KadKey(append([]byte{0x60}, zeroBytes(31)...)) // 011000...000
-	key6  = key.KadKey(append([]byte{0x70}, zeroBytes(31)...)) // 011100...000
-	key7  = key.KadKey(append([]byte{0x18}, zeroBytes(31)...)) // 000110...000
-	key8  = key.KadKey(append([]byte{0x14}, zeroBytes(31)...)) // 000101...000
-	key9  = key.KadKey(append([]byte{0x10}, zeroBytes(31)...)) // 000100...000
-	key10 = key.KadKey(append([]byte{0x20}, zeroBytes(31)...)) // 001000...000
-	key11 = key.KadKey(append([]byte{0x30}, zeroBytes(31)...)) // 001100...100
+	key0  = key.NewKey256(zeroBytes(32))                          // 000000...000
+	key1  = key.NewKey256(append([]byte{0x40}, zeroBytes(31)...)) // 010000...000
+	key2  = key.NewKey256(append([]byte{0x80}, zeroBytes(31)...)) // 100000...000
+	key3  = key.NewKey256(append([]byte{0xc0}, zeroBytes(31)...)) // 110000...000
+	key4  = key.NewKey256(append([]byte{0xe0}, zeroBytes(31)...)) // 111000...000
+	key5  = key.NewKey256(append([]byte{0x60}, zeroBytes(31)...)) // 011000...000
+	key6  = key.NewKey256(append([]byte{0x70}, zeroBytes(31)...)) // 011100...000
+	key7  = key.NewKey256(append([]byte{0x18}, zeroBytes(31)...)) // 000110...000
+	key8  = key.NewKey256(append([]byte{0x14}, zeroBytes(31)...)) // 000101...000
+	key9  = key.NewKey256(append([]byte{0x10}, zeroBytes(31)...)) // 000100...000
+	key10 = key.NewKey256(append([]byte{0x20}, zeroBytes(31)...)) // 001000...000
+	key11 = key.NewKey256(append([]byte{0x30}, zeroBytes(31)...)) // 001100...100
 )
 
 func TestBasic(t *testing.T) {
@@ -204,7 +202,7 @@ func TestNearestPeers(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, bucketSize, len(peers))
 
-	expectedOrder := []address.NodeID{peerIds[9], peerIds[8], peerIds[7], peerIds[10], peerIds[11]}
+	expectedOrder := []address.NodeID[key.Key256]{peerIds[9], peerIds[8], peerIds[7], peerIds[10], peerIds[11]}
 	require.Equal(t, expectedOrder, peers)
 
 	peers, err = rt.NearestPeers(ctx, key11, 2)
@@ -214,36 +212,9 @@ func TestNearestPeers(t *testing.T) {
 	// create routing table with a single duplicate peer
 	// useful to test peers sorting with duplicate (even tough it should never happen)
 	rt2 := New(key0, 2)
-	rt2.buckets[0] = append(rt2.buckets[0], peerInfo{peerIds[1], key1})
-	rt2.buckets[0] = append(rt2.buckets[0], peerInfo{peerIds[1], key1})
+	rt2.buckets[0] = append(rt2.buckets[0], peerInfo[key.Key256]{peerIds[1], key1})
+	rt2.buckets[0] = append(rt2.buckets[0], peerInfo[key.Key256]{peerIds[1], key1})
 	peers, err = rt2.NearestPeers(ctx, key0, 10)
 	require.NoError(t, err)
 	require.Equal(t, peers[0], peers[1])
-}
-
-func TestInvalidKeys(t *testing.T) {
-	ctx := context.Background()
-	dummyNodeId := si.StringID("dummy")
-	invalidKey := key.KadKey(zeroBytes(4)) // key is shorter (4 bytes only)
-
-	rt := New(key0, 2)
-	success, err := rt.addPeer(ctx, invalidKey, dummyNodeId)
-	require.Equal(t, routing.ErrWrongKeySize, err)
-	require.False(t, success)
-
-	bid, err := rt.BucketIdForKey(invalidKey)
-	require.Equal(t, routing.ErrWrongKeySize, err)
-	require.Equal(t, bid, 0)
-
-	success, err = rt.RemoveKey(ctx, invalidKey)
-	require.Equal(t, routing.ErrWrongKeySize, err)
-	require.False(t, success)
-
-	nodeID, err := rt.Find(ctx, invalidKey)
-	require.Equal(t, routing.ErrWrongKeySize, err)
-	require.Nil(t, nodeID)
-
-	nodeIDs, err := rt.NearestPeers(ctx, invalidKey, 2)
-	require.Equal(t, routing.ErrWrongKeySize, err)
-	require.Nil(t, nodeIDs)
 }

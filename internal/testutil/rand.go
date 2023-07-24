@@ -1,7 +1,6 @@
 package testutil
 
 import (
-	"encoding/binary"
 	"math/rand"
 	"strconv"
 
@@ -10,47 +9,37 @@ import (
 
 var rng = rand.New(rand.NewSource(299792458))
 
-// Random returns a KadKey with the specificed number of bits populated with random data.
-func Random(bits int) key.KadKey {
-	buf := make([]byte, (bits+7)/8)
-	rng.Read(buf)
-	return buf
+// RandomKey returns a random 32-bit Kademlia key.
+func RandomKey() key.Key32 {
+	return key.Key32(rng.Uint32())
 }
 
-// RandomWithPrefix returns a KadKey with the specificed number of bits having a prefix equal to the bit pattern held in s.
-// A prefix of up to 64 bits is supported.
-func RandomWithPrefix(s string, bits int) key.KadKey {
-	kk := Random(bits)
+// RandomKeyWithPrefix returns a 32-bit Kademlia key having a prefix equal to the bit pattern held in s and
+// random following bits. A prefix of up to 32 bits is supported.
+func RandomKeyWithPrefix(s string) key.Key32 {
+	kk := RandomKey()
 	if s == "" {
 		return kk
 	}
 
 	prefixbits := len(s)
-	if prefixbits > 64 {
-		panic("RandomWithPrefix: prefix too long")
-	} else if prefixbits > bits {
-		panic("RandomWithPrefix: prefix longer than key length")
+	if prefixbits > 32 {
+		panic("RandomKeyWithPrefix: prefix too long")
 	}
-	n, err := strconv.ParseInt(s, 2, 64)
+	n, err := strconv.ParseInt(s, 2, 32)
 	if err != nil {
-		panic("RandomWithPrefix: " + err.Error())
+		panic("RandomKeyWithPrefix: " + err.Error())
 	}
-	prefix := uint64(n) << (64 - prefixbits)
+	prefix := uint32(n) << (32 - prefixbits)
 
-	// sizes are in bytes
-	keySize := (bits + 7) / 8
-	bufSize := keySize
-	if bufSize < 8 {
-		bufSize = 8
-	}
+	v := uint32(kk) << prefixbits
+	v >>= prefixbits
 
-	buf := make([]byte, bufSize)
-	rng.Read(buf)
+	return key.Key32(v | prefix)
+}
 
-	lead := binary.BigEndian.Uint64(buf)
-	lead <<= prefixbits
-	lead >>= prefixbits
-	lead |= prefix
-	binary.BigEndian.PutUint64(buf, lead)
-	return key.KadKey(buf[:keySize])
+// Key256WithLeadingBytes returns a 256-bit Kademlia key consisting of the given leading bytes padded by
+// zero bytes to the end of the key.
+func Key256WithLeadingBytes(in []byte) key.Key256 {
+	return key.NewKey256(append(in, make([]byte, 32-len(in))...))
 }

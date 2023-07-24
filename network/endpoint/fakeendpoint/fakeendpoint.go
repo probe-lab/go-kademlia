@@ -8,7 +8,7 @@ import (
 	ba "github.com/plprobelab/go-kademlia/events/action/basicaction"
 	"github.com/plprobelab/go-kademlia/events/planner"
 	"github.com/plprobelab/go-kademlia/events/scheduler"
-	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"github.com/plprobelab/go-kademlia/network/message"
@@ -19,32 +19,29 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 )
 
-type FakeEndpoint struct {
-	self  address.NodeID
+type FakeEndpoint[K kad.Key[K]] struct {
+	self  address.NodeID[K]
 	sched scheduler.Scheduler // client
 
-	peerstore      map[string]address.NodeAddr
+	peerstore      map[string]address.NodeAddr[K]
 	connStatus     map[string]network.Connectedness
-	serverProtos   map[address.ProtocolID]endpoint.RequestHandlerFn // server
-	streamFollowup map[endpoint.StreamID]endpoint.ResponseHandlerFn // client
-	streamTimeout  map[endpoint.StreamID]planner.PlannedAction      // client
+	serverProtos   map[address.ProtocolID]endpoint.RequestHandlerFn[K] // server
+	streamFollowup map[endpoint.StreamID]endpoint.ResponseHandlerFn[K] // client
+	streamTimeout  map[endpoint.StreamID]planner.PlannedAction         // client
 
-	router *FakeRouter
+	router *FakeRouter[K]
 }
 
-var _ endpoint.NetworkedEndpoint = (*FakeEndpoint)(nil)
-var _ endpoint.SimEndpoint = (*FakeEndpoint)(nil)
-
-func NewFakeEndpoint(self address.NodeID, sched scheduler.Scheduler, router *FakeRouter) *FakeEndpoint {
-	e := &FakeEndpoint{
+func NewFakeEndpoint[K kad.Key[K]](self address.NodeID[K], sched scheduler.Scheduler, router *FakeRouter[K]) *FakeEndpoint[K] {
+	e := &FakeEndpoint[K]{
 		self:         self,
 		sched:        sched,
-		serverProtos: make(map[address.ProtocolID]endpoint.RequestHandlerFn),
+		serverProtos: make(map[address.ProtocolID]endpoint.RequestHandlerFn[K]),
 
-		peerstore:  make(map[string]address.NodeAddr),
+		peerstore:  make(map[string]address.NodeAddr[K]),
 		connStatus: make(map[string]network.Connectedness),
 
-		streamFollowup: make(map[endpoint.StreamID]endpoint.ResponseHandlerFn),
+		streamFollowup: make(map[endpoint.StreamID]endpoint.ResponseHandlerFn[K]),
 		streamTimeout:  make(map[endpoint.StreamID]planner.PlannedAction),
 
 		router: router,
@@ -55,7 +52,7 @@ func NewFakeEndpoint(self address.NodeID, sched scheduler.Scheduler, router *Fak
 	return e
 }
 
-func (e *FakeEndpoint) DialPeer(ctx context.Context, id address.NodeID) error {
+func (e *FakeEndpoint[K]) DialPeer(ctx context.Context, id address.NodeID[K]) error {
 	_, span := util.StartSpan(ctx, "DialPeer",
 		trace.WithAttributes(attribute.String("id", id.String())),
 	)
@@ -78,7 +75,7 @@ func (e *FakeEndpoint) DialPeer(ctx context.Context, id address.NodeID) error {
 
 // MaybeAddToPeerstore adds the given address to the peerstore. FakeEndpoint
 // doesn't take into account the ttl.
-func (e *FakeEndpoint) MaybeAddToPeerstore(ctx context.Context, id address.NodeAddr, ttl time.Duration) error {
+func (e *FakeEndpoint[K]) MaybeAddToPeerstore(ctx context.Context, id address.NodeAddr[K], ttl time.Duration) error {
 	strNodeID := id.NodeID().String()
 	_, span := util.StartSpan(ctx, "MaybeAddToPeerstore",
 		trace.WithAttributes(attribute.String("self", e.self.String())),
@@ -95,11 +92,11 @@ func (e *FakeEndpoint) MaybeAddToPeerstore(ctx context.Context, id address.NodeA
 	return nil
 }
 
-func (e *FakeEndpoint) SendRequestHandleResponse(ctx context.Context,
-	protoID address.ProtocolID, id address.NodeID, req message.MinKadMessage,
+func (e *FakeEndpoint[K]) SendRequestHandleResponse(ctx context.Context,
+	protoID address.ProtocolID, id address.NodeID[K], req message.MinKadMessage,
 	resp message.MinKadMessage, timeout time.Duration,
-	handleResp endpoint.ResponseHandlerFn) error {
-
+	handleResp endpoint.ResponseHandlerFn[K],
+) error {
 	ctx, span := util.StartSpan(ctx, "SendRequestHandleResponse",
 		trace.WithAttributes(attribute.Stringer("id", id)),
 	)
@@ -150,7 +147,7 @@ func (e *FakeEndpoint) SendRequestHandleResponse(ctx context.Context,
 }
 
 // Peerstore functions
-func (e *FakeEndpoint) Connectedness(id address.NodeID) (network.Connectedness, error) {
+func (e *FakeEndpoint[K]) Connectedness(id address.NodeID[K]) (network.Connectedness, error) {
 	if s, ok := e.connStatus[id.String()]; !ok {
 		return network.NotConnected, nil
 	} else {
@@ -158,23 +155,23 @@ func (e *FakeEndpoint) Connectedness(id address.NodeID) (network.Connectedness, 
 	}
 }
 
-func (e *FakeEndpoint) NetworkAddress(id address.NodeID) (address.NodeAddr, error) {
+func (e *FakeEndpoint[K]) NetworkAddress(id address.NodeID[K]) (address.NodeAddr[K], error) {
 	if ai, ok := e.peerstore[id.String()]; ok {
 		return ai, nil
 	}
-	if na, ok := id.(address.NodeAddr); ok {
+	if na, ok := id.(address.NodeAddr[K]); ok {
 		return na, nil
 	}
 	return nil, endpoint.ErrUnknownPeer
 }
 
-func (e *FakeEndpoint) KadKey() key.KadKey {
+func (e *FakeEndpoint[K]) KadKey() K {
 	return e.self.Key()
 }
 
-func (e *FakeEndpoint) HandleMessage(ctx context.Context, id address.NodeID,
-	protoID address.ProtocolID, sid endpoint.StreamID, msg message.MinKadMessage) {
-
+func (e *FakeEndpoint[K]) HandleMessage(ctx context.Context, id address.NodeID[K],
+	protoID address.ProtocolID, sid endpoint.StreamID, msg message.MinKadMessage,
+) {
 	_, span := util.StartSpan(ctx, "HandleMessage",
 		trace.WithAttributes(attribute.Stringer("id", id),
 			attribute.Int64("StreamID", int64(sid))))
@@ -191,7 +188,7 @@ func (e *FakeEndpoint) HandleMessage(ctx context.Context, id address.NodeID,
 		delete(e.streamFollowup, sid)
 		delete(e.streamTimeout, sid)
 
-		resp, ok := msg.(message.MinKadResponseMessage)
+		resp, ok := msg.(message.MinKadResponseMessage[K])
 		var err error
 		if ok {
 			for _, p := range resp.CloserNodes() {
@@ -220,8 +217,9 @@ func (e *FakeEndpoint) HandleMessage(ctx context.Context, id address.NodeID,
 	}
 }
 
-func (e *FakeEndpoint) AddRequestHandler(protoID address.ProtocolID,
-	req message.MinKadMessage, reqHandler endpoint.RequestHandlerFn) error {
+func (e *FakeEndpoint[K]) AddRequestHandler(protoID address.ProtocolID,
+	req message.MinKadMessage, reqHandler endpoint.RequestHandlerFn[K],
+) error {
 	if reqHandler == nil {
 		return endpoint.ErrNilRequestHandler
 	}
@@ -229,6 +227,6 @@ func (e *FakeEndpoint) AddRequestHandler(protoID address.ProtocolID,
 	return nil
 }
 
-func (e *FakeEndpoint) RemoveRequestHandler(protoID address.ProtocolID) {
+func (e *FakeEndpoint[K]) RemoveRequestHandler(protoID address.ProtocolID) {
 	delete(e.serverProtos, protoID)
 }

@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/plprobelab/go-kademlia/internal/testutil"
+	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/kadaddr"
 	"github.com/plprobelab/go-kademlia/network/address/kadid"
@@ -14,7 +16,7 @@ import (
 )
 
 func TestAddPeers(t *testing.T) {
-	target := kadid.NewKadID([]byte{0x00})
+	target := kadid.NewKadID(key.Key8(0x00))
 
 	// create empty peer list
 	pl := newPeerList(target.Key(), nil)
@@ -22,11 +24,11 @@ func TestAddPeers(t *testing.T) {
 	require.Nil(t, pl.closest)
 	require.Nil(t, pl.closestQueued)
 
-	initialIds := []address.NodeID{
-		kadid.NewKadID([]byte{0xa0}),
-		kadid.NewKadID([]byte{0x08}),
-		kadid.NewKadID([]byte{0x20}),
-		kadid.NewKadID([]byte{0xa0}), // duplicate with initialIds[0]
+	initialIds := []address.NodeID[key.Key8]{
+		kadid.NewKadID(key.Key8(0xa0)),
+		kadid.NewKadID(key.Key8(0x08)),
+		kadid.NewKadID(key.Key8(0x20)),
+		kadid.NewKadID(key.Key8(0xa0)), // duplicate with initialIds[0]
 	}
 
 	// add 4 peers (incl. 1 duplicate)
@@ -47,14 +49,14 @@ func TestAddPeers(t *testing.T) {
 	// end of the list
 	require.Nil(t, curr.next)
 
-	additionalIds := []address.NodeID{
-		kadid.NewKadID([]byte{0x40}),
-		kadid.NewKadID([]byte{0x20}), // duplicate with initialIds[2]
-		kadid.NewKadID([]byte{0x60}),
-		kadid.NewKadID([]byte{0x80}),
-		kadid.NewKadID([]byte{0x60}), // duplicate additionalIds[2]
-		kadid.NewKadID([]byte{0x18}),
-		kadid.NewKadID([]byte{0xf0}),
+	additionalIds := []address.NodeID[key.Key8]{
+		kadid.NewKadID(key.Key8(0x40)),
+		kadid.NewKadID(key.Key8(0x20)), // duplicate with initialIds[2]
+		kadid.NewKadID(key.Key8(0x60)),
+		kadid.NewKadID(key.Key8(0x80)),
+		kadid.NewKadID(key.Key8(0x60)), // duplicate additionalIds[2]
+		kadid.NewKadID(key.Key8(0x18)),
+		kadid.NewKadID(key.Key8(0xf0)),
 	}
 
 	// add 7 more peers (incl. 2 duplicates)
@@ -91,8 +93,8 @@ func TestAddPeers(t *testing.T) {
 	require.Nil(t, curr.next)
 
 	// add 1 more peer, the closest to target
-	newId := kadid.NewKadID([]byte{0x00})
-	pl.addToPeerlist([]address.NodeID{newId})
+	newId := kadid.NewKadID(key.Key8(0x00))
+	pl.addToPeerlist([]address.NodeID[key.Key8]{newId})
 	require.Equal(t, len(initialIds)-1+len(additionalIds)-2+1, pl.queuedCount)
 
 	// it must be the closest peer
@@ -100,16 +102,16 @@ func TestAddPeers(t *testing.T) {
 	require.Equal(t, newId, pl.closestQueued.id)
 
 	// add empty list
-	pl.addToPeerlist([]address.NodeID{})
+	pl.addToPeerlist([]address.NodeID[key.Key8]{})
 	require.Equal(t, len(initialIds)-1+len(additionalIds)-2+1, pl.queuedCount)
 
 	// add list containing nil element
-	pl.addToPeerlist([]address.NodeID{nil})
+	pl.addToPeerlist([]address.NodeID[key.Key8]{nil})
 	require.Equal(t, len(initialIds)-1+len(additionalIds)-2+1, pl.queuedCount)
 }
 
 func TestChangeStatus(t *testing.T) {
-	target := kadid.NewKadID([]byte{0x00})
+	target := kadid.NewKadID(key.Key8(0x00))
 
 	// create empty peer list
 	pl := newPeerList(target.Key(), nil)
@@ -119,9 +121,9 @@ func TestChangeStatus(t *testing.T) {
 	require.Nil(t, pl.popClosestQueued())
 
 	nPeers := 32
-	ids := make([]address.NodeID, nPeers)
+	ids := make([]address.NodeID[key.Key8], nPeers)
 	for i := 0; i < nPeers; i++ {
-		ids[i] = kadid.NewKadID([]byte{byte(4 * i)})
+		ids[i] = kadid.NewKadID(key.Key8(uint8(4 * i)))
 	}
 
 	// add peers
@@ -162,30 +164,29 @@ func TestChangeStatus(t *testing.T) {
 
 	// inserting a new peer that isn't the absolute closest, but is now the
 	// closest queued peer
-	newID := kadid.NewKadID([]byte{0x05})
-	pl.addToPeerlist([]address.NodeID{newID})
+	newID := kadid.NewKadID(key.Key8(0x05))
+	pl.addToPeerlist([]address.NodeID[key.Key8]{newID})
 	require.Equal(t, newID, pl.closestQueued.id)
 	require.Equal(t, ids[0], pl.closest.id)
 }
 
 func TestMultiAddrs(t *testing.T) {
 	ctx := context.Background()
-	keylen := 32
-	self := kadid.NewKadID(append([]byte{0x80}, make([]byte, keylen-1)...))
-	ep := fakeendpoint.NewFakeEndpoint(self, nil, nil)
+	self := kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0x80}))
+	ep := fakeendpoint.NewFakeEndpoint[key.Key256](self, nil, nil)
 
 	// create empty peer list
-	pl := newPeerList(make([]byte, keylen), ep)
+	pl := newPeerList[key.Key256](key.ZeroKey256(), ep)
 
 	require.Nil(t, pl.closest)
 	require.Nil(t, pl.closestQueued)
 
 	// create initial peers
 	nPeers := 5
-	ids := make([]address.NodeID, nPeers)
-	addrs := make([]*kadaddr.KadAddr, nPeers)
+	ids := make([]address.NodeID[key.Key256], nPeers)
+	addrs := make([]*kadaddr.KadAddr[key.Key256], nPeers)
 	for i := 0; i < nPeers; i++ {
-		id := kadid.NewKadID(append([]byte{byte(16 * i)}, make([]byte, keylen-1)...))
+		id := kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{byte(16 * i)}))
 		ids[i] = id
 		addrs[i] = kadaddr.NewKadAddr(id, []string{})
 		ep.MaybeAddToPeerstore(ctx, addrs[i], 1)
@@ -213,13 +214,13 @@ func TestMultiAddrs(t *testing.T) {
 	require.Equal(t, unreachable, pl.closest.next.status)
 
 	// ids[1] is added again, with the same address, it should be ignored
-	pl.addToPeerlist([]address.NodeID{ids[1]})
+	pl.addToPeerlist([]address.NodeID[key.Key256]{ids[1]})
 	require.Equal(t, unreachable, pl.closest.next.status)
 
 	// ids[1] added again, with a different address, its status should be queued
 	addrs[1].AddAddr("0")
 	ep.MaybeAddToPeerstore(ctx, addrs[1], 1)
-	pl.addToPeerlist([]address.NodeID{ids[1]})
+	pl.addToPeerlist([]address.NodeID[key.Key256]{ids[1]})
 	require.Equal(t, queued, pl.closest.next.status)
 
 	// change ids[1] to waiting again
@@ -230,14 +231,14 @@ func TestMultiAddrs(t *testing.T) {
 	require.Equal(t, unreachable, pl.closest.next.status)
 
 	// ids[1] added again with same address as before, should remain unreachable
-	pl.addToPeerlist([]address.NodeID{ids[1]})
+	pl.addToPeerlist([]address.NodeID[key.Key256]{ids[1]})
 	require.Equal(t, unreachable, pl.closest.next.status)
 
 	// add new addr to ids[1]
 	addrs[1].AddAddr("1")
 	ep.MaybeAddToPeerstore(ctx, addrs[1], 1)
 	// add ids[1] again to peerlist, this time it should be queued
-	pl.addToPeerlist([]address.NodeID{ids[1]})
+	pl.addToPeerlist([]address.NodeID[key.Key256]{ids[1]})
 	require.Equal(t, queued, pl.closest.next.status)
 	require.Equal(t, ids[1], pl.popClosestQueued())
 
@@ -245,7 +246,7 @@ func TestMultiAddrs(t *testing.T) {
 	addrs[0].AddAddr("0")
 	ep.MaybeAddToPeerstore(ctx, addrs[0], 1)
 	// add ids[0] new address to peerlist
-	pl.addToPeerlist([]address.NodeID{ids[0]})
+	pl.addToPeerlist([]address.NodeID[key.Key256]{ids[0]})
 	require.Equal(t, waiting, pl.closest.status)
 	require.True(t, pl.closest.tryAgainOnFailure)
 
@@ -270,7 +271,7 @@ func TestMultiAddrs(t *testing.T) {
 	// add unknown peer, this peer doesn't have any address (and the peerlist
 	// has an endpoint configured). Hence, it can never be queried, when
 	// "popped" it should be set as unreachable
-	pl.addToPeerlist([]address.NodeID{pid})
+	pl.addToPeerlist([]address.NodeID[key.Key256]{pid})
 	require.Equal(t, nPeers-popCounter+1, pl.queuedCount) // 4 peers have been poped so far
 	require.Equal(t, pid, pl.closestQueued.id)
 
@@ -288,7 +289,7 @@ func TestMultiAddrs(t *testing.T) {
 	pid2 := peerid.NewPeerID(parsed)
 
 	// add unknown peer 2, same as before, but there is no successor to pid2
-	pl.addToPeerlist([]address.NodeID{pid2})
+	pl.addToPeerlist([]address.NodeID[key.Key256]{pid2})
 	require.Equal(t, nPeers-popCounter+1, pl.queuedCount)
 	require.Equal(t, pid2, pl.closestQueued.id)
 	// 5 peers have been poped so far, pid is not counted because unreachable

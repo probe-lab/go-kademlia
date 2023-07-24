@@ -11,6 +11,7 @@ import (
 
 	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
 	tutil "github.com/plprobelab/go-kademlia/examples/util"
+	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
 	"github.com/plprobelab/go-kademlia/network/address/peerid"
@@ -84,9 +85,9 @@ func FindPeer(ctx context.Context) {
 
 	// endCond is used to terminate the simulation once the query is done
 	endCond := false
-	handleResultsFn := func(ctx context.Context, id address.NodeID,
-		resp message.MinKadResponseMessage,
-	) (bool, []address.NodeID) {
+	handleResultsFn := func(ctx context.Context, id address.NodeID[key.Key256],
+		resp message.MinKadResponseMessage[key.Key256],
+	) (bool, []address.NodeID[key.Key256]) {
 		// parse response to ipfs dht message
 		msg, ok := resp.(*ipfsv1.Message)
 		if !ok {
@@ -94,7 +95,7 @@ func FindPeer(ctx context.Context) {
 			return false, nil
 		}
 		var targetAddrs *addrinfo.AddrInfo
-		peers := make([]address.NodeID, 0, len(msg.CloserPeers))
+		peers := make([]address.NodeID[key.Key256], 0, len(msg.CloserPeers))
 		for _, p := range msg.CloserPeers {
 			addrInfo, err := ipfsv1.PBPeerToPeerInfo(p)
 			if err != nil {
@@ -123,16 +124,16 @@ func FindPeer(ctx context.Context) {
 	// handler function.
 	// The query will be executed only once actions are run on the scheduler.
 	// For now, it is only scheduled to be run.
-	queryOpts := []simplequery.Option{
-		simplequery.WithProtocolID(protocolID),
-		simplequery.WithConcurrency(1),
-		simplequery.WithRequestTimeout(2 * time.Second),
+	queryOpts := []simplequery.Option[key.Key256]{
+		simplequery.WithProtocolID[key.Key256](protocolID),
+		simplequery.WithConcurrency[key.Key256](1),
+		simplequery.WithRequestTimeout[key.Key256](2 * time.Second),
 		simplequery.WithHandleResultsFunc(handleResultsFn),
-		simplequery.WithRoutingTable(rt),
-		simplequery.WithEndpoint(msgEndpoint),
-		simplequery.WithScheduler(sched),
+		simplequery.WithRoutingTable[key.Key256](rt),
+		simplequery.WithEndpoint[key.Key256](msgEndpoint),
+		simplequery.WithScheduler[key.Key256](sched),
 	}
-	_, err = simplequery.NewSimpleQuery(ctx, req, queryOpts...)
+	_, err = simplequery.NewSimpleQuery[key.Key256](ctx, req, queryOpts...)
 	if err != nil {
 		panic(err)
 	}

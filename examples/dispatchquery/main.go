@@ -18,6 +18,7 @@ import (
 	ss "github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
 	"github.com/plprobelab/go-kademlia/events/simulator"
 	"github.com/plprobelab/go-kademlia/events/simulator/litesimulator"
+	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
 	"github.com/plprobelab/go-kademlia/network/address/peerid"
@@ -45,7 +46,7 @@ func queryTest(ctx context.Context) {
 
 	clk := clock.NewMock()
 
-	router := fakeendpoint.NewFakeRouter()
+	router := fakeendpoint.NewFakeRouter[key.Key256]()
 
 	// create peer A
 	pidA, err := peer.Decode("12BooooALPHA")
@@ -54,11 +55,13 @@ func queryTest(ctx context.Context) {
 	}
 	selfA := &peerid.PeerID{ID: pidA} // peer.ID is necessary for ipfskadv1 message format
 	addrA := multiaddr.StringCast("/ip4/1.1.1.1/tcp/4001/")
-	var naddrA address.NodeAddr = addrinfo.NewAddrInfo(peer.AddrInfo{ID: selfA.ID,
-		Addrs: []multiaddr.Multiaddr{addrA}})
+	var naddrA address.NodeAddr[key.Key256] = addrinfo.NewAddrInfo(peer.AddrInfo{
+		ID:    selfA.ID,
+		Addrs: []multiaddr.Multiaddr{addrA},
+	})
 	rtA := simplert.New(selfA.Key(), 2)
 	schedA := ss.NewSimpleScheduler(clk)
-	endpointA := fakeendpoint.NewFakeEndpoint(selfA, schedA, router)
+	endpointA := fakeendpoint.NewFakeEndpoint(selfA.NodeID(), schedA, router)
 	servA := basicserver.NewBasicServer(rtA, endpointA)
 	err = endpointA.AddRequestHandler(protoID, nil, servA.HandleRequest)
 	if err != nil {
@@ -72,11 +75,13 @@ func queryTest(ctx context.Context) {
 	}
 	selfB := &peerid.PeerID{ID: pidB}
 	addrB := multiaddr.StringCast("/ip4/2.2.2.2/tcp/4001/")
-	var naddrB address.NodeAddr = addrinfo.NewAddrInfo(peer.AddrInfo{ID: selfB.ID,
-		Addrs: []multiaddr.Multiaddr{addrB}})
+	var naddrB address.NodeAddr[key.Key256] = addrinfo.NewAddrInfo(peer.AddrInfo{
+		ID:    selfB.ID,
+		Addrs: []multiaddr.Multiaddr{addrB},
+	})
 	rtB := simplert.New(selfB.Key(), 2)
 	schedB := ss.NewSimpleScheduler(clk)
-	endpointB := fakeendpoint.NewFakeEndpoint(selfB, schedB, router)
+	endpointB := fakeendpoint.NewFakeEndpoint(selfB.NodeID(), schedB, router)
 	servB := basicserver.NewBasicServer(rtB, endpointB)
 	err = endpointB.AddRequestHandler(protoID, nil, servB.HandleRequest)
 	if err != nil {
@@ -90,11 +95,13 @@ func queryTest(ctx context.Context) {
 	}
 	selfC := &peerid.PeerID{ID: pidC}
 	addrC := multiaddr.StringCast("/ip4/3.3.3.3/tcp/4001/")
-	var naddrC address.NodeAddr = addrinfo.NewAddrInfo(peer.AddrInfo{ID: selfC.ID,
-		Addrs: []multiaddr.Multiaddr{addrC}})
+	var naddrC address.NodeAddr[key.Key256] = addrinfo.NewAddrInfo(peer.AddrInfo{
+		ID:    selfC.ID,
+		Addrs: []multiaddr.Multiaddr{addrC},
+	})
 	rtC := simplert.New(selfC.Key(), 2)
 	schedC := ss.NewSimpleScheduler(clk)
-	endpointC := fakeendpoint.NewFakeEndpoint(selfC, schedC, router)
+	endpointC := fakeendpoint.NewFakeEndpoint(selfC.NodeID(), schedC, router)
 	servC := basicserver.NewBasicServer(rtC, endpointC)
 	err = endpointC.AddRequestHandler(protoID, nil, servC.HandleRequest)
 	if err != nil {
@@ -119,25 +126,26 @@ func queryTest(ctx context.Context) {
 	req := ipfsv1.FindPeerRequest(target)
 
 	// dummy parameters
-	handleResp := func(ctx context.Context, _ address.NodeID,
-		resp message.MinKadResponseMessage) (bool, []address.NodeID) {
-		peerids := make([]address.NodeID, len(resp.CloserNodes()))
+	handleResp := func(ctx context.Context, _ address.NodeID[key.Key256],
+		resp message.MinKadResponseMessage[key.Key256],
+	) (bool, []address.NodeID[key.Key256]) {
+		peerids := make([]address.NodeID[key.Key256], len(resp.CloserNodes()))
 		for i, p := range resp.CloserNodes() {
 			peerids[i] = p.(*addrinfo.AddrInfo).PeerID()
 		}
 		return false, peerids
 	}
 
-	queryOpts := []sq.Option{
-		sq.WithProtocolID(protoID),
-		sq.WithConcurrency(1),
-		sq.WithRequestTimeout(5 * time.Second),
+	queryOpts := []sq.Option[key.Key256]{
+		sq.WithProtocolID[key.Key256](protoID),
+		sq.WithConcurrency[key.Key256](1),
+		sq.WithRequestTimeout[key.Key256](5 * time.Second),
 		sq.WithHandleResultsFunc(handleResp),
-		sq.WithRoutingTable(rtA),
-		sq.WithEndpoint(endpointA),
-		sq.WithScheduler(schedA),
+		sq.WithRoutingTable[key.Key256](rtA),
+		sq.WithEndpoint[key.Key256](endpointA),
+		sq.WithScheduler[key.Key256](schedA),
 	}
-	sq.NewSimpleQuery(ctx, req, queryOpts...)
+	sq.NewSimpleQuery[key.Key256](ctx, req, queryOpts...)
 
 	// create simulator
 	sim := litesimulator.NewLiteSimulator(clk)

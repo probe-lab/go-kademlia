@@ -8,11 +8,19 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/stretchr/testify/require"
+
+	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
 	"github.com/plprobelab/go-kademlia/network/address/peerid"
 	"github.com/plprobelab/go-kademlia/network/endpoint/fakeendpoint"
-	"github.com/stretchr/testify/require"
+	"github.com/plprobelab/go-kademlia/network/message"
+)
+
+var (
+	_ message.ProtoKadRequestMessage  = (*Message)(nil)
+	_ message.ProtoKadResponseMessage = (*Message)(nil)
 )
 
 var testPeerstoreTTL = 10 * time.Minute
@@ -26,7 +34,7 @@ func TestFindPeerRequest(t *testing.T) {
 
 	require.Equal(t, msg.GetKey(), []byte(p))
 
-	b := msg.Target().Equal(pid.Key())
+	b := key.Equal(msg.Target(), pid.Key())
 	require.True(t, b)
 
 	require.Equal(t, 0, len(msg.CloserNodes()))
@@ -52,11 +60,11 @@ func TestFindPeerResponse(t *testing.T) {
 	selfAddr, err := createDummyPeerInfo("12BoooooSELF", "/ip4/1.1.1.1")
 	require.NoError(t, err)
 
-	fakeEndpoint := fakeendpoint.NewFakeEndpoint(selfAddr, nil, nil)
+	fakeEndpoint := fakeendpoint.NewFakeEndpoint[key.Key256](selfAddr, nil, nil)
 
 	nPeers := 5
-	closerPeers := make([]address.NodeAddr, nPeers)
-	closerIds := make([]address.NodeID, nPeers)
+	closerPeers := make([]address.NodeAddr[key.Key256], nPeers)
+	closerIds := make([]address.NodeID[key.Key256], nPeers)
 	for i := 0; i < nPeers; i++ {
 		s := strconv.Itoa(2 + i)
 		closerPeers[i], err = createDummyPeerInfo("12BooooPEER"+s, "/ip4/"+s+"."+s+"."+s+"."+s)
@@ -68,24 +76,24 @@ func TestFindPeerResponse(t *testing.T) {
 
 	resp := FindPeerResponse(closerIds, fakeEndpoint)
 
-	require.Nil(t, resp.Target())
+	// require.Nil(t, resp.Target())
 	require.Equal(t, closerPeers, resp.CloserNodes())
 }
 
 func TestCornerCases(t *testing.T) {
 	resp := FindPeerResponse(nil, nil)
-	require.Nil(t, resp.Target())
+	// require.Nil(t, resp.Target())
 	require.Equal(t, 0, len(resp.CloserNodes()))
 
 	require.Equal(t, &Message{}, resp.EmptyResponse())
 
-	ids := make([]address.NodeID, 0)
+	ids := make([]address.NodeID[key.Key256], 0)
 	resp = FindPeerResponse(ids, nil)
 
-	require.Nil(t, resp.Target())
+	// require.Nil(t, resp.Target())
 	require.Equal(t, 0, len(resp.CloserNodes()))
 
-	fakeEndpoint := fakeendpoint.NewFakeEndpoint(addrinfo.AddrInfo{}, nil, nil)
+	fakeEndpoint := fakeendpoint.NewFakeEndpoint[key.Key256](addrinfo.AddrInfo{}, nil, nil)
 	n0, err := peer.Decode("1D3oooUnknownPeer")
 	require.NoError(t, err)
 	ids = append(ids, &peerid.PeerID{ID: n0})

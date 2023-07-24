@@ -12,7 +12,7 @@ type AddrInfo struct {
 	id *peerid.PeerID
 }
 
-var _ address.NodeAddr = (*AddrInfo)(nil)
+var _ address.NodeAddr[key.Key256] = (*AddrInfo)(nil)
 
 func NewAddrInfo(ai peer.AddrInfo) *AddrInfo {
 	return &AddrInfo{
@@ -21,7 +21,7 @@ func NewAddrInfo(ai peer.AddrInfo) *AddrInfo {
 	}
 }
 
-func (ai AddrInfo) Key() key.KadKey {
+func (ai AddrInfo) Key() key.Key256 {
 	return ai.id.Key()
 }
 
@@ -33,7 +33,7 @@ func (ai AddrInfo) PeerID() *peerid.PeerID {
 	return ai.id
 }
 
-func (ai AddrInfo) NodeID() address.NodeID {
+func (ai AddrInfo) NodeID() address.NodeID[key.Key256] {
 	return ai.id
 }
 

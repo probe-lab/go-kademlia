@@ -1,39 +1,36 @@
 package simmessage
 
 import (
-	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/message"
 )
 
-type SimMessage struct {
-	target      key.KadKey
-	closerPeers []address.NodeAddr
+type SimMessage[K kad.Key[K]] struct {
+	target      K
+	closerPeers []address.NodeAddr[K]
 }
 
-var _ message.MinKadRequestMessage = (*SimMessage)(nil)
-var _ message.MinKadResponseMessage = (*SimMessage)(nil)
-
-func NewSimRequest(target key.KadKey) *SimMessage {
-	return &SimMessage{
+func NewSimRequest[K kad.Key[K]](target K) *SimMessage[K] {
+	return &SimMessage[K]{
 		target: target,
 	}
 }
 
-func NewSimResponse(closerPeers []address.NodeAddr) *SimMessage {
-	return &SimMessage{
+func NewSimResponse[K kad.Key[K]](closerPeers []address.NodeAddr[K]) *SimMessage[K] {
+	return &SimMessage[K]{
 		closerPeers: closerPeers,
 	}
 }
 
-func (m *SimMessage) Target() key.KadKey {
+func (m *SimMessage[K]) Target() K {
 	return m.target
 }
 
-func (m *SimMessage) EmptyResponse() message.MinKadResponseMessage {
-	return &SimMessage{}
+func (m *SimMessage[K]) EmptyResponse() message.MinKadResponseMessage[K] {
+	return &SimMessage[K]{}
 }
 
-func (m *SimMessage) CloserNodes() []address.NodeAddr {
+func (m *SimMessage[K]) CloserNodes() []address.NodeAddr[K] {
 	return m.closerPeers
 }

@@ -3,24 +3,24 @@ package routing
 import (
 	"context"
 
-	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/network/address"
 )
 
 // Table is the interface for Kademlia Routing Tables
-type Table interface {
+type Table[K kad.Key[K]] interface {
 	// Self returns the local node's Kademlia key
-	Self() key.KadKey
+	Self() K
 	// AddPeer tries to add a peer to the routing table
-	AddPeer(context.Context, address.NodeID) (bool, error)
+	AddPeer(context.Context, address.NodeID[K]) (bool, error)
 	// RemoveKey tries to remove a peer identified by its Kademlia key from the
 	// routing table
-	RemoveKey(context.Context, key.KadKey) (bool, error)
+	RemoveKey(context.Context, K) (bool, error)
 	// NearestPeers returns the closest peers to a given key
-	NearestPeers(context.Context, key.KadKey, int) ([]address.NodeID, error)
+	NearestPeers(context.Context, K, int) ([]address.NodeID[K], error)
 }
 
 // RemovePeer removes a peer from the routing table
-func RemovePeer(ctx context.Context, rt Table, k address.NodeID) (bool, error) {
-	return rt.RemoveKey(ctx, k.Key())
+func RemovePeer[K kad.Key[K]](ctx context.Context, rt Table[K], a address.NodeID[K]) (bool, error) {
+	return rt.RemoveKey(ctx, a.Key())
 }

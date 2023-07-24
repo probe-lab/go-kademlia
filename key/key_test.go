@@ -1,130 +1,294 @@
 package key
 
 import (
-	"strings"
+	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/plprobelab/go-kademlia/kad"
 )
 
-var keysize = 4
+func TestKey256(t *testing.T) {
+	tester := &KeyTester[Key256]{
+		// kt.Key0 is 00000...000
+		Key0: ZeroKey256(),
 
-func TestKadKeyString(t *testing.T) {
-	zeroKadid := KadKey(make([]byte, keysize))
-	zeroHex := strings.Repeat("00", keysize)
-	require.Equal(t, zeroHex, zeroKadid.String())
+		// key1 is key0 + 1 (00000...001)
+		Key1: NewKey256([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}),
 
-	ffKadid := make([]byte, keysize)
-	for i := 0; i < keysize; i++ {
-		ffKadid[i] = 0xff
+		// key2 is key0 + 2 (00000...010)
+		Key2: NewKey256([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02}),
+
+		// key1xor2 is key1 ^ key2 (00000...011)
+		Key1xor2: NewKey256([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03}),
+
+		// key100 is key0 with the most significant bit set (10000...000)
+		Key100: NewKey256([]byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}),
+
+		// key010 is key0 with the second most significant bit set (01000...000)
+		Key010: NewKey256([]byte{0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}),
+
+		KeyX: NewKey256([]byte{0x23, 0xe4, 0xdd, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}),
 	}
-	ffHex := strings.Repeat("ff", keysize)
-	require.Equal(t, ffHex, KadKey(ffKadid).String())
 
-	e3Kadid := make([]byte, keysize)
-	for i := 0; i < keysize; i++ {
-		e3Kadid[i] = 0xe3
-	}
-	e3Hex := strings.Repeat("e3", keysize)
-	require.Equal(t, e3Hex, KadKey(e3Kadid).String())
+	tester.RunTests(t)
 }
 
-func TestXor(t *testing.T) {
-	key0 := KadKey(make([]byte, keysize))             // 00000...000
-	randKey := KadKey([]byte{0x23, 0xe4, 0xdd, 0x03}) // arbitrary key
+func TestKey32(t *testing.T) {
+	tester := &KeyTester[Key32]{
+		Key0:     Key32(0),
+		Key1:     Key32(1),
+		Key2:     Key32(2),
+		Key1xor2: Key32(3),
+		Key100:   Key32(0x80000000),
+		Key010:   Key32(0x40000000),
+		KeyX:     Key32(0x23e4dd03),
+	}
 
-	xored := key0.Xor(key0)
-	require.Equal(t, key0, xored)
-	xored = randKey.Xor(key0)
-	require.Equal(t, randKey, xored)
-	xored = key0.Xor(randKey)
-	require.Equal(t, randKey, xored)
-	xored = randKey.Xor(randKey)
-	require.Equal(t, key0, xored)
-
-	shorterKey := KadKey([]byte{0x23, 0xe4, 0xdd}) // shorter key
-	xored = key0.Xor(shorterKey)
-	expected := append(shorterKey, make([]byte, key0.Size()-shorterKey.Size())...)
-	require.Equal(t, expected, xored)
-	xored = shorterKey.Xor(key0)
-	require.Equal(t, expected, xored)
-	xored = key0.Xor(nil)
-	require.Equal(t, key0, xored)
+	tester.RunTests(t)
 }
 
-func TestCommonPrefixLength(t *testing.T) {
-	key0 := KadKey(make([]byte, keysize))                            // 00000...000
-	key1 := KadKey(append(make([]byte, keysize-1), 0x01))            // 00000...001
-	key2 := KadKey(append([]byte{0x80}, make([]byte, keysize-1)...)) // 10000...000
-	key3 := KadKey(append([]byte{0x40}, make([]byte, keysize-1)...)) // 01000...000
+func TestKey8(t *testing.T) {
+	tester := &KeyTester[Key8]{
+		Key0:     Key8(0),
+		Key1:     Key8(1),
+		Key2:     Key8(2),
+		Key1xor2: Key8(3),
+		Key100:   Key8(0x80),
+		Key010:   Key8(0x40),
+		KeyX:     Key8(0x23),
+	}
 
-	cpl := key0.CommonPrefixLength(key0)
-	require.Equal(t, keysize*8, cpl)
-	cpl = key0.CommonPrefixLength(key1)
-	require.Equal(t, keysize*8-1, cpl)
-	cpl = key0.CommonPrefixLength(key2)
+	tester.RunTests(t)
+}
+
+// TestBitStrKey7 tests a strange 7-bit Kademlia key
+func TestBitStrKey7(t *testing.T) {
+	tester := &KeyTester[BitStrKey]{
+		Key0:     BitStrKey("0000000"),
+		Key1:     BitStrKey("0000001"),
+		Key2:     BitStrKey("0000010"),
+		Key1xor2: BitStrKey("0000011"),
+		Key100:   BitStrKey("1000000"),
+		Key010:   BitStrKey("0100000"),
+		KeyX:     BitStrKey("1010110"),
+	}
+
+	tester.RunTests(t)
+}
+
+type KeyTester[K kad.Key[K]] struct {
+	// Key 0 is zero
+	Key0 K
+
+	// Key1 is Key0 + 1 (00000...001)
+	Key1 K
+
+	// Key2 is Key0 + 2 (00000...010)
+	Key2 K
+
+	// Key1xor2 is Key1 ^ Key2 (00000...011)
+	Key1xor2 K
+
+	// Key100 is Key0 with the most significant bit set (10000...000)
+	Key100 K
+
+	// Key010 is Key0 with the second most significant bit set (01000...000)
+	Key010 K
+
+	// KeyX is a random key
+	KeyX K
+}
+
+func (kt *KeyTester[K]) RunTests(t *testing.T) {
+	t.Helper()
+	t.Run("Xor", kt.TestXor)
+	t.Run("CommonPrefixLength", kt.TestCommonPrefixLength)
+	t.Run("Compare", kt.TestCompare)
+	t.Run("Bit", kt.TestBit)
+	t.Run("BitString", kt.TestBitString)
+	t.Run("HexString", kt.TestHexString)
+}
+
+func (kt *KeyTester[K]) TestXor(t *testing.T) {
+	xored := kt.Key0.Xor(kt.Key0)
+	require.Equal(t, kt.Key0, xored)
+
+	xored = kt.KeyX.Xor(kt.Key0)
+	require.Equal(t, kt.KeyX, xored)
+
+	xored = kt.Key0.Xor(kt.KeyX)
+	require.Equal(t, kt.KeyX, xored)
+
+	xored = kt.KeyX.Xor(kt.KeyX)
+	require.Equal(t, kt.Key0, xored)
+
+	xored = kt.Key1.Xor(kt.Key2)
+	require.Equal(t, kt.Key1xor2, xored)
+}
+
+func (kt *KeyTester[K]) TestCommonPrefixLength(t *testing.T) {
+	cpl := kt.Key0.CommonPrefixLength(kt.Key0)
+	require.Equal(t, kt.Key0.BitLen(), cpl)
+
+	cpl = kt.Key0.CommonPrefixLength(kt.Key1)
+	require.Equal(t, kt.Key0.BitLen()-1, cpl)
+
+	cpl = kt.Key0.CommonPrefixLength(kt.Key100)
 	require.Equal(t, 0, cpl)
-	cpl = key0.CommonPrefixLength(key3)
+
+	cpl = kt.Key0.CommonPrefixLength(kt.Key010)
 	require.Equal(t, 1, cpl)
-
-	cpl = key0.CommonPrefixLength(nil)
-	require.Equal(t, 0, cpl)
-	cpl = key0.CommonPrefixLength([]byte{0x00})
-	require.Equal(t, 8, cpl)
-	cpl = key0.CommonPrefixLength([]byte{0x00, 0x40})
-	require.Equal(t, 9, cpl)
-	cpl = key0.CommonPrefixLength([]byte{0x80})
-	require.Equal(t, 0, cpl)
 }
 
-func TestCompare(t *testing.T) {
-	nKeys := 5
-	keys := make([]KadKey, nKeys)
-	// ascending order
-	keys[0] = KadKey(make([]byte, keysize))                            // 00000...000
-	keys[1] = KadKey(append(make([]byte, keysize-1), 0x01))            // 00000...001
-	keys[2] = KadKey(append(make([]byte, keysize-1), 0x02))            // 00000...010
-	keys[3] = KadKey(append([]byte{0x40}, make([]byte, keysize-1)...)) // 01000...000
-	keys[4] = KadKey(append([]byte{0x80}, make([]byte, keysize-1)...)) // 10000...000
+func (kt *KeyTester[K]) TestCompare(t *testing.T) {
+	res := kt.Key0.Compare(kt.Key0)
+	require.Equal(t, 0, res)
 
-	for i := 0; i < nKeys; i++ {
-		for j := 0; j < nKeys; j++ {
-			res := keys[i].Compare(keys[j])
-			if i < j {
-				require.Equal(t, -1, res)
-			} else if i > j {
-				require.Equal(t, 1, res)
-			} else {
-				require.Equal(t, 0, res)
-				equal := keys[i].Equal(keys[j])
-				require.True(t, equal)
+	res = kt.Key0.Compare(kt.Key1)
+	require.Equal(t, -1, res)
+
+	res = kt.Key0.Compare(kt.Key2)
+	require.Equal(t, -1, res)
+
+	res = kt.Key0.Compare(kt.Key100)
+	require.Equal(t, -1, res)
+
+	res = kt.Key0.Compare(kt.Key010)
+	require.Equal(t, -1, res)
+
+	res = kt.Key1.Compare(kt.Key1)
+	require.Equal(t, 0, res)
+
+	res = kt.Key1.Compare(kt.Key0)
+	require.Equal(t, 1, res)
+
+	res = kt.Key1.Compare(kt.Key2)
+	require.Equal(t, -1, res)
+}
+
+func (kt *KeyTester[K]) TestBit(t *testing.T) {
+	for i := 0; i < kt.Key0.BitLen(); i++ {
+		require.Equal(t, uint(0), kt.Key0.Bit(i), fmt.Sprintf("Key0.Bit(%d)=%d", i, kt.Key0.Bit(i)))
+	}
+
+	for i := 0; i < kt.Key1.BitLen()-1; i++ {
+		require.Equal(t, uint(0), kt.Key1.Bit(i), fmt.Sprintf("Key1.Bit(%d)=%d", i, kt.Key1.Bit(i)))
+	}
+	require.Equal(t, uint(1), kt.Key1.Bit(kt.Key0.BitLen()-1), fmt.Sprintf("Key1.Bit(%d)=%d", kt.Key1.BitLen()-1, kt.Key1.Bit(kt.Key1.BitLen()-1)))
+
+	for i := 0; i < kt.Key0.BitLen()-2; i++ {
+		require.Equal(t, uint(0), kt.Key2.Bit(i), fmt.Sprintf("Key1.Bit(%d)=%d", i, kt.Key2.Bit(i)))
+	}
+	require.Equal(t, uint(1), kt.Key2.Bit(kt.Key2.BitLen()-2), fmt.Sprintf("Key1.Bit(%d)=%d", kt.Key2.BitLen()-2, kt.Key2.BitLen()-2))
+	require.Equal(t, uint(0), kt.Key2.Bit(kt.Key2.BitLen()-1), fmt.Sprintf("Key1.Bit(%d)=%d", kt.Key2.BitLen()-2, kt.Key2.BitLen()-1))
+}
+
+func (kt *KeyTester[K]) TestBitString(t *testing.T) {
+	str := BitString(kt.KeyX)
+	t.Logf("BitString(%v)=%s", kt.KeyX, str)
+	for i := 0; i < kt.KeyX.BitLen(); i++ {
+		expected := byte('0')
+		if kt.KeyX.Bit(i) == 1 {
+			expected = byte('1')
+		}
+		require.Equal(t, string(expected), string(str[i]))
+	}
+}
+
+func (kt *KeyTester[K]) TestHexString(t *testing.T) {
+	str := HexString(kt.KeyX)
+	t.Logf("HexString(%v)=%s", kt.KeyX, str)
+
+	bitpos := kt.KeyX.BitLen() - 1
+
+	for i := len(str) - 1; i >= 0; i-- {
+		v, err := strconv.ParseInt(string(str[i]), 16, 8)
+		require.NoError(t, err)
+		mask := uint(0x1)
+		for b := 0; b < 4; b++ {
+			got := (uint(v) & mask) >> b
+			want := kt.KeyX.Bit(bitpos)
+			require.Equal(t, want, got, fmt.Sprintf("bit %d: (%04b & %04b)>>%d = %d, wanted kt.KeyX.Bit(%d)=%d", bitpos, uint(v), b, mask, (uint(v)&mask), bitpos, want))
+			bitpos--
+			if bitpos < 0 {
+				break
 			}
+			mask <<= 1
+		}
+
+		if bitpos < 0 && i > 0 {
+			t.Errorf("hex string had length %d, but expected %d", len(str), (kt.KeyX.BitLen()+3)/4)
+			break
 		}
 	}
 
-	// compare keys of different sizes
-	key := keys[4]                                                          // 10000...000 (32 bits)
-	require.Equal(t, 1, key.Compare([]byte{}))                              // b is prefix of a -> 1
-	require.Equal(t, 1, key.Compare([]byte{0x00}))                          // a[0] > b [0] -> 1
-	require.Equal(t, 1, key.Compare([]byte{0x80}))                          // b is prefix of a -> 1
-	require.Equal(t, -1, key.Compare([]byte{0x81}))                         // a[4] < b[4] -> -1
-	require.Equal(t, 0, key.Compare([]byte{0x80, 0x00, 0x00, 0x00}))        // a == b -> 0
-	require.Equal(t, -1, key.Compare([]byte{0x80, 0x00, 0x00, 0x00, 0x00})) // a is prefix of b -> -1
+	if bitpos >= 0 {
+		t.Errorf("hex string had length %d, but expected %d", len(str), (kt.KeyX.BitLen()+3)/4)
+	}
 }
 
-func TestBitAt(t *testing.T) {
-	kk := KadKey([]byte{0b10010011, 0b11110100})
-	require.Equal(t, 1, kk.BitAt(0))
-	require.Equal(t, 0, kk.BitAt(1))
-	require.Equal(t, 0, kk.BitAt(2))
-	require.Equal(t, 1, kk.BitAt(3))
-	require.Equal(t, 0, kk.BitAt(4))
-	require.Equal(t, 0, kk.BitAt(5))
-	require.Equal(t, 1, kk.BitAt(6))
-	require.Equal(t, 1, kk.BitAt(7))
-	require.Equal(t, 1, kk.BitAt(8))
-	require.Equal(t, 0, kk.BitAt(15))
+// BitStrKey is a key represented by a string of 1's and 0's
+type BitStrKey string
 
-	require.Panics(t, func() { kk.BitAt(-1) })
-	require.Panics(t, func() { kk.BitAt(16) })
+var _ kad.Key[BitStrKey] = BitStrKey("1010")
+
+func (k BitStrKey) BitLen() int {
+	return len(k)
+}
+
+func (k BitStrKey) Bit(i int) uint {
+	if i < 0 || i > len(k) {
+		panic(bitPanicMsg)
+	}
+	if k[i] == '1' {
+		return 1
+	} else if k[i] == '0' {
+		return 0
+	}
+	panic("BitStrKey: not a binary string")
+}
+
+func (k BitStrKey) Xor(o BitStrKey) BitStrKey {
+	if len(k) != len(o) {
+		panic("BitStrKey: other key has different length")
+	}
+	buf := make([]byte, len(k))
+	for i := range buf {
+		if k[i] != o[i] {
+			buf[i] = '1'
+		} else {
+			buf[i] = '0'
+		}
+	}
+	return BitStrKey(string(buf))
+}
+
+func (k BitStrKey) CommonPrefixLength(o BitStrKey) int {
+	if len(k) != len(o) {
+		panic("BitStrKey: other key has different length")
+	}
+	for i := 0; i < len(k); i++ {
+		if k[i] != o[i] {
+			return i
+		}
+	}
+	return len(k)
+}
+
+func (k BitStrKey) Compare(o BitStrKey) int {
+	if len(k) != len(o) {
+		panic("BitStrKey: other key has different length")
+	}
+	for i := 0; i < len(k); i++ {
+		if k[i] != o[i] {
+			if k[i] < o[i] {
+				return -1
+			}
+			return 1
+		}
+	}
+	return 0
 }

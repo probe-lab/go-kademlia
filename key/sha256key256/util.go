@@ -20,9 +20,9 @@ const (
 
 // StringKadID produces a 256-bit long KadKey from a string, using the SHA256
 // hash function.
-func StringKadID(s string) key.KadKey {
+func StringKadID(s string) key.Key256 {
 	// hasher is the hash function used to derive the second hash identifiers
 	hasher, _ := mhreg.GetHasher(HasherID)
 	hasher.Write([]byte(s))
-	return key.KadKey(hasher.Sum(nil))
+	return key.NewKey256(hasher.Sum(nil))
 }
