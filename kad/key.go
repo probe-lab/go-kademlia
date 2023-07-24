@@ -13,6 +13,7 @@ type Key[K any] interface {
 	BitLen() int
 
 	// Bit returns the value of the i'th bit of the key from most significant to least. It is equivalent to (key>>(bitlen-i-1))&1.
+	// Bit will panic if i is out of the range [0,BitLen()-1].
 	Bit(i int) uint
 
 	// Xor returns the result of the eXclusive OR operation between the key and another key of the same type.

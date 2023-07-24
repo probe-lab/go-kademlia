@@ -9,6 +9,8 @@ import (
 	"github.com/plprobelab/go-kademlia/kad"
 )
 
+const bitPanicMsg = "bit index out of range"
+
 // Key256 is a 256-bit Kademlia key.
 type Key256 struct {
 	b *[32]byte // this is a pointer to keep the size of Key256 small since it is often passed as argument
@@ -34,6 +36,9 @@ func ZeroKey256() Key256 {
 
 // Bit returns the value of the i'th bit of the key from most significant to least.
 func (k Key256) Bit(i int) uint {
+	if i < 0 || i > 255 {
+		panic(bitPanicMsg)
+	}
 	if k.b == nil {
 		return 0
 	}
@@ -104,6 +109,9 @@ func (Key32) BitLen() int {
 
 // Bit returns the value of the i'th bit of the key from most significant to least.
 func (k Key32) Bit(i int) uint {
+	if i < 0 || i > 31 {
+		panic(bitPanicMsg)
+	}
 	return uint((k >> (31 - i)) & 1)
 }
 
@@ -162,6 +170,9 @@ func (Key8) BitLen() int {
 
 // Bit returns the value of the i'th bit of the key from most significant to least.
 func (k Key8) Bit(i int) uint {
+	if i < 0 || i > 7 {
+		panic(bitPanicMsg)
+	}
 	return uint((k >> (7 - i)) & 1)
 }
 
