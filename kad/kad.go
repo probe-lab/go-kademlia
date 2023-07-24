@@ -2,7 +2,7 @@ package kad
 
 // Key is the interface all Kademlia key types support.
 //
-// A Kademlia key is defined as a bit string of arbitrary size. In practice different Kademlia implementations use
+// A Kademlia key is defined as a bit string of arbitrary size. In practice, different Kademlia implementations use
 // different key sizes. For instance, the Kademlia paper (https://pdos.csail.mit.edu/~petar/papers/maymounkov-kademlia-lncs.pdf)
 // defines keys as 160-bits long and IPFS uses 256-bit keys.
 //
@@ -28,3 +28,40 @@ type Key[K any] interface {
 	// and 0 if both keys are equal.
 	Compare(other K) int
 }
+
+// RoutingTable is the interface all Kademlia Routing Tables types support.
+type RoutingTable[K Key[K]] interface {
+	// Self returns the local node's Kademlia key
+	Self() K
+
+	// AddPeer tries to add a peer to the routing table
+	AddPeer(NodeID[K]) (bool, error)
+
+	// RemoveKey tries to remove a peer identified by its Kademlia key from the
+	// routing table
+	RemoveKey(K) (NodeID[K], error)
+
+	// NearestPeers returns the closest peers to a given key
+	NearestPeers(K, int) ([]NodeID[K], error)
+}
+
+// NodeID is a generic node identifier. It is used to identify a node.
+type NodeID[K Key[K]] interface {
+	// Key returns the KadKey of the NodeID.
+	Key() K
+
+	// String returns the string representation of the NodeID. String
+	// representation should be unique for each NodeID.
+	String() string
+}
+
+// NodeAddr is a generic type that captures node ID and address information at once.
+type NodeAddr[K Key[K]] interface {
+	// ID returns the node identifier.
+	ID() NodeID[K]
+
+	// Addresses returns the network addresses associated with the given node.
+	Addresses() []Address
+}
+
+type Address any
