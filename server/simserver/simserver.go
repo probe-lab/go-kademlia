@@ -1,16 +1,14 @@
-package basicserver
+package simserver
 
 import (
 	"context"
 	"time"
 
-	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/network/address/peerid"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"github.com/plprobelab/go-kademlia/network/message"
-	"github.com/plprobelab/go-kademlia/network/message/ipfsv1"
 	"github.com/plprobelab/go-kademlia/network/message/simmessage"
 	"github.com/plprobelab/go-kademlia/routing"
 	"github.com/plprobelab/go-kademlia/util"
@@ -18,25 +16,19 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-type BasicServer struct {
-	rt       routing.Table[key.Key256]
-	endpoint endpoint.Endpoint[key.Key256]
+type SimServer[K kad.Key[K]] struct {
+	rt       routing.Table[K]
+	endpoint endpoint.Endpoint[K]
 
 	peerstoreTTL              time.Duration
 	numberOfCloserPeersToSend int
 }
 
-// var _ server.Server = (*BasicServer)(nil)
-
-func NewBasicServer(rt routing.Table[key.Key256], endpoint endpoint.Endpoint[key.Key256],
-	options ...Option,
-) *BasicServer {
-	var cfg Config
-	if err := cfg.Apply(append([]Option{DefaultConfig}, options...)...); err != nil {
-		return nil
+func NewSimServer[K kad.Key[K]](rt routing.Table[K], endpoint endpoint.Endpoint[K], cfg *Config) *SimServer[K] {
+	if cfg == nil {
+		cfg = DefaultConfig()
 	}
-
-	return &BasicServer{
+	return &SimServer[K]{
 		rt:                        rt,
 		endpoint:                  endpoint,
 		peerstoreTTL:              cfg.PeerstoreTTL,
@@ -44,40 +36,25 @@ func NewBasicServer(rt routing.Table[key.Key256], endpoint endpoint.Endpoint[key
 	}
 }
 
-func (s *BasicServer) HandleRequest(ctx context.Context, rpeer address.NodeID[key.Key256],
+func (s *SimServer[K]) HandleRequest(ctx context.Context, rpeer address.NodeID[K],
 	msg message.MinKadMessage,
 ) (message.MinKadMessage, error) {
 	switch msg := msg.(type) {
-	case *simmessage.SimMessage[key.Key256]:
+	case *simmessage.SimMessage[K]:
 		return s.HandleFindNodeRequest(ctx, rpeer, msg)
-	case *ipfsv1.Message:
-		switch msg.GetType() {
-		case ipfsv1.Message_FIND_NODE:
-			return s.HandleFindNodeRequest(ctx, rpeer, msg)
-		default:
-			return nil, ErrIpfsV1InvalidRequest
-		}
 	default:
 		return nil, ErrUnknownMessageFormat
 	}
 }
 
-func (s *BasicServer) HandleFindNodeRequest(ctx context.Context,
-	rpeer address.NodeID[key.Key256], msg message.MinKadMessage,
+func (s *SimServer[K]) HandleFindNodeRequest(ctx context.Context,
+	rpeer address.NodeID[K], msg message.MinKadMessage,
 ) (message.MinKadMessage, error) {
-	var target key.Key256
+	var target K
 
 	switch msg := msg.(type) {
-	case *simmessage.SimMessage[key.Key256]:
+	case *simmessage.SimMessage[K]:
 		target = msg.Target()
-	case *ipfsv1.Message:
-		p := peer.ID("")
-		if p.UnmarshalBinary(msg.GetKey()) != nil {
-			// invalid requested key (not a peer.ID)
-			return nil, ErrIpfsV1InvalidPeerID
-		}
-		t := peerid.NewPeerID(p)
-		target = t.Key()
 	default:
 		// invalid request, don't reply
 		return nil, ErrUnknownMessageFormat
@@ -94,15 +71,14 @@ func (s *BasicServer) HandleFindNodeRequest(ctx context.Context,
 		// invalid request, don't reply
 		return nil, err
 	}
-
 	span.AddEvent("Nearest peers", trace.WithAttributes(
 		attribute.Int("count", len(peers)),
 	))
 
 	var resp message.MinKadMessage
 	switch msg.(type) {
-	case *simmessage.SimMessage[key.Key256]:
-		peerAddrs := make([]address.NodeAddr[key.Key256], len(peers))
+	case *simmessage.SimMessage[K]:
+		peerAddrs := make([]address.NodeAddr[K], len(peers))
 		var index int
 		for _, p := range peers {
 			na, err := s.endpoint.NetworkAddress(p)
@@ -114,14 +90,19 @@ func (s *BasicServer) HandleFindNodeRequest(ctx context.Context,
 			index++
 		}
 		resp = simmessage.NewSimResponse(peerAddrs[:index])
-	case *ipfsv1.Message:
-		nEndpoint, ok := s.endpoint.(endpoint.NetworkedEndpoint[key.Key256])
-		if !ok {
-			span.RecordError(ErrNotNetworkedEndpoint)
-			return nil, ErrNotNetworkedEndpoint
-		}
-		resp = ipfsv1.FindPeerResponse(peers, nEndpoint)
 	}
 
 	return resp, nil
+}
+
+type Config struct {
+	PeerstoreTTL            time.Duration
+	NumberUsefulCloserPeers int
+}
+
+func DefaultConfig() *Config {
+	return &Config{
+		PeerstoreTTL:            time.Second,
+		NumberUsefulCloserPeers: 4,
+	}
 }

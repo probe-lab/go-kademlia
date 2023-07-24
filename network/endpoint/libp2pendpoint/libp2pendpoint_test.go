@@ -16,6 +16,7 @@ import (
 	"github.com/plprobelab/go-kademlia/events/planner"
 	"github.com/plprobelab/go-kademlia/events/scheduler"
 	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
 	"github.com/plprobelab/go-kademlia/network/address/peerid"
@@ -34,7 +35,8 @@ var (
 
 func createEndpoints(t *testing.T, ctx context.Context, nPeers int) (
 	[]*Libp2pEndpoint, []*addrinfo.AddrInfo, []*peerid.PeerID,
-	[]scheduler.AwareScheduler) {
+	[]scheduler.AwareScheduler,
+) {
 	clk := clock.New()
 
 	scheds := make([]scheduler.AwareScheduler, nPeers)
@@ -63,7 +65,8 @@ func createEndpoints(t *testing.T, ctx context.Context, nPeers int) (
 }
 
 func connectEndpoints(t *testing.T, ctx context.Context, endpoints []*Libp2pEndpoint,
-	addrInfos []*addrinfo.AddrInfo) {
+	addrInfos []*addrinfo.AddrInfo,
+) {
 	require.Len(t, endpoints, len(addrInfos))
 	for i, ep := range endpoints {
 		for j, ai := range addrInfos {
@@ -244,8 +247,9 @@ func TestRequestHandler(t *testing.T) {
 	endpoints, _, _, _ := createEndpoints(t, ctx, 1)
 
 	// set node 1 to server mode
-	requestHandler := func(ctx context.Context, id address.NodeID,
-		req message.MinKadMessage) (message.MinKadMessage, error) {
+	requestHandler := func(ctx context.Context, id address.NodeID[key.Key256],
+		req message.MinKadMessage,
+	) (message.MinKadMessage, error) {
 		// request handler returning the received message
 		return req, nil
 	}
@@ -255,7 +259,7 @@ func TestRequestHandler(t *testing.T) {
 	require.Equal(t, endpoint.ErrNilRequestHandler, err)
 
 	// invalid message format for handler
-	err = endpoints[0].AddRequestHandler("/fail/1.0.0", &simmessage.SimMessage{}, requestHandler)
+	err = endpoints[0].AddRequestHandler("/fail/1.0.0", &simmessage.SimMessage[key.Key256]{}, requestHandler)
 	require.Equal(t, ErrRequireProtoKadMessage, err)
 
 	// remove request handler
@@ -271,12 +275,12 @@ func TestReqFailFast(t *testing.T) {
 	req := ipfsv1.FindPeerRequest(ids[1])
 	// invalid response format (not protobuf)
 	err := endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], req,
-		&simmessage.SimMessage{}, time.Second, nil)
+		&simmessage.SimMessage[key.Key256]{}, time.Second, nil)
 	require.Equal(t, ErrRequireProtoKadResponse, err)
 
 	// invalid request format (not protobuf)
 	err = endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1],
-		&simmessage.SimMessage{}, &ipfsv1.Message{}, time.Second, nil)
+		&simmessage.SimMessage[key.Key256]{}, &ipfsv1.Message{}, time.Second, nil)
 	require.Equal(t, ErrRequireProtoKadMessage, err)
 
 	// invalid recipient (not a peerid)
@@ -290,7 +294,7 @@ func TestReqFailFast(t *testing.T) {
 	require.Equal(t, endpoint.ErrNilResponseHandler, err)
 
 	// non nil response handler that should not be called
-	responseHandler := func(_ context.Context, _ message.MinKadResponseMessage, err error) {
+	responseHandler := func(_ context.Context, _ message.MinKadResponseMessage[key.Key256], err error) {
 		require.Fail(t, "response handler shouldn't be called")
 	}
 
@@ -307,8 +311,9 @@ func TestSuccessfulRequest(t *testing.T) {
 	connectEndpoints(t, ctx, endpoints, addrs)
 
 	// set node 1 to server mode
-	requestHandler := func(ctx context.Context, id address.NodeID,
-		req message.MinKadMessage) (message.MinKadMessage, error) {
+	requestHandler := func(ctx context.Context, id address.NodeID[key.Key256],
+		req message.MinKadMessage,
+	) (message.MinKadMessage, error) {
 		// request handler returning the received message
 		return req, nil
 	}
@@ -317,7 +322,8 @@ func TestSuccessfulRequest(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	responseHandler := func(ctx context.Context,
-		resp message.MinKadResponseMessage, err error) {
+		resp message.MinKadResponseMessage[key.Key256], err error,
+	) {
 		wg.Done()
 	}
 	req := ipfsv1.FindPeerRequest(ids[1])
@@ -373,7 +379,7 @@ func TestReqUnknownPeer(t *testing.T) {
 
 	req := ipfsv1.FindPeerRequest(ids[1])
 	wg := sync.WaitGroup{}
-	responseHandler := func(_ context.Context, _ message.MinKadResponseMessage, err error) {
+	responseHandler := func(_ context.Context, _ message.MinKadResponseMessage[key.Key256], err error) {
 		wg.Done()
 		require.Equal(t, swarm.ErrNoGoodAddresses, err)
 	}
@@ -410,12 +416,13 @@ func TestReqTimeout(t *testing.T) {
 	wg := sync.WaitGroup{}
 
 	err := endpoints[1].AddRequestHandler(protoID, &ipfsv1.Message{}, func(ctx context.Context,
-		id address.NodeID, req message.MinKadMessage) (message.MinKadMessage, error) {
+		id address.NodeID[key.Key256], req message.MinKadMessage,
+	) (message.MinKadMessage, error) {
 		return req, nil
 	})
 	require.NoError(t, err)
 
-	responseHandler := func(_ context.Context, _ message.MinKadResponseMessage, err error) {
+	responseHandler := func(_ context.Context, _ message.MinKadResponseMessage[key.Key256], err error) {
 		require.Error(t, err)
 		wg.Done()
 	}
@@ -454,14 +461,16 @@ func TestReqHandlerError(t *testing.T) {
 	wg := sync.WaitGroup{}
 
 	err := endpoints[1].AddRequestHandler(protoID, &ipfsv1.Message{}, func(ctx context.Context,
-		id address.NodeID, req message.MinKadMessage) (message.MinKadMessage, error) {
+		id address.NodeID[key.Key256], req message.MinKadMessage,
+	) (message.MinKadMessage, error) {
 		// request handler returns error
 		return nil, errors.New("server error")
 	})
 	require.NoError(t, err)
 	// responseHandler is run after context is cancelled
 	responseHandler := func(ctx context.Context,
-		resp message.MinKadResponseMessage, err error) {
+		resp message.MinKadResponseMessage[key.Key256], err error,
+	) {
 		wg.Done()
 		require.Error(t, err)
 	}
@@ -506,14 +515,16 @@ func TestReqHandlerReturnsWrongType(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	err := endpoints[1].AddRequestHandler(protoID, &ipfsv1.Message{}, func(ctx context.Context,
-		id address.NodeID, req message.MinKadMessage) (message.MinKadMessage, error) {
+		id address.NodeID[key.Key256], req message.MinKadMessage,
+	) (message.MinKadMessage, error) {
 		// request handler returns error
-		return &simmessage.SimMessage{}, nil
+		return &simmessage.SimMessage[key.Key256]{}, nil
 	})
 	require.NoError(t, err)
 	// responseHandler is run after context is cancelled
 	responseHandler := func(ctx context.Context,
-		resp message.MinKadResponseMessage, err error) {
+		resp message.MinKadResponseMessage[key.Key256], err error,
+	) {
 		wg.Done()
 		require.Error(t, err)
 	}

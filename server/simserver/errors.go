@@ -1,4 +1,4 @@
-package basicserver
+package simserver
 
 import "errors"
 

@@ -6,23 +6,24 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/message"
 )
 
-type KademliaHandler struct {
-	self           *FakeNode
-	qp             *QueryPool
-	mr             *MessageRouter
+type KademliaHandler[K kad.Key[K]] struct {
+	self           *FakeNode[K]
+	qp             *QueryPool[K]
+	mr             *MessageRouter[K]
 	notify         chan struct{} // channel to notify there is potentially work to do
 	outboundEvents chan KademliaHandlerEvent
 	inboundEvents  chan KademliaHandlerInternalEvent
 	startOnce      sync.Once
 }
 
-func NewKademliaHandler(node *FakeNode, mr *MessageRouter) *KademliaHandler {
+func NewKademliaHandler[K kad.Key[K]](node *FakeNode[K], mr *MessageRouter[K]) *KademliaHandler[K] {
 	qp := NewQueryPool(node, mr)
-	return &KademliaHandler{
+	return &KademliaHandler[K]{
 		self:           node,
 		qp:             qp,
 		mr:             mr,
@@ -32,7 +33,7 @@ func NewKademliaHandler(node *FakeNode, mr *MessageRouter) *KademliaHandler {
 	}
 }
 
-func (k *KademliaHandler) Start(ctx context.Context) <-chan KademliaHandlerEvent {
+func (k *KademliaHandler[K]) Start(ctx context.Context) <-chan KademliaHandlerEvent {
 	// ensure there is only ever one mainloop
 	k.startOnce.Do(func() {
 		go k.mainloop(ctx)
@@ -40,7 +41,7 @@ func (k *KademliaHandler) Start(ctx context.Context) <-chan KademliaHandlerEvent
 	return k.outboundEvents
 }
 
-func (k *KademliaHandler) mainloop(ctx context.Context) {
+func (k *KademliaHandler[K]) mainloop(ctx context.Context) {
 	for {
 		trace("KademliaHandler.mainloop: waiting for inbound events")
 
@@ -50,11 +51,11 @@ func (k *KademliaHandler) mainloop(ctx context.Context) {
 			return
 		case ev := <-k.inboundEvents:
 			switch tev := ev.(type) {
-			case *UnroutablePeerEvent:
+			case *UnroutablePeerEvent[K]:
 
-			case *MessageFailedEvent:
+			case *MessageFailedEvent[K]:
 
-			case *MessageResponseEvent:
+			case *MessageResponseEvent[K]:
 				k.onMessageSuccess(ctx, tev.QueryID, tev.NodeID, tev.Response)
 			default:
 				panic(fmt.Sprintf("unexpected event: %T", tev))
@@ -74,7 +75,7 @@ func (k *KademliaHandler) mainloop(ctx context.Context) {
 		switch st := state.(type) {
 		case *QueryPoolWaiting:
 			trace("Query pool is waiting for %d", st.QueryID)
-		case *QueryPoolWaitingMessage:
+		case *QueryPoolWaitingMessage[K]:
 			trace("Query pool is waiting to send a message to %v", st.NodeID)
 			k.attemptSendMessage(ctx, st.NodeID, st.Message, st.QueryID)
 		case *QueryPoolWaitingWithCapacity:
@@ -93,7 +94,7 @@ func (k *KademliaHandler) mainloop(ctx context.Context) {
 	}
 }
 
-func (h *KademliaHandler) attemptSendMessage(ctx context.Context, to address.NodeID, msg message.MinKadRequestMessage, queryID QueryID) {
+func (h *KademliaHandler[K]) attemptSendMessage(ctx context.Context, to address.NodeID[K], msg message.MinKadRequestMessage[K], queryID QueryID) {
 	trace("KademliaHandler.attemptSendMessage")
 	go func() {
 		// HACK: assume always works
@@ -102,17 +103,17 @@ func (h *KademliaHandler) attemptSendMessage(ctx context.Context, to address.Nod
 		if err != nil {
 			if errors.Is(err, ErrNoKnownAddress) {
 				// here we can notify that the peer is unroutable, which would feed into peerstore and routing table
-				h.inboundEvents <- &UnroutablePeerEvent{NodeID: to}
+				h.inboundEvents <- &UnroutablePeerEvent[K]{NodeID: to}
 			}
-			h.inboundEvents <- &MessageFailedEvent{NodeID: to, QueryID: queryID}
+			h.inboundEvents <- &MessageFailedEvent[K]{NodeID: to, QueryID: queryID}
 			return
 		}
 
-		h.inboundEvents <- &MessageResponseEvent{NodeID: to, QueryID: queryID, Response: resp}
+		h.inboundEvents <- &MessageResponseEvent[K]{NodeID: to, QueryID: queryID, Response: resp}
 	}()
 }
 
-func (k *KademliaHandler) onMessageSuccess(ctx context.Context, queryID QueryID, node address.NodeID, resp message.MinKadResponseMessage) {
+func (k *KademliaHandler[K]) onMessageSuccess(ctx context.Context, queryID QueryID, node address.NodeID[K], resp message.MinKadResponseMessage[K]) {
 	// HACK: add closer nodes to peer store
 	// TODO: make this an inbound event
 	for _, cn := range resp.CloserNodes() {
@@ -120,7 +121,7 @@ func (k *KademliaHandler) onMessageSuccess(ctx context.Context, queryID QueryID,
 	}
 
 	// notify caller so they have chance to stop query
-	k.outboundEvents <- &KademliaOutboundQueryProgressedEvent{
+	k.outboundEvents <- &KademliaOutboundQueryProgressedEvent[K]{
 		NodeID:   node,
 		QueryID:  queryID,
 		Response: resp,
@@ -128,7 +129,7 @@ func (k *KademliaHandler) onMessageSuccess(ctx context.Context, queryID QueryID,
 	k.qp.onMessageSuccess(ctx, queryID, node, resp)
 }
 
-func (k *KademliaHandler) StartQuery(ctx context.Context, msg message.MinKadRequestMessage) (QueryID, error) {
+func (k *KademliaHandler[K]) StartQuery(ctx context.Context, msg message.MinKadRequestMessage[K]) (QueryID, error) {
 	trace("KademliaHandler.StartQuery")
 	// If not in peer store then query the Kademlia dht
 	queryID, err := k.qp.AddQuery(ctx, msg.Target(), msg)
@@ -140,7 +141,7 @@ func (k *KademliaHandler) StartQuery(ctx context.Context, msg message.MinKadRequ
 	return queryID, nil
 }
 
-func (k *KademliaHandler) StopQuery(ctx context.Context, queryID QueryID) error {
+func (k *KademliaHandler[K]) StopQuery(ctx context.Context, queryID QueryID) error {
 	trace("KademliaHandler.StopQuery")
 	return k.qp.StopQuery(ctx, queryID)
 }
@@ -152,23 +153,23 @@ type KademliaHandlerEvent interface {
 	kademliaHandlerEvent()
 }
 
-type KademliaRoutingUpdatedEvent struct{}
+type KademliaRoutingUpdatedEvent[K kad.Key[K]] struct{}
 
-type KademliaOutboundQueryProgressedEvent struct {
-	NodeID   address.NodeID
+type KademliaOutboundQueryProgressedEvent[K kad.Key[K]] struct {
+	NodeID   address.NodeID[K]
 	QueryID  QueryID
-	Response message.MinKadResponseMessage
+	Response message.MinKadResponseMessage[K]
 }
 
-type KademliaUnroutablePeerEvent struct{}
+type KademliaUnroutablePeerEvent[K kad.Key[K]] struct{}
 
-type KademliaRoutablePeerEvent struct{}
+type KademliaRoutablePeerEvent[K kad.Key[K]] struct{}
 
 // kademliaHandlerEvent() ensures that only KademliaHandler events can be assigned to a KademliaHandlerEvent.
-func (*KademliaRoutingUpdatedEvent) kademliaHandlerEvent()          {}
-func (*KademliaOutboundQueryProgressedEvent) kademliaHandlerEvent() {}
-func (*KademliaUnroutablePeerEvent) kademliaHandlerEvent()          {}
-func (*KademliaRoutablePeerEvent) kademliaHandlerEvent()            {}
+func (*KademliaRoutingUpdatedEvent[K]) kademliaHandlerEvent()          {}
+func (*KademliaOutboundQueryProgressedEvent[K]) kademliaHandlerEvent() {}
+func (*KademliaUnroutablePeerEvent[K]) kademliaHandlerEvent()          {}
+func (*KademliaRoutablePeerEvent[K]) kademliaHandlerEvent()            {}
 
 // Internal events for the Kademlia Handler
 
@@ -177,21 +178,21 @@ type KademliaHandlerInternalEvent interface {
 	kademliaHandlerInternalEvent()
 }
 
-type UnroutablePeerEvent struct {
-	NodeID address.NodeID
+type UnroutablePeerEvent[K kad.Key[K]] struct {
+	NodeID address.NodeID[K]
 }
 
-type MessageFailedEvent struct {
-	NodeID  address.NodeID
+type MessageFailedEvent[K kad.Key[K]] struct {
+	NodeID  address.NodeID[K]
 	QueryID QueryID
 }
 
-type MessageResponseEvent struct {
-	NodeID   address.NodeID
+type MessageResponseEvent[K kad.Key[K]] struct {
+	NodeID   address.NodeID[K]
 	QueryID  QueryID
-	Response message.MinKadResponseMessage
+	Response message.MinKadResponseMessage[K]
 }
 
-func (*UnroutablePeerEvent) kademliaHandlerInternalEvent()  {}
-func (*MessageFailedEvent) kademliaHandlerInternalEvent()   {}
-func (*MessageResponseEvent) kademliaHandlerInternalEvent() {}
+func (*UnroutablePeerEvent[K]) kademliaHandlerInternalEvent()  {}
+func (*MessageFailedEvent[K]) kademliaHandlerInternalEvent()   {}
+func (*MessageResponseEvent[K]) kademliaHandlerInternalEvent() {}

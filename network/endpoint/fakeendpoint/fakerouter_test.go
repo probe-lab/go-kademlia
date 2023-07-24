@@ -7,6 +7,8 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/plprobelab/go-kademlia/events/scheduler"
 	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	"github.com/plprobelab/go-kademlia/internal/testutil"
+	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/kadid"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
@@ -16,14 +18,14 @@ import (
 func TestFakeRouter(t *testing.T) {
 	ctx := context.Background()
 	clk := clock.NewMock()
-	router := NewFakeRouter()
+	router := NewFakeRouter[key.Key256]()
 
 	nPeers := 5
 	scheds := make([]scheduler.AwareScheduler, nPeers)
-	ids := make([]address.NodeID, nPeers)
-	fakeEndpoints := make([]*FakeEndpoint, nPeers)
+	ids := make([]address.NodeID[key.Key256], nPeers)
+	fakeEndpoints := make([]*FakeEndpoint[key.Key256], nPeers)
 	for i := 0; i < nPeers; i++ {
-		ids[i] = kadid.NewKadID([]byte{byte(i)})
+		ids[i] = kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{byte(i)}))
 		scheds[i] = simplescheduler.NewSimpleScheduler(clk)
 		fakeEndpoints[i] = NewFakeEndpoint(ids[i], scheds[i], router)
 	}
@@ -48,7 +50,7 @@ func TestFakeRouter(t *testing.T) {
 	require.True(t, scheds[3].RunOne(ctx))
 	require.False(t, scheds[3].RunOne(ctx))
 
-	notRegisteredID := kadid.NewKadID([]byte{byte(100)})
+	notRegisteredID := kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{byte(100)}))
 	sid, err = router.SendMessage(ctx, ids[3], notRegisteredID, protoID, 0, nil)
 	require.Error(t, err)
 	require.Equal(t, endpoint.ErrUnknownPeer, err)

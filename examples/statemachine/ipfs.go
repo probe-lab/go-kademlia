@@ -10,14 +10,14 @@ import (
 )
 
 type IpfsDht struct {
-	kad          *KademliaHandler
-	queryWaiters map[QueryID]chan<- message.MinKadResponseMessage
+	kad          *KademliaHandler[key.Key256]
+	queryWaiters map[QueryID]chan<- message.MinKadResponseMessage[key.Key256]
 }
 
-func NewIpfsDht(kad *KademliaHandler) *IpfsDht {
+func NewIpfsDht(kad *KademliaHandler[key.Key256]) *IpfsDht {
 	return &IpfsDht{
 		kad:          kad,
-		queryWaiters: make(map[QueryID]chan<- message.MinKadResponseMessage),
+		queryWaiters: make(map[QueryID]chan<- message.MinKadResponseMessage[key.Key256]),
 	}
 }
 
@@ -33,7 +33,7 @@ func (d *IpfsDht) mainloop(ctx context.Context) {
 			return
 		case ev := <-kadEvents:
 			switch tev := ev.(type) {
-			case *KademliaOutboundQueryProgressedEvent:
+			case *KademliaOutboundQueryProgressedEvent[key.Key256]:
 				// TODO: locking
 				ch, ok := d.queryWaiters[tev.QueryID]
 				if !ok {
@@ -52,25 +52,25 @@ func (d *IpfsDht) mainloop(ctx context.Context) {
 	}
 }
 
-func (d *IpfsDht) registerQueryWaiter(queryID QueryID, ch chan<- message.MinKadResponseMessage) {
+func (d *IpfsDht) registerQueryWaiter(queryID QueryID, ch chan<- message.MinKadResponseMessage[key.Key256]) {
 	// TODO: locking
 	d.queryWaiters[queryID] = ch
 }
 
 // Initiates an iterative query for the the address of the given peer.
 // FindNode is a fundamental Kademlia operation so this logic should be on KademliaHandler
-func (d *IpfsDht) FindNode(ctx context.Context, node address.NodeID) (address.NodeAddr, error) {
+func (d *IpfsDht) FindNode(ctx context.Context, node address.NodeID[key.Key256]) (address.NodeAddr[key.Key256], error) {
 	trace("IpfsHandler.FindNode")
 	// TODO: look in local peer store first
 
 	// If not in peer store then query the Kademlia dht
-	queryID, err := d.kad.StartQuery(ctx, &FindNodeRequest{NodeID: node})
+	queryID, err := d.kad.StartQuery(ctx, &FindNodeRequest[key.Key256]{NodeID: node})
 	if err != nil {
 		return nil, fmt.Errorf("failed to start query: %w", err)
 	}
 	trace("Query id is %d", queryID)
 
-	ch := make(chan message.MinKadResponseMessage)
+	ch := make(chan message.MinKadResponseMessage[key.Key256])
 	d.registerQueryWaiter(queryID, ch)
 
 	// wait for query to finish
@@ -87,11 +87,11 @@ func (d *IpfsDht) FindNode(ctx context.Context, node address.NodeID) (address.No
 			trace("IpfsHandler.FindNode: got event from kademlia")
 			// we got a response from a message sent by query
 			switch tresp := resp.(type) {
-			case *FindNodeResponse:
+			case *FindNodeResponse[key.Key256]:
 				// interpret the response
 				for _, found := range tresp.CloserPeers {
 					// TODO: is this the best way to test for node equality?
-					if found.NodeID().Key().Equal(node.Key()) {
+					if key.Equal(found.NodeID().Key(), node.Key()) {
 						// found the node we were looking for
 						d.kad.StopQuery(ctx, queryID)
 						return found, nil
@@ -107,33 +107,33 @@ func (d *IpfsDht) FindNode(ctx context.Context, node address.NodeID) (address.No
 
 // Initiates an iterative query for the closest peers to the given key.
 // TODO: function signature
-func (*IpfsDht) ClosestPeers(ctx context.Context, kk key.KadKey) {
+func (*IpfsDht) ClosestPeers(ctx context.Context, kk key.Key256) {
 	panic("not implemented")
 }
 
 // Performs a lookup for a record in the DHT.
 // TODO: function signature
-func (*IpfsDht) GetRecord(ctx context.Context, kk key.KadKey) {
+func (*IpfsDht) GetRecord(ctx context.Context, kk key.Key256) {
 	panic("not implemented")
 }
 
 // Stores a record in the DHT, locally as well as at the nodes
 // closest to the key as per the xor distance metric.
 // TODO: function signature
-func (*IpfsDht) PutRecord(ctx context.Context, kk key.KadKey) {
+func (*IpfsDht) PutRecord(ctx context.Context, kk key.Key256) {
 	panic("not implemented")
 }
 
 // Stores a record at specific peers, without storing it locally.
 // TODO: function signature
-func (*IpfsDht) PutRecordTo(ctx context.Context, kk key.KadKey) {
+func (*IpfsDht) PutRecordTo(ctx context.Context, kk key.Key256) {
 	panic("not implemented")
 }
 
 // Removes the record with the given key from _local_ storage,
 // if the local node is the publisher of the record.
 // TODO: function signature
-func (*IpfsDht) RemoveRecord(ctx context.Context, kk key.KadKey) {
+func (*IpfsDht) RemoveRecord(ctx context.Context, kk key.Key256) {
 	panic("not implemented")
 }
 
@@ -151,12 +151,12 @@ func (*IpfsDht) StartProviding(ctx context.Context) {
 
 // Stops the local node from announcing that it is a provider for the given key.
 // TODO: function signature
-func (*IpfsDht) StopProviding(ctx context.Context, kk key.KadKey) {
+func (*IpfsDht) StopProviding(ctx context.Context, kk key.Key256) {
 	panic("not implemented")
 }
 
 // Performs a lookup for providers of a value to the given key.
 // TODO: function signature
-func (*IpfsDht) GetProviders(ctx context.Context, kk key.KadKey) {
+func (*IpfsDht) GetProviders(ctx context.Context, kk key.Key256) {
 	panic("not implemented")
 }

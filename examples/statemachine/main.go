@@ -35,19 +35,18 @@ func main() {
 }
 
 const (
-	keysize      = 1                                 // keysize in bytes
 	peerstoreTTL = 10 * time.Minute                  // duration for which a peer is kept in the peerstore
 	protoID      = address.ProtocolID("/test/1.0.0") // protocol ID for the test
 )
 
-func setupSimulation(ctx context.Context) ([]*FakeNode, *MessageRouter) {
+func setupSimulation(ctx context.Context) ([]*FakeNode[key.Key256], *MessageRouter[key.Key256]) {
 	// create node identifiers
 	nodeCount := 4
-	ids := make([]*kadid.KadID, nodeCount)
-	ids[0] = kadid.NewKadID(key.KadKey(make([]byte, keysize)))
-	ids[1] = kadid.NewKadID(key.KadKey(append(make([]byte, keysize-1), 0x01)))
-	ids[2] = kadid.NewKadID(key.KadKey(append(make([]byte, keysize-1), 0x02)))
-	ids[3] = kadid.NewKadID(key.KadKey(append(make([]byte, keysize-1), 0x03)))
+	ids := make([]*kadid.KadID[key.Key256], nodeCount)
+	ids[0] = kadid.NewKadID(key.ZeroKey256())
+	ids[1] = kadid.NewKadID(key.NewKey256(append(make([]byte, 31), 0x01)))
+	ids[2] = kadid.NewKadID(key.NewKey256(append(make([]byte, 31), 0x02)))
+	ids[3] = kadid.NewKadID(key.NewKey256(append(make([]byte, 31), 0x03)))
 
 	// Kademlia trie:
 	//     ^
@@ -55,17 +54,17 @@ func setupSimulation(ctx context.Context) ([]*FakeNode, *MessageRouter) {
 	//   ^   ^
 	//  A B C D
 
-	addrs := make([]address.NodeAddr, nodeCount)
+	addrs := make([]address.NodeAddr[key.Key256], nodeCount)
 	for i := 0; i < nodeCount; i++ {
 		addrs[i] = kadaddr.NewKadAddr(ids[i], []string{})
 	}
 
-	nodes := make([]*FakeNode, nodeCount)
+	nodes := make([]*FakeNode[key.Key256], nodeCount)
 	for i := 0; i < nodeCount; i++ {
-		nodes[i] = &FakeNode{
+		nodes[i] = &FakeNode[key.Key256]{
 			addr:      addrs[i],
-			rt:        simplert.New(ids[i].KadKey, 2),
-			peerstore: make(map[address.NodeID]address.NodeAddr),
+			rt:        simplert.New(ids[i].Key(), 2),
+			peerstore: make(map[address.NodeID[key.Key256]]address.NodeAddr[key.Key256]),
 		}
 	}
 
@@ -84,7 +83,7 @@ func setupSimulation(ctx context.Context) ([]*FakeNode, *MessageRouter) {
 }
 
 // connectNodes adds nodes to each other's peerstores and routing tables
-func connectNodes(ctx context.Context, a, b *FakeNode) {
+func connectNodes(ctx context.Context, a, b *FakeNode[key.Key256]) {
 	// add b to a's peerstore and routing table
 	a.AddNodeAddr(ctx, b.Addr())
 

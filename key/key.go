@@ -1,108 +1,209 @@
 package key
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"math"
-	"strings"
+
+	"github.com/plprobelab/go-kademlia/kad"
 )
 
-type KadKey []byte
-
-func (k KadKey) Size() int {
-	return len(k)
+// Key256 is a 256-bit Kademlia key.
+type Key256 struct {
+	bits *[32]byte // this is a pointer to keep the size of Key256 small since it is often passed as argument
 }
 
-func (k KadKey) Hex() string {
-	return hex.EncodeToString(k[:])
-}
+var _ kad.Key[Key256] = Key256{}
 
-func (k KadKey) String() string {
-	return k.Hex()
-}
-
-func shortLong(a, b KadKey) (min, max KadKey) {
-	if len(a) < len(b) {
-		return a, b
+// ZeroKey256 returns a 256-bit Kademlia key whose bits are set from the supplied bytes.
+func NewKey256(data []byte) Key256 {
+	if len(data) != 32 {
+		panic("invalid data length for key")
 	}
-	return b, a
+	var bits [32]byte
+	copy(bits[:], data)
+	return Key256{bits: &bits}
 }
 
-// BitString returns a bit representation of the key, in descending order of significance.
-func (k KadKey) BitString() string {
-	sb := new(strings.Builder)
-	for _, b := range k {
-		sb.WriteString(fmt.Sprintf("%08b", b))
-	}
-	return sb.String()
+// ZeroKey256 returns a 256-bit Kademlia key with all bits zeroed.
+func ZeroKey256() Key256 {
+	var bits [32]byte
+	return Key256{bits: &bits}
 }
 
-func (a KadKey) Xor(b KadKey) KadKey {
-	short, long := shortLong(a, b)
-	xored := make([]byte, len(long))
-	for i := 0; i < len(short); i++ {
-		xored[i] = a[i] ^ b[i]
-	}
-	copy(xored[len(short):], long[len(short):])
-	return xored
-}
-
-func (a KadKey) CommonPrefixLength(b KadKey) int {
-	short, _ := shortLong(a, b)
-
-	var xored byte
-	for i := 0; i < len(short); i++ {
-		xored = a[i] ^ b[i]
-		if xored != 0 {
-			return i*8 + 7 - int(math.Log2(float64(xored)))
-		}
-	}
-	return 8 * len(short)
-}
-
-// Compare returns -1 if a < b, 0 if a == b, and 1 if a > b
-func (a KadKey) Compare(b KadKey) int {
-	short, _ := shortLong(a, b)
-
-	for i := 0; i < len(short); i++ {
-		if a[i] < b[i] {
-			return -1
-		}
-		if a[i] > b[i] {
-			return 1
-		}
-	}
-	if len(a) == len(b) {
+// Bit returns the value of the i'th bit of the key from most significant to least.
+func (k Key256) Bit(i int) uint {
+	if k.bits == nil {
 		return 0
-	} else if len(a) < len(b) {
-		// if both keys don't have the same size, and the shorter is a prefix
-		// of the longer, then the shorter is considered smaller
+	}
+	if k.bits[i/8]&(byte(1)<<(7-i%8)) == 0 {
+		return 0
+	} else {
+		return 1
+	}
+}
+
+// BitLen returns the length of the key in bits, which is always 256.
+func (Key256) BitLen() int {
+	return 256
+}
+
+// Xor returns the result of the eXclusive OR operation between the key and another key of the same type.
+func (k Key256) Xor(o Key256) Key256 {
+	var xored [32]byte
+	if k.bits != nil && o.bits != nil {
+		for i := 0; i < 32; i++ {
+			xored[i] = k.bits[i] ^ o.bits[i]
+		}
+	} else if k.bits != nil && o.bits == nil {
+		copy(xored[:], k.bits[:])
+	} else if k.bits == nil && o.bits != nil {
+		copy(xored[:], o.bits[:])
+	}
+	return Key256{bits: &xored}
+}
+
+// CommonPrefixLength returns the number of leading bits the key shares with another key of the same type.
+func (k Key256) CommonPrefixLength(o Key256) int {
+	if k.bits == nil || o.bits == nil {
+		return 256
+	}
+	var x byte
+	for i := 0; i < 32; i++ {
+		x = k.bits[i] ^ o.bits[i]
+		if x != 0 {
+			return i*8 + 7 - int(math.Log2(float64(x)))
+		}
+	}
+	return 256
+}
+
+// Compare compares the numeric value of the key with another key of the same type.
+func (k Key256) Compare(o Key256) int {
+	return bytes.Compare(k.bits[:], o.bits[:])
+}
+
+// HexString returns a string containing the hexadecimal representation of the key.
+func (k Key256) HexString() string {
+	if k.bits == nil {
+		return ""
+	}
+	return hex.EncodeToString(k.bits[:])
+}
+
+// Key32 is a 32-bit Kademlia key, suitable for testing and simulation of small networks.
+type Key32 uint32
+
+var _ kad.Key[Key32] = Key32(0)
+
+// BitLen returns the length of the key in bits, which is always 32.
+func (Key32) BitLen() int {
+	return 32
+}
+
+// Bit returns the value of the i'th bit of the key from most significant to least.
+func (k Key32) Bit(i int) uint {
+	return uint((k >> (31 - i)) & 1)
+}
+
+// Xor returns the result of the eXclusive OR operation between the key and another key of the same type.
+func (k Key32) Xor(o Key32) Key32 {
+	return k ^ o
+}
+
+// CommonPrefixLength returns the number of leading bits the key shares with another key of the same type.
+func (k Key32) CommonPrefixLength(o Key32) int {
+	a := uint32(k)
+	b := uint32(o)
+	for i := 32; i > 0; i-- {
+		if a == b {
+			return i
+		}
+		a >>= 1
+		b >>= 1
+	}
+	return 0
+}
+
+// Compare compares the numeric value of the key with another key of the same type.
+func (k Key32) Compare(o Key32) int {
+	if k < o {
 		return -1
-	} else {
+	} else if k > o {
 		return 1
 	}
+	return 0
 }
 
-func (a KadKey) Equal(b KadKey) bool {
-	if a.Size() != b.Size() {
-		return false
+// HexString returns a string containing the hexadecimal representation of the key.
+func (k Key32) HexString() string {
+	return fmt.Sprintf("%04x", uint32(k))
+}
+
+// BitString returns a string containing the binary representation of the key.
+func (k Key32) BitString() string {
+	return fmt.Sprintf("%032b", uint32(k))
+}
+
+func (k Key32) String() string {
+	return k.HexString()
+}
+
+// Key8 is an 8-bit Kademlia key, suitable for testing and simulation of very small networks.
+type Key8 uint8
+
+var _ kad.Key[Key8] = Key8(0)
+
+// BitLen returns the length of the key in bits, which is always 8.
+func (Key8) BitLen() int {
+	return 8
+}
+
+// Bit returns the value of the i'th bit of the key from most significant to least.
+func (k Key8) Bit(i int) uint {
+	return uint((k >> (7 - i)) & 1)
+}
+
+// Xor returns the result of the eXclusive OR operation between the key and another key of the same type.
+func (k Key8) Xor(o Key8) Key8 {
+	return k ^ o
+}
+
+// CommonPrefixLength returns the number of leading bits the key shares with another key of the same type.
+func (k Key8) CommonPrefixLength(o Key8) int {
+	a := uint8(k)
+	b := uint8(o)
+	for i := 8; i > 0; i-- {
+		if a == b {
+			return i
+		}
+		a >>= 1
+		b >>= 1
 	}
-	return a.Compare(b) == 0
+	return 0
 }
 
-// BitLen returns the length of the key in bits
-func (k KadKey) BitLen() int {
-	return len(k) * 8
-}
-
-// BitAt returns the value of the i'th bit of the key from most significant to least. It is equivalent to (key>>(bitlen-i-1))&1.
-func (k KadKey) BitAt(i int) int {
-	if i < 0 || i > k.BitLen()-1 {
-		panic("BitAt: index out of range")
-	}
-	if k[i/8]&(byte(1)<<(7-i%8)) == 0 {
-		return 0
-	} else {
+// Compare compares the numeric value of the key with another key of the same type.
+func (k Key8) Compare(o Key8) int {
+	if k < o {
+		return -1
+	} else if k > o {
 		return 1
 	}
+	return 0
+}
+
+// HexString returns a string containing the hexadecimal representation of the key.
+func (k Key8) HexString() string {
+	return fmt.Sprintf("%x", uint8(k))
+}
+
+func (k Key8) String() string {
+	return k.HexString()
+}
+
+// HexString returns a string containing the binary representation of the key.
+func (k Key8) BitString() string {
+	return fmt.Sprintf("%08b", uint8(k))
 }

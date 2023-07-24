@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/plprobelab/go-kademlia/key"
 )
 
 func TestPeerKadID(t *testing.T) {
@@ -12,5 +14,5 @@ func TestPeerKadID(t *testing.T) {
 	digest := "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
 
 	kid := StringKadID(str)
-	require.Equal(t, digest, kid.String())
+	require.Equal(t, digest, key.HexString(kid))
 }

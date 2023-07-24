@@ -6,27 +6,27 @@ import (
 	"testing"
 
 	"github.com/plprobelab/go-kademlia/internal/testutil"
+	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/key/trie"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/kadid"
 	"github.com/stretchr/testify/require"
 )
 
 var (
-	key0 = key.KadKey(make([]byte, 32)) // 000000...000
+	key0 = key.Key32(0) // 000000...000
 
-	key1  = testutil.RandomWithPrefix("010000", 256)
-	key2  = testutil.RandomWithPrefix("100000", 256)
-	key3  = testutil.RandomWithPrefix("110000", 256)
-	key4  = testutil.RandomWithPrefix("111000", 256)
-	key5  = testutil.RandomWithPrefix("011000", 256)
-	key6  = testutil.RandomWithPrefix("011100", 256)
-	key7  = testutil.RandomWithPrefix("000110", 256)
-	key8  = testutil.RandomWithPrefix("000101", 256)
-	key9  = testutil.RandomWithPrefix("000100", 256)
-	key10 = testutil.RandomWithPrefix("001000", 256)
-	key11 = testutil.RandomWithPrefix("001100", 256)
+	key1  = testutil.RandomKeyWithPrefix("010000")
+	key2  = testutil.RandomKeyWithPrefix("100000")
+	key3  = testutil.RandomKeyWithPrefix("110000")
+	key4  = testutil.RandomKeyWithPrefix("111000")
+	key5  = testutil.RandomKeyWithPrefix("011000")
+	key6  = testutil.RandomKeyWithPrefix("011100")
+	key7  = testutil.RandomKeyWithPrefix("000110")
+	key8  = testutil.RandomKeyWithPrefix("000101")
+	key9  = testutil.RandomKeyWithPrefix("000100")
+	key10 = testutil.RandomKeyWithPrefix("001000")
+	key11 = testutil.RandomKeyWithPrefix("001100")
 
 	node1  = NewNode("QmPeer1", key1)
 	node2  = NewNode("QmPeer2", key2)
@@ -190,45 +190,12 @@ func TestNearestPeers(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 5, len(peers))
 
-	expectedOrder := []address.NodeID{node9, node8, node7, node10, node11}
+	expectedOrder := []address.NodeID[key.Key32]{node9, node8, node7, node10, node11}
 	require.Equal(t, expectedOrder, peers)
 
 	peers, err = rt.NearestPeers(ctx, node11.Key(), 2)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(peers))
-}
-
-func TestInvalidKeys(t *testing.T) {
-	ctx := context.Background()
-	incompatKey := key.KadKey(make([]byte, 4)) // key is shorter (4 bytes only)
-	incompatNode := NewNode("inv", incompatKey)
-
-	rt, err := New(key0, nil)
-	require.NoError(t, err)
-
-	t.Run("add peer", func(t *testing.T) {
-		success, err := rt.AddPeer(ctx, incompatNode)
-		require.ErrorIs(t, err, trie.ErrMismatchedKeyLength)
-		require.False(t, success)
-	})
-
-	t.Run("remove key", func(t *testing.T) {
-		success, err := rt.RemoveKey(ctx, incompatKey)
-		require.ErrorIs(t, err, trie.ErrMismatchedKeyLength)
-		require.False(t, success)
-	})
-
-	t.Run("find", func(t *testing.T) {
-		nodeID, err := rt.Find(ctx, incompatKey)
-		require.ErrorIs(t, err, trie.ErrMismatchedKeyLength)
-		require.Nil(t, nodeID)
-	})
-
-	t.Run("nearest peers", func(t *testing.T) {
-		nodeIDs, err := rt.NearestPeers(ctx, incompatKey, 2)
-		require.ErrorIs(t, err, trie.ErrMismatchedKeyLength)
-		require.Nil(t, nodeIDs)
-	})
 }
 
 func TestCplSize(t *testing.T) {
@@ -247,10 +214,10 @@ func TestCplSize(t *testing.T) {
 		rt, err := New(key0, nil)
 		require.NoError(t, err)
 
-		success, err := rt.AddPeer(ctx, NewNode("cpl1a", testutil.RandomWithPrefix("01", 256)))
+		success, err := rt.AddPeer(ctx, NewNode("cpl1a", testutil.RandomKeyWithPrefix("01")))
 		require.NoError(t, err)
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl1b", testutil.RandomWithPrefix("01", 256)))
+		success, err = rt.AddPeer(ctx, NewNode("cpl1b", testutil.RandomKeyWithPrefix("01")))
 		require.NoError(t, err)
 		require.True(t, success)
 		require.Equal(t, 2, rt.Size())
@@ -265,10 +232,10 @@ func TestCplSize(t *testing.T) {
 		rt, err := New(key0, nil)
 		require.NoError(t, err)
 
-		success, err := rt.AddPeer(ctx, NewNode("cpl2a", testutil.RandomWithPrefix("001", 256)))
+		success, err := rt.AddPeer(ctx, NewNode("cpl2a", testutil.RandomKeyWithPrefix("001")))
 		require.NoError(t, err)
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl2b", testutil.RandomWithPrefix("001", 256)))
+		success, err = rt.AddPeer(ctx, NewNode("cpl2b", testutil.RandomKeyWithPrefix("001")))
 		require.NoError(t, err)
 		require.True(t, success)
 
@@ -284,16 +251,16 @@ func TestCplSize(t *testing.T) {
 		rt, err := New(key0, nil)
 		require.NoError(t, err)
 
-		success, err := rt.AddPeer(ctx, NewNode("cpl3a", testutil.RandomWithPrefix("0001", 256)))
+		success, err := rt.AddPeer(ctx, NewNode("cpl3a", testutil.RandomKeyWithPrefix("0001")))
 		require.NoError(t, err)
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl3b", testutil.RandomWithPrefix("0001", 256)))
+		success, err = rt.AddPeer(ctx, NewNode("cpl3b", testutil.RandomKeyWithPrefix("0001")))
 		require.NoError(t, err)
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl3c", testutil.RandomWithPrefix("0001", 256)))
+		success, err = rt.AddPeer(ctx, NewNode("cpl3c", testutil.RandomKeyWithPrefix("0001")))
 		require.NoError(t, err)
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl3d", testutil.RandomWithPrefix("0001", 256)))
+		success, err = rt.AddPeer(ctx, NewNode("cpl3d", testutil.RandomKeyWithPrefix("0001")))
 		require.NoError(t, err)
 		require.True(t, success)
 
@@ -309,30 +276,30 @@ func TestCplSize(t *testing.T) {
 		rt, err := New(key0, nil)
 		require.NoError(t, err)
 
-		success, err := rt.AddPeer(ctx, NewNode("cpl1a", testutil.RandomWithPrefix("01", 256)))
+		success, err := rt.AddPeer(ctx, NewNode("cpl1a", testutil.RandomKeyWithPrefix("01")))
 		require.NoError(t, err)
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl1b", testutil.RandomWithPrefix("01", 256)))
-		require.NoError(t, err)
-		require.True(t, success)
-
-		success, err = rt.AddPeer(ctx, NewNode("cpl2a", testutil.RandomWithPrefix("001", 256)))
-		require.NoError(t, err)
-		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl2b", testutil.RandomWithPrefix("001", 256)))
+		success, err = rt.AddPeer(ctx, NewNode("cpl1b", testutil.RandomKeyWithPrefix("01")))
 		require.NoError(t, err)
 		require.True(t, success)
 
-		success, err = rt.AddPeer(ctx, NewNode("cpl3a", testutil.RandomWithPrefix("0001", 256)))
+		success, err = rt.AddPeer(ctx, NewNode("cpl2a", testutil.RandomKeyWithPrefix("001")))
 		require.NoError(t, err)
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl3b", testutil.RandomWithPrefix("0001", 256)))
+		success, err = rt.AddPeer(ctx, NewNode("cpl2b", testutil.RandomKeyWithPrefix("001")))
 		require.NoError(t, err)
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl3c", testutil.RandomWithPrefix("0001", 256)))
+
+		success, err = rt.AddPeer(ctx, NewNode("cpl3a", testutil.RandomKeyWithPrefix("0001")))
 		require.NoError(t, err)
 		require.True(t, success)
-		success, err = rt.AddPeer(ctx, NewNode("cpl3d", testutil.RandomWithPrefix("0001", 256)))
+		success, err = rt.AddPeer(ctx, NewNode("cpl3b", testutil.RandomKeyWithPrefix("0001")))
+		require.NoError(t, err)
+		require.True(t, success)
+		success, err = rt.AddPeer(ctx, NewNode("cpl3c", testutil.RandomKeyWithPrefix("0001")))
+		require.NoError(t, err)
+		require.True(t, success)
+		success, err = rt.AddPeer(ctx, NewNode("cpl3d", testutil.RandomKeyWithPrefix("0001")))
 		require.NoError(t, err)
 		require.True(t, success)
 
@@ -345,9 +312,9 @@ func TestCplSize(t *testing.T) {
 
 func TestKeyFilter(t *testing.T) {
 	ctx := context.Background()
-	cfg := DefaultConfig()
-	cfg.KeyFilter = func(rt *TrieRT, kk key.KadKey) bool {
-		return !kk.Equal(key2) // don't allow key2 to be added
+	cfg := DefaultConfig[key.Key32]()
+	cfg.KeyFilter = func(rt *TrieRT[key.Key32], kk key.Key32) bool {
+		return !key.Equal(kk, key2) // don't allow key2 to be added
 	}
 	rt, err := New(key0, cfg)
 	require.NoError(t, err)
@@ -404,9 +371,9 @@ func BenchmarkChurn(b *testing.B) {
 
 func benchmarkBuildTable(n int) func(b *testing.B) {
 	return func(b *testing.B) {
-		nodes := make([]address.NodeID, n)
+		nodes := make([]address.NodeID[key.Key32], n)
 		for i := 0; i < n; i++ {
-			nodes[i] = kadid.NewKadID(testutil.Random(256))
+			nodes[i] = kadid.NewKadID(testutil.RandomKey())
 		}
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -425,9 +392,9 @@ func benchmarkBuildTable(n int) func(b *testing.B) {
 
 func benchmarkFindPositive(n int) func(b *testing.B) {
 	return func(b *testing.B) {
-		keys := make([]key.KadKey, n)
+		keys := make([]key.Key32, n)
 		for i := 0; i < n; i++ {
-			keys[i] = testutil.Random(256)
+			keys[i] = testutil.RandomKey()
 		}
 		rt, err := New(key0, nil)
 		if err != nil {
@@ -446,9 +413,9 @@ func benchmarkFindPositive(n int) func(b *testing.B) {
 
 func benchmarkFindNegative(n int) func(b *testing.B) {
 	return func(b *testing.B) {
-		keys := make([]key.KadKey, n)
+		keys := make([]key.Key32, n)
 		for i := 0; i < n; i++ {
-			keys[i] = testutil.Random(256)
+			keys[i] = testutil.RandomKey()
 		}
 		rt, err := New(key0, nil)
 		if err != nil {
@@ -458,9 +425,9 @@ func benchmarkFindNegative(n int) func(b *testing.B) {
 			rt.AddPeer(context.Background(), kadid.NewKadID(kk))
 		}
 
-		unknown := make([]key.KadKey, n)
+		unknown := make([]key.Key32, n)
 		for i := 0; i < n; i++ {
-			kk := testutil.Random(256)
+			kk := testutil.RandomKey()
 			if found, _ := rt.Find(context.Background(), kk); found != nil {
 				continue
 			}
@@ -477,9 +444,9 @@ func benchmarkFindNegative(n int) func(b *testing.B) {
 
 func benchmarkNearestPeers(n int) func(b *testing.B) {
 	return func(b *testing.B) {
-		keys := make([]key.KadKey, n)
+		keys := make([]key.Key32, n)
 		for i := 0; i < n; i++ {
-			keys[i] = testutil.Random(256)
+			keys[i] = testutil.RandomKey()
 		}
 		rt, err := New(key0, nil)
 		if err != nil {
@@ -491,16 +458,16 @@ func benchmarkNearestPeers(n int) func(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			rt.NearestPeers(context.Background(), testutil.Random(256), 20)
+			rt.NearestPeers(context.Background(), testutil.RandomKey(), 20)
 		}
 	}
 }
 
 func benchmarkChurn(n int) func(b *testing.B) {
 	return func(b *testing.B) {
-		universe := make([]address.NodeID, n)
+		universe := make([]address.NodeID[key.Key32], n)
 		for i := 0; i < n; i++ {
-			universe[i] = kadid.NewKadID(testutil.Random(256))
+			universe[i] = kadid.NewKadID(testutil.RandomKey())
 		}
 		rt, err := New(key0, nil)
 		if err != nil {
@@ -528,28 +495,28 @@ func benchmarkChurn(n int) func(b *testing.B) {
 	}
 }
 
-var _ address.NodeID = (*node)(nil)
+// var _ address.NodeID = (*node)(nil)
 
-type node struct {
+type node[K kad.Key[K]] struct {
 	id  string
-	key key.KadKey
+	key K
 }
 
-func NewNode(id string, k key.KadKey) *node {
-	return &node{
+func NewNode[K kad.Key[K]](id string, k K) *node[K] {
+	return &node[K]{
 		id:  id,
 		key: k,
 	}
 }
 
-func (n node) String() string {
+func (n node[K]) String() string {
 	return n.id
 }
 
-func (n node) Key() key.KadKey {
+func (n node[K]) Key() K {
 	return n.key
 }
 
-func (n node) NodeID() address.NodeID {
+func (n node[K]) NodeID() address.NodeID[K] {
 	return &n
 }

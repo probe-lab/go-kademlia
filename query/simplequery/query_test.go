@@ -16,6 +16,8 @@ import (
 	ss "github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
 	"github.com/plprobelab/go-kademlia/events/simulator"
 	"github.com/plprobelab/go-kademlia/events/simulator/litesimulator"
+	"github.com/plprobelab/go-kademlia/internal/testutil"
+	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
@@ -32,6 +34,7 @@ import (
 	"github.com/plprobelab/go-kademlia/routing/simplert"
 	"github.com/plprobelab/go-kademlia/server"
 	"github.com/plprobelab/go-kademlia/server/basicserver"
+	"github.com/plprobelab/go-kademlia/server/simserver"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,49 +48,49 @@ func TestTrivialQuery(t *testing.T) {
 	protoID := address.ProtocolID("/test/1.0.0")
 	peerstoreTTL := 10 * time.Minute
 
-	router := fe.NewFakeRouter()
-	node0 := kadid.NewKadID([]byte{0x00})
-	node1 := kadid.NewKadID([]byte{0x80})
+	router := fe.NewFakeRouter[key.Key256]()
+	node0 := kadaddr.NewKadAddr(kadid.NewKadID(key.ZeroKey256()), nil)
+	node1 := kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0x80})), nil)
 	sched0 := ss.NewSimpleScheduler(clk)
 	sched1 := ss.NewSimpleScheduler(clk)
-	fendpoint0 := fe.NewFakeEndpoint(node0, sched0, router)
-	fendpoint1 := fe.NewFakeEndpoint(node1, sched1, router)
-	rt0 := simplert.New(node0.Key(), 1)
-	rt1 := simplert.New(node1.Key(), 1)
+	fendpoint0 := fe.NewFakeEndpoint[key.Key256](node0.NodeID(), sched0, router)
+	fendpoint1 := fe.NewFakeEndpoint[key.Key256](node1.NodeID(), sched1, router)
+	rt0 := simplert.New(node0.NodeID().Key(), 1)
+	rt1 := simplert.New(node1.NodeID().Key(), 1)
 
 	// make node1 a server
 	server1 := basicserver.NewBasicServer(rt1, fendpoint1)
-	fendpoint1.AddRequestHandler(protoID, &sm.SimMessage{}, server1.HandleRequest)
+	fendpoint1.AddRequestHandler(protoID, &sm.SimMessage[key.Key256]{}, server1.HandleRequest)
 
 	// connect add node1 address to node0
 	err := fendpoint0.MaybeAddToPeerstore(ctx, node1, peerstoreTTL)
 	require.NoError(t, err)
-	success, err := rt0.AddPeer(ctx, node1)
+	success, err := rt0.AddPeer(ctx, node1.NodeID())
 	require.NoError(t, err)
 	require.True(t, success)
 
 	// add a peer in node1's routing table. this peer will be returned in the
 	// response to the query
-	node2 := kadid.NewKadID([]byte{0xf0})
+	node2 := kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0xf0})), nil)
 	err = fendpoint1.MaybeAddToPeerstore(ctx, node2, peerstoreTTL)
 	require.NoError(t, err)
-	success, err = rt1.AddPeer(ctx, node2)
+	success, err = rt1.AddPeer(ctx, node2.NodeID())
 	require.NoError(t, err)
 	require.True(t, success)
 
-	req := sm.NewSimRequest([]byte{0xf0})
+	req := sm.NewSimRequest(testutil.Key256WithLeadingBytes([]byte{0xf0}))
 
-	queryOpts := []Option{
-		WithProtocolID(protoID),
-		WithConcurrency(1),
-		WithNumberUsefulCloserPeers(2),
-		WithRequestTimeout(time.Second),
-		WithPeerstoreTTL(peerstoreTTL),
-		WithRoutingTable(rt0),
-		WithEndpoint(fendpoint0),
-		WithScheduler(sched0),
+	queryOpts := []Option[key.Key256]{
+		WithProtocolID[key.Key256](protoID),
+		WithConcurrency[key.Key256](1),
+		WithNumberUsefulCloserPeers[key.Key256](2),
+		WithRequestTimeout[key.Key256](time.Second),
+		WithPeerstoreTTL[key.Key256](peerstoreTTL),
+		WithRoutingTable[key.Key256](rt0),
+		WithEndpoint[key.Key256](fendpoint0),
+		WithScheduler[key.Key256](sched0),
 	}
-	q, err := NewSimpleQuery(ctx, req, queryOpts...)
+	q, err := NewSimpleQuery[key.Key256](ctx, req, queryOpts...)
 	require.NoError(t, err)
 
 	// create and run the simulation
@@ -96,11 +99,11 @@ func TestTrivialQuery(t *testing.T) {
 	sim.Run(ctx)
 
 	// check that the peerlist should contain node2 and node1 (in this order)
-	require.Equal(t, node2, q.peerlist.closest.id)
+	require.Equal(t, node2.NodeID(), q.peerlist.closest.id)
 	require.Equal(t, unreachable, q.peerlist.closest.status)
 	// node2 is considered unreachable, and not added to the routing table,
 	// because it doesn't return any peer (as its routing table is empty)
-	require.Equal(t, node1, q.peerlist.closest.next.id)
+	require.Equal(t, node1.NodeID(), q.peerlist.closest.next.id)
 	// node1 is set as queried because it answer with closer peers (only 1)
 	require.Equal(t, queried, q.peerlist.closest.next.status)
 	// there are no more peers in the peerlist
@@ -112,132 +115,123 @@ func TestInvalidQueryOptions(t *testing.T) {
 	ctx := context.Background()
 	clk := clock.NewMock()
 
-	router := fe.NewFakeRouter()
+	router := fe.NewFakeRouter[key.Key256]()
 	node := si.StringID("node0")
 	sched := ss.NewSimpleScheduler(clk)
-	fendpoint := fe.NewFakeEndpoint(node, sched, router)
+	fendpoint := fe.NewFakeEndpoint[key.Key256](node, sched, router)
 	rt := simplert.New(node.Key(), 1)
 
 	// fails because rt is not set
-	invalidOpts := []Option{}
-	req := sm.NewSimRequest(nil)
-	_, err := NewSimpleQuery(ctx, req, invalidOpts...)
+	invalidOpts := []Option[key.Key256]{}
+	req := sm.NewSimRequest[key.Key256](key.ZeroKey256())
+	_, err := NewSimpleQuery[key.Key256](ctx, req, invalidOpts...)
 	require.Error(t, err)
 
 	// fails because rt is nil
-	invalidOpts = []Option{
-		WithRoutingTable(nil),
+	invalidOpts = []Option[key.Key256]{
+		WithRoutingTable[key.Key256](nil),
 	}
-	_, err = NewSimpleQuery(ctx, req, invalidOpts...)
+	_, err = NewSimpleQuery[key.Key256](ctx, req, invalidOpts...)
 	require.Error(t, err)
 
 	// fails because endpoint is not set
-	invalidOpts = []Option{
-		WithRoutingTable(rt),
+	invalidOpts = []Option[key.Key256]{
+		WithRoutingTable[key.Key256](rt),
 	}
-	_, err = NewSimpleQuery(ctx, req, invalidOpts...)
+	_, err = NewSimpleQuery[key.Key256](ctx, req, invalidOpts...)
 	require.Error(t, err)
 
 	// fails because endpoint is nil
-	invalidOpts = []Option{
-		WithRoutingTable(rt),
-		WithEndpoint(nil),
+	invalidOpts = []Option[key.Key256]{
+		WithRoutingTable[key.Key256](rt),
+		WithEndpoint[key.Key256](nil),
 	}
-	_, err = NewSimpleQuery(ctx, req, invalidOpts...)
+	_, err = NewSimpleQuery[key.Key256](ctx, req, invalidOpts...)
 	require.Error(t, err)
 
 	// fails because scheduler is not set
-	invalidOpts = []Option{
-		WithRoutingTable(rt),
-		WithEndpoint(fendpoint),
+	invalidOpts = []Option[key.Key256]{
+		WithRoutingTable[key.Key256](rt),
+		WithEndpoint[key.Key256](fendpoint),
 	}
-	_, err = NewSimpleQuery(ctx, req, invalidOpts...)
+	_, err = NewSimpleQuery[key.Key256](ctx, req, invalidOpts...)
 	require.Error(t, err)
 
 	// fails because scheduler is nil
-	invalidOpts = []Option{
-		WithRoutingTable(rt),
-		WithEndpoint(fendpoint),
-		WithScheduler(nil),
+	invalidOpts = []Option[key.Key256]{
+		WithRoutingTable[key.Key256](rt),
+		WithEndpoint[key.Key256](fendpoint),
+		WithScheduler[key.Key256](nil),
 	}
-	_, err = NewSimpleQuery(ctx, req, invalidOpts...)
+	_, err = NewSimpleQuery[key.Key256](ctx, req, invalidOpts...)
 	require.Error(t, err)
 
 	// fails because HandleResultsFunc is nil
-	invalidOpts = []Option{
-		WithRoutingTable(rt),
-		WithEndpoint(fendpoint),
-		WithScheduler(sched),
-		WithHandleResultsFunc(nil),
+	invalidOpts = []Option[key.Key256]{
+		WithRoutingTable[key.Key256](rt),
+		WithEndpoint[key.Key256](fendpoint),
+		WithScheduler[key.Key256](sched),
+		WithHandleResultsFunc[key.Key256](nil),
 	}
-	_, err = NewSimpleQuery(ctx, req, invalidOpts...)
+	_, err = NewSimpleQuery[key.Key256](ctx, req, invalidOpts...)
 	require.Error(t, err)
 
 	// fails because WithNotifyFailureFunc is nil
-	invalidOpts = []Option{
-		WithRoutingTable(rt),
-		WithEndpoint(fendpoint),
-		WithScheduler(sched),
-		WithNotifyFailureFunc(nil),
+	invalidOpts = []Option[key.Key256]{
+		WithRoutingTable[key.Key256](rt),
+		WithEndpoint[key.Key256](fendpoint),
+		WithScheduler[key.Key256](sched),
+		WithNotifyFailureFunc[key.Key256](nil),
 	}
-	_, err = NewSimpleQuery(ctx, req, invalidOpts...)
+	_, err = NewSimpleQuery[key.Key256](ctx, req, invalidOpts...)
 	require.Error(t, err)
 
 	// fails because NumberUsefulCloserPeers is 0
-	invalidOpts = []Option{
-		WithRoutingTable(rt),
-		WithEndpoint(fendpoint),
-		WithScheduler(sched),
-		WithNumberUsefulCloserPeers(0),
+	invalidOpts = []Option[key.Key256]{
+		WithRoutingTable[key.Key256](rt),
+		WithEndpoint[key.Key256](fendpoint),
+		WithScheduler[key.Key256](sched),
+		WithNumberUsefulCloserPeers[key.Key256](0),
 	}
-	_, err = NewSimpleQuery(ctx, req, invalidOpts...)
+	_, err = NewSimpleQuery[key.Key256](ctx, req, invalidOpts...)
 	require.Error(t, err)
 
 	// fails because Concurrency is 0
-	invalidOpts = []Option{
-		WithRoutingTable(rt),
-		WithEndpoint(fendpoint),
-		WithScheduler(sched),
-		WithConcurrency(0),
+	invalidOpts = []Option[key.Key256]{
+		WithRoutingTable[key.Key256](rt),
+		WithEndpoint[key.Key256](fendpoint),
+		WithScheduler[key.Key256](sched),
+		WithConcurrency[key.Key256](0),
 	}
-	_, err = NewSimpleQuery(ctx, req, invalidOpts...)
-	require.Error(t, err)
-
-	// fails because req.Target() isn't the same size as node.Key()
-	invalidOpts = []Option{
-		WithRoutingTable(rt),
-		WithEndpoint(fendpoint),
-		WithScheduler(sched),
-		WithConcurrency(1),
-	}
-	_, err = NewSimpleQuery(ctx, req, invalidOpts...)
+	_, err = NewSimpleQuery[key.Key256](ctx, req, invalidOpts...)
 	require.Error(t, err)
 }
 
 func simulationSetup(t *testing.T, ctx context.Context, n, bucketSize int,
 	clk clock.Clock, protoID address.ProtocolID, peerstoreTTL time.Duration,
-	defaultQueryOpts []Option) (
-	[]address.NodeAddr, []scheduler.AwareScheduler, []endpoint.SimEndpoint,
-	[]routing.Table, []server.Server, [][]Option) {
+	defaultQueryOpts []Option[key.Key8]) (
+	[]address.NodeAddr[key.Key8], []scheduler.AwareScheduler, []endpoint.SimEndpoint[key.Key8],
+	[]routing.Table[key.Key8], []server.Server[key.Key8], [][]Option[key.Key8],
+) {
+	router := fe.NewFakeRouter[key.Key8]()
 
-	router := fe.NewFakeRouter()
-
-	ids := make([]address.NodeAddr, n)
+	ids := make([]address.NodeAddr[key.Key8], n)
 	scheds := make([]scheduler.AwareScheduler, n)
-	fendpoints := make([]endpoint.SimEndpoint, n)
-	rts := make([]routing.Table, n)
-	servers := make([]server.Server, n)
+	fendpoints := make([]endpoint.SimEndpoint[key.Key8], n)
+	rts := make([]routing.Table[key.Key8], n)
+	servers := make([]server.Server[key.Key8], n)
 
 	spacing := 256 / n
 
 	for i := 0; i < n; i++ {
 		scheds[i] = ss.NewSimpleScheduler(clk)
-		ids[i] = kadid.NewKadID([]byte{byte(i * spacing)})
+		ids[i] = kadaddr.NewKadAddr(kadid.NewKadID(key.Key8(uint8(i*spacing))), nil)
 		fendpoints[i] = fe.NewFakeEndpoint(ids[i].NodeID(), scheds[i], router)
 		rts[i] = simplert.New(ids[i].NodeID().Key(), bucketSize)
-		servers[i] = basicserver.NewBasicServer(rts[i], fendpoints[i],
-			basicserver.WithNumberUsefulCloserPeers(bucketSize))
-		fendpoints[i].AddRequestHandler(protoID, &sm.SimMessage{}, servers[i].HandleRequest)
+		cfg := simserver.DefaultConfig()
+		cfg.NumberUsefulCloserPeers = bucketSize
+		servers[i] = simserver.NewSimServer[key.Key8](rts[i], fendpoints[i], cfg)
+		fendpoints[i].AddRequestHandler(protoID, &sm.SimMessage[key.Key8]{}, servers[i].HandleRequest)
 	}
 
 	// peer ids (KadIDs) are i*8 for i in [0, 32), the keyspace is 1 byte [0, 255]
@@ -259,34 +253,34 @@ func simulationSetup(t *testing.T, ctx context.Context, n, bucketSize int,
 	}
 
 	// query options for each peer
-	queryOpts := make([][]Option, n)
+	queryOpts := make([][]Option[key.Key8], n)
 	for i := 0; i < n; i++ {
 		queryOpts[i] = append(defaultQueryOpts,
-			WithRoutingTable(rts[i]),
-			WithEndpoint(fendpoints[i]),
-			WithScheduler(scheds[i]),
+			WithRoutingTable[key.Key8](rts[i]),
+			WithEndpoint[key.Key8](fendpoints[i]),
+			WithScheduler[key.Key8](scheds[i]),
 		)
 	}
 
 	return ids, scheds, fendpoints, rts, servers, queryOpts
 }
 
-func getHandleResults(t *testing.T, req message.MinKadRequestMessage,
-	expectedPeers []key.KadKey, expectedResponses [][]key.KadKey) func(
-	ctx context.Context, id address.NodeID, resp message.MinKadResponseMessage) (
-	bool, []address.NodeID) {
-
+func getHandleResults[K kad.Key[K]](t *testing.T, req message.MinKadRequestMessage[K],
+	expectedPeers []K, expectedResponses [][]K) func(
+	ctx context.Context, id address.NodeID[K], resp message.MinKadResponseMessage[K]) (
+	bool, []address.NodeID[K]) {
 	var responseCount int
-	return func(ctx context.Context, id address.NodeID,
-		resp message.MinKadResponseMessage) (bool, []address.NodeID) {
+	return func(ctx context.Context, id address.NodeID[K],
+		resp message.MinKadResponseMessage[K],
+	) (bool, []address.NodeID[K]) {
 		// check that the request was sent to the correct peer
 		require.Equal(t, expectedPeers[responseCount], id.Key(), "responseCount: ", responseCount)
 
-		ids := make([]address.NodeID, len(resp.CloserNodes()))
+		ids := make([]address.NodeID[K], len(resp.CloserNodes()))
 		var found bool
 		for i, n := range resp.CloserNodes() {
 			ids[i] = n.NodeID()
-			if ids[i].Key().Equal(req.Target()) {
+			if key.Equal(ids[i].Key(), req.Target()) {
 				// the target was found, stop the query
 				found = true
 			}
@@ -308,12 +302,12 @@ func TestElementaryQuery(t *testing.T) {
 	peerstoreTTL := time.Minute
 
 	// generic query options to be used by all peers
-	defaultQueryOpts := []Option{
-		WithProtocolID(protoID),
-		WithConcurrency(1),
-		WithNumberUsefulCloserPeers(bucketSize),
-		WithRequestTimeout(time.Second),
-		WithPeerstoreTTL(peerstoreTTL),
+	defaultQueryOpts := []Option[key.Key8]{
+		WithProtocolID[key.Key8](protoID),
+		WithConcurrency[key.Key8](1),
+		WithNumberUsefulCloserPeers[key.Key8](bucketSize),
+		WithRequestTimeout[key.Key8](time.Second),
+		WithPeerstoreTTL[key.Key8](peerstoreTTL),
 	}
 
 	ids, scheds, _, rts, _, queryOpts := simulationSetup(t, ctx, nPeers,
@@ -324,27 +318,27 @@ func TestElementaryQuery(t *testing.T) {
 	req := sm.NewSimRequest(ids[len(ids)-1].NodeID().Key())
 
 	// peers that are expected to be queried, in order
-	expectedPeers := []key.KadKey{}
+	expectedPeers := []key.Key8{}
 	// peer that are expected to be included in responses, in order
-	expectedResponses := [][]key.KadKey{}
+	expectedResponses := [][]key.Key8{}
 
 	currID := 0
 	// while currID != target.Key()
-	for !ids[currID].NodeID().Key().Equal(req.Target()) {
+	for !key.Equal(ids[currID].NodeID().Key(), req.Target()) {
 		// get closest peer to target from the sollicited peer
 		closest, err := rts[currID].NearestPeers(ctx, req.Target(), 1)
 		require.NoError(t, err)
-		require.Len(t, closest, 1, fmt.Sprint(ids[currID].NodeID().Key().Equal(req.Target())))
+		require.Len(t, closest, 1, fmt.Sprint(key.Equal(ids[currID].NodeID().Key(), req.Target())))
 		expectedPeers = append(expectedPeers, closest[0].Key())
 
 		// the next current id is the closest peer to the target
-		currID = int(closest[0].Key()[0] / 8)
+		currID = int(closest[0].Key() / 8)
 
 		// the peers included in the response are the closest to the target
 		// from the sollicited peer
 		responseClosest, err := rts[currID].NearestPeers(ctx, req.Target(), bucketSize)
 		require.NoError(t, err)
-		closestKey := make([]key.KadKey, len(responseClosest))
+		closestKey := make([]key.Key8, len(responseClosest))
 		for i, n := range responseClosest {
 			closestKey[i] = n.Key()
 		}
@@ -356,16 +350,16 @@ func TestElementaryQuery(t *testing.T) {
 	// Otherwise, it returns false, and the query continues. This function also
 	// checks that the response come from the expected peer and contains the
 	// expected peers addresses.
-	handleResults := getHandleResults(t, req, expectedPeers, expectedResponses)
+	handleResults := getHandleResults[key.Key8](t, req, expectedPeers, expectedResponses)
 
 	// the request will not fail
 	notifyFailure := func(context.Context) {
 		require.Fail(t, "notify failure shouldn't be called")
 	}
 
-	_, err := NewSimpleQuery(ctx, req, append(queryOpts[0],
+	_, err := NewSimpleQuery[key.Key8](ctx, req, append(queryOpts[0],
 		WithHandleResultsFunc(handleResults),
-		WithNotifyFailureFunc(notifyFailure))...)
+		WithNotifyFailureFunc[key.Key8](notifyFailure))...)
 	require.NoError(t, err)
 
 	// create simulator
@@ -388,12 +382,12 @@ func TestFailedQuery(t *testing.T) {
 	peerstoreTTL := time.Minute
 
 	// generic query options to be used by all peers
-	defaultQueryOpts := []Option{
-		WithProtocolID(protoID),
-		WithConcurrency(1),
-		WithNumberUsefulCloserPeers(bucketSize),
-		WithRequestTimeout(time.Second),
-		WithPeerstoreTTL(peerstoreTTL),
+	defaultQueryOpts := []Option[key.Key8]{
+		WithProtocolID[key.Key8](protoID),
+		WithConcurrency[key.Key8](1),
+		WithNumberUsefulCloserPeers[key.Key8](bucketSize),
+		WithRequestTimeout[key.Key8](time.Second),
+		WithPeerstoreTTL[key.Key8](peerstoreTTL),
 	}
 
 	ids, scheds, _, rts, _, queryOpts := simulationSetup(t, ctx, nPeers,
@@ -401,7 +395,7 @@ func TestFailedQuery(t *testing.T) {
 
 	// smallest peer is looking for biggest peer (which is the most far away
 	// in hop numbers, given the routing table configuration)
-	req := sm.NewSimRequest([]byte{0xff})
+	req := sm.NewSimRequest(key.Key8(0xff))
 
 	//         _______^_______
 	//      __^__           __^__
@@ -429,19 +423,19 @@ func TestFailedQuery(t *testing.T) {
 	}
 
 	// peers that are expected to be queried, in order
-	expectedPeers := make([]key.KadKey, len(order))
+	expectedPeers := make([]key.Key8, len(order))
 	for i, o := range order {
 		expectedPeers[i] = ids[o].NodeID().Key()
 	}
 
 	// peer that are expected to be included in responses, in order
-	expectedResponses := make([][]key.KadKey, len(order))
+	expectedResponses := make([][]key.Key8, len(order))
 	for i, o := range order {
 		// the peers included in the response are the closest to the target
 		// from the sollicited peer
 		responseClosest, err := rts[o].NearestPeers(ctx, req.Target(), bucketSize)
 		require.NoError(t, err)
-		closestKeys := make([]key.KadKey, len(responseClosest))
+		closestKeys := make([]key.Key8, len(responseClosest))
 		for i, n := range responseClosest {
 			closestKeys[i] = n.Key()
 		}
@@ -453,7 +447,7 @@ func TestFailedQuery(t *testing.T) {
 	// Otherwise, it returns false, and the query continues. This function also
 	// checks that the response come from the expected peer and contains the
 	// expected peers addresses.
-	handleResults := getHandleResults(t, req, expectedPeers, expectedResponses)
+	handleResults := getHandleResults[key.Key8](t, req, expectedPeers, expectedResponses)
 
 	var failed bool
 	// the request will not fail
@@ -461,9 +455,9 @@ func TestFailedQuery(t *testing.T) {
 		failed = true
 	}
 
-	_, err := NewSimpleQuery(ctx, req, append(queryOpts[0],
+	_, err := NewSimpleQuery[key.Key8](ctx, req, append(queryOpts[0],
 		WithHandleResultsFunc(handleResults),
-		WithNotifyFailureFunc(notifyFailure))...)
+		WithNotifyFailureFunc[key.Key8](notifyFailure))...)
 	require.NoError(t, err)
 
 	// create simulator
@@ -484,22 +478,22 @@ func TestConcurrentQuery(t *testing.T) {
 	nPeers := 8
 	peerstoreTTL := time.Minute
 
-	router := fe.NewFakeRouter()
+	router := fe.NewFakeRouter[key.Key256]()
 
-	ids := make([]address.NodeAddr, nPeers)
+	ids := make([]address.NodeAddr[key.Key256], nPeers)
 	scheds := make([]scheduler.AwareScheduler, nPeers)
-	fendpoints := make([]endpoint.SimEndpoint, nPeers)
-	rts := make([]routing.Table, nPeers)
-	servers := make([]server.Server, nPeers)
+	fendpoints := make([]endpoint.SimEndpoint[key.Key256], nPeers)
+	rts := make([]routing.Table[key.Key256], nPeers)
+	servers := make([]server.Server[key.Key256], nPeers)
 
 	for i := 0; i < nPeers; i++ {
 		scheds[i] = ss.NewSimpleScheduler(clk)
-		ids[i] = kadid.NewKadID([]byte{byte(i * 32)})
+		ids[i] = kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{byte(i * 32)})), nil)
 		fendpoints[i] = fe.NewFakeEndpoint(ids[i].NodeID(), scheds[i], router)
 		rts[i] = simplert.New(ids[i].NodeID().Key(), bucketSize)
 		servers[i] = basicserver.NewBasicServer(rts[i], fendpoints[i],
 			basicserver.WithNumberUsefulCloserPeers(bucketSize))
-		fendpoints[i].AddRequestHandler(protoID, &sm.SimMessage{}, servers[i].HandleRequest)
+		fendpoints[i].AddRequestHandler(protoID, &sm.SimMessage[key.Key8]{}, servers[i].HandleRequest)
 	}
 
 	// 0 is looking for 7
@@ -511,8 +505,16 @@ func TestConcurrentQuery(t *testing.T) {
 	// 5 knows 4, 6
 	// sequence of outgoing requests from 0 to find 7: 3, 2, 4, 6
 
-	connections := [...][2]int{{0, 1}, {0, 2}, {0, 3}, {3, 4}, {2, 6},
-		{4, 5}, {6, 7}, {6, 5}}
+	connections := [...][2]int{
+		{0, 1},
+		{0, 2},
+		{0, 3},
+		{3, 4},
+		{2, 6},
+		{4, 5},
+		{6, 7},
+		{6, 5},
+	}
 
 	for _, c := range connections {
 		for i := range c {
@@ -527,21 +529,21 @@ func TestConcurrentQuery(t *testing.T) {
 	}
 
 	// generic query options to be used by all peers
-	defaultQueryOpts := []Option{
-		WithProtocolID(protoID),
-		WithConcurrency(2),
-		WithNumberUsefulCloserPeers(bucketSize),
-		WithRequestTimeout(time.Second),
-		WithPeerstoreTTL(peerstoreTTL),
+	defaultQueryOpts := []Option[key.Key256]{
+		WithProtocolID[key.Key256](protoID),
+		WithConcurrency[key.Key256](2),
+		WithNumberUsefulCloserPeers[key.Key256](bucketSize),
+		WithRequestTimeout[key.Key256](time.Second),
+		WithPeerstoreTTL[key.Key256](peerstoreTTL),
 	}
 
 	// query options for each peer
-	queryOpts := make([][]Option, nPeers)
+	queryOpts := make([][]Option[key.Key256], nPeers)
 	for i := 0; i < nPeers; i++ {
 		queryOpts[i] = append(defaultQueryOpts,
 			WithRoutingTable(rts[i]),
-			WithEndpoint(fendpoints[i]),
-			WithScheduler(scheds[i]),
+			WithEndpoint[key.Key256](fendpoints[i]),
+			WithScheduler[key.Key256](scheds[i]),
 		)
 	}
 
@@ -550,26 +552,28 @@ func TestConcurrentQuery(t *testing.T) {
 	req := sm.NewSimRequest(ids[len(ids)-1].NodeID().Key())
 
 	// peers that are expected to be queried, in order
-	expectedPeers := []key.KadKey{ids[3].NodeID().Key(), ids[2].NodeID().Key(),
-		ids[4].NodeID().Key(), ids[6].NodeID().Key()}
+	expectedPeers := []key.Key256{
+		ids[3].NodeID().Key(), ids[2].NodeID().Key(),
+		ids[4].NodeID().Key(), ids[6].NodeID().Key(),
+	}
 	// peer that are expected to be included in responses, in order
-	expectedResponses := [][]key.KadKey{
+	expectedResponses := [][]key.Key256{
 		{ids[4].NodeID().Key(), ids[0].NodeID().Key()},
 		{ids[6].NodeID().Key(), ids[0].NodeID().Key()},
 		{ids[5].NodeID().Key(), ids[3].NodeID().Key()},
 		{ids[7].NodeID().Key(), ids[2].NodeID().Key(), ids[5].NodeID().Key()},
 	}
 
-	handleResults := getHandleResults(t, req, expectedPeers, expectedResponses)
+	handleResults := getHandleResults[key.Key256](t, req, expectedPeers, expectedResponses)
 
 	// the request will not fail
 	notifyFailure := func(context.Context) {
 		require.Fail(t, "notify failure shouldn't be called")
 	}
 
-	_, err := NewSimpleQuery(ctx, req, append(queryOpts[0],
+	_, err := NewSimpleQuery[key.Key256](ctx, req, append(queryOpts[0],
 		WithHandleResultsFunc(handleResults),
-		WithNotifyFailureFunc(notifyFailure))...)
+		WithNotifyFailureFunc[key.Key256](notifyFailure))...)
 	require.NoError(t, err)
 
 	// create simulator
@@ -587,51 +591,53 @@ func TestUnresponsivePeer(t *testing.T) {
 	peerstoreTTL := time.Minute
 	bucketSize := 1
 
-	router := fe.NewFakeRouter()
-	id0 := kadid.NewKadID([]byte{0})
-	id1 := kadid.NewKadID([]byte{1})
+	router := fe.NewFakeRouter[key.Key8]()
+	node0 := kadaddr.NewKadAddr(kadid.NewKadID(key.Key8(0)), nil)
+	node1 := kadaddr.NewKadAddr(kadid.NewKadID(key.Key8(1)), nil)
 	sched0 := ss.NewSimpleScheduler(clk)
 	sched1 := ss.NewSimpleScheduler(clk)
-	fendpoint0 := fe.NewFakeEndpoint(id0.NodeID(), sched0, router)
-	fendpoint1 := fe.NewFakeEndpoint(id1.NodeID(), sched1, router)
-	rt0 := simplert.New(id0.NodeID().Key(), bucketSize)
+	fendpoint0 := fe.NewFakeEndpoint[key.Key8](node0.NodeID(), sched0, router)
+	fendpoint1 := fe.NewFakeEndpoint[key.Key8](node1.NodeID(), sched1, router)
+	rt0 := simplert.New(node0.NodeID().Key(), bucketSize)
 
-	serverRequestHandler := func(context.Context, address.NodeID,
-		message.MinKadMessage) (message.MinKadMessage, error) {
+	serverRequestHandler := func(context.Context, address.NodeID[key.Key8],
+		message.MinKadMessage,
+	) (message.MinKadMessage, error) {
 		return nil, errors.New("")
 	}
-	fendpoint1.AddRequestHandler(protoID, &sm.SimMessage{}, serverRequestHandler)
+	fendpoint1.AddRequestHandler(protoID, &sm.SimMessage[key.Key8]{}, serverRequestHandler)
 
-	req := sm.NewSimRequest([]byte{0xff})
+	req := sm.NewSimRequest(key.Key8(0xff))
 
-	responseHandler := func(ctx context.Context, sender address.NodeID,
-		msg message.MinKadResponseMessage) (bool, []address.NodeID) {
+	responseHandler := func(ctx context.Context, sender address.NodeID[key.Key8],
+		msg message.MinKadResponseMessage[key.Key8],
+	) (bool, []address.NodeID[key.Key8]) {
 		require.Fail(t, "response handler shouldn't be called")
 		return false, nil
 	}
-	queryOpts := []Option{
-		WithProtocolID(protoID),
-		WithConcurrency(2),
-		WithNumberUsefulCloserPeers(bucketSize),
-		WithRequestTimeout(time.Millisecond),
-		WithEndpoint(fendpoint0),
-		WithRoutingTable(rt0),
-		WithScheduler(sched0),
+	queryOpts := []Option[key.Key8]{
+		WithProtocolID[key.Key8](protoID),
+		WithConcurrency[key.Key8](2),
+		WithNumberUsefulCloserPeers[key.Key8](bucketSize),
+		WithRequestTimeout[key.Key8](time.Millisecond),
+		WithEndpoint[key.Key8](fendpoint0),
+		WithRoutingTable[key.Key8](rt0),
+		WithScheduler[key.Key8](sched0),
 		WithHandleResultsFunc(responseHandler),
 	}
 
 	// query creation fails because the routing table of 0 is empty
-	_, err := NewSimpleQuery(ctx, req, queryOpts...)
+	_, err := NewSimpleQuery[key.Key8](ctx, req, queryOpts...)
 	require.Error(t, err)
 
 	// connect 0 and 1
-	err = fendpoint0.MaybeAddToPeerstore(ctx, id1, peerstoreTTL)
+	err = fendpoint0.MaybeAddToPeerstore(ctx, node1, peerstoreTTL)
 	require.NoError(t, err)
-	success, err := rt0.AddPeer(ctx, id1.NodeID())
+	success, err := rt0.AddPeer(ctx, node1.NodeID())
 	require.NoError(t, err)
 	require.True(t, success)
 
-	q, err := NewSimpleQuery(ctx, req, queryOpts...)
+	q, err := NewSimpleQuery[key.Key8](ctx, req, queryOpts...)
 	require.NoError(t, err)
 
 	// create simulator
@@ -652,59 +658,60 @@ func TestCornerCases(t *testing.T) {
 	bucketSize := 1
 	peerstoreTTL := time.Minute
 
-	router := fe.NewFakeRouter()
-	id0 := kadid.NewKadID([]byte{0x00})
+	router := fe.NewFakeRouter[key.Key8]()
+	node0 := kadaddr.NewKadAddr(kadid.NewKadID(key.Key8(0x00)), nil)
 	sched0 := ss.NewSimpleScheduler(clk)
-	fendpoint0 := fe.NewFakeEndpoint(id0.NodeID(), sched0, router)
-	rt0 := simplert.New(id0.NodeID().Key(), bucketSize)
+	fendpoint0 := fe.NewFakeEndpoint(node0.NodeID(), sched0, router)
+	rt0 := simplert.New(node0.NodeID().Key(), bucketSize)
 
-	id1 := kadid.NewKadID([]byte{0x01})
-	fendpoint0.MaybeAddToPeerstore(ctx, id1, peerstoreTTL)
+	node1 := kadaddr.NewKadAddr(kadid.NewKadID(key.Key8(0x01)), nil)
+	fendpoint0.MaybeAddToPeerstore(ctx, node1, peerstoreTTL)
 
-	success, err := rt0.AddPeer(ctx, id1)
+	success, err := rt0.AddPeer(ctx, node1.NodeID())
 	require.NoError(t, err)
 	require.True(t, success)
 
-	req := sm.NewSimRequest([]byte{0xff})
+	req := sm.NewSimRequest(key.Key8(0xff))
 
-	responseHandler := func(ctx context.Context, sender address.NodeID,
-		msg message.MinKadResponseMessage) (bool, []address.NodeID) {
-		ids := make([]address.NodeID, len(msg.CloserNodes()))
+	responseHandler := func(ctx context.Context, sender address.NodeID[key.Key8],
+		msg message.MinKadResponseMessage[key.Key8],
+	) (bool, []address.NodeID[key.Key8]) {
+		ids := make([]address.NodeID[key.Key8], len(msg.CloserNodes()))
 		for i, peer := range msg.CloserNodes() {
 			ids[i] = peer.NodeID()
 		}
 		return false, ids
 	}
 
-	queryOpts := []Option{
-		WithProtocolID(protoID),
-		WithConcurrency(1),
-		WithNumberUsefulCloserPeers(bucketSize),
-		WithRequestTimeout(time.Millisecond),
-		WithEndpoint(fendpoint0),
-		WithRoutingTable(rt0),
-		WithScheduler(sched0),
+	queryOpts := []Option[key.Key8]{
+		WithProtocolID[key.Key8](protoID),
+		WithConcurrency[key.Key8](1),
+		WithNumberUsefulCloserPeers[key.Key8](bucketSize),
+		WithRequestTimeout[key.Key8](time.Millisecond),
+		WithEndpoint[key.Key8](fendpoint0),
+		WithRoutingTable[key.Key8](rt0),
+		WithScheduler[key.Key8](sched0),
 		WithHandleResultsFunc(responseHandler),
 	}
 
-	q, err := NewSimpleQuery(ctx, req, queryOpts...)
+	q, err := NewSimpleQuery[key.Key8](ctx, req, queryOpts...)
 	require.NoError(t, err)
 
 	// nil response should trigger a request error
-	q.handleResponse(ctx, id1, nil)
+	q.handleResponse(ctx, node1.NodeID(), nil)
 
-	addrs := []address.NodeAddr{
-		kadaddr.NewKadAddr(kadid.NewKadID([]byte{0xee}), nil),
-		kadaddr.NewKadAddr(kadid.NewKadID([]byte{0x66, 0x66}), nil), // invalid key length
-		kadaddr.NewKadAddr(kadid.NewKadID([]byte{0x88}), nil),
+	addrs := []address.NodeAddr[key.Key8]{
+		kadaddr.NewKadAddr(kadid.NewKadID(key.Key8(0xee)), nil),
+		// kadaddr.NewKadAddr(kadid.NewKadID([]byte{0x66, 0x66}), nil), // invalid key length
+		kadaddr.NewKadAddr(kadid.NewKadID(key.Key8(0x88)), nil),
 	}
 	forgedResponse := sm.NewSimResponse(addrs)
-	q.handleResponse(ctx, id1, forgedResponse)
+	q.handleResponse(ctx, node1.NodeID(), forgedResponse)
 
 	// test that 0xee and 0x88 have been added to peerlist but not 0x6666
 	require.Equal(t, addrs[0].NodeID(), q.peerlist.closest.id)
-	require.Equal(t, addrs[2].NodeID(), q.peerlist.closest.next.id)
-	require.Equal(t, id1, q.peerlist.closest.next.next.id)
+	require.Equal(t, addrs[1].NodeID(), q.peerlist.closest.next.id)
+	require.Equal(t, node1.NodeID(), q.peerlist.closest.next.next.id)
 	require.Nil(t, q.peerlist.closest.next.next.next)
 
 	// test new request if all peers have been tried
@@ -718,7 +725,7 @@ func TestCornerCases(t *testing.T) {
 	// cancel contex
 	cancel()
 	sched0.EnqueueAction(ctx, basicaction.BasicAction(func(context.Context) {
-		q.requestError(ctx, id1, errors.New(""))
+		q.requestError(ctx, node1.NodeID(), errors.New(""))
 	}))
 
 	// create simulator
@@ -761,26 +768,26 @@ func TestLibp2pCornerCase(t *testing.T) {
 	err = libp2pEndpoint.MaybeAddToPeerstore(ctx, addrInfo, peerstoreTTL)
 	require.NoError(t, err)
 
-	queryOpts := []Option{
-		WithProtocolID(protoID),
-		WithConcurrency(1),
-		WithNumberUsefulCloserPeers(bucketSize),
-		WithRequestTimeout(time.Millisecond),
-		WithEndpoint(libp2pEndpoint),
-		WithRoutingTable(rt),
-		WithScheduler(sched),
+	queryOpts := []Option[key.Key256]{
+		WithProtocolID[key.Key256](protoID),
+		WithConcurrency[key.Key256](1),
+		WithNumberUsefulCloserPeers[key.Key256](bucketSize),
+		WithRequestTimeout[key.Key256](time.Millisecond),
+		WithEndpoint[key.Key256](libp2pEndpoint),
+		WithRoutingTable[key.Key256](rt),
+		WithScheduler[key.Key256](sched),
 	}
 
 	req := sm.NewSimRequest(si.NewStringID("RandomKey").Key())
 
-	q2, err := NewSimpleQuery(ctx, req, queryOpts...)
+	q2, err := NewSimpleQuery[key.Key256](ctx, req, queryOpts...)
 	require.NoError(t, err)
 
 	// set the peerlist endpoint to nil, to allow invalid NodeIDs in peerlist
 	q2.peerlist.endpoint = nil
 	// change the node id of the queued peer. sending the message with
 	// SendRequestHandleResponse will fail fast (no new go routine created)
-	q2.peerlist.closest.id = kadid.NewKadID([]byte{0x00})
+	q2.peerlist.closest.id = kadid.NewKadID(key.ZeroKey256())
 
 	require.True(t, sched.RunOne(ctx))
 	require.False(t, sched.RunOne(ctx))

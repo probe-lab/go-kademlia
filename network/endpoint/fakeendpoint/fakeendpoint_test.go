@@ -10,6 +10,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/plprobelab/go-kademlia/events/scheduler"
 	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	"github.com/plprobelab/go-kademlia/internal/testutil"
+	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/kadaddr"
 	"github.com/plprobelab/go-kademlia/network/address/kadid"
@@ -24,6 +26,12 @@ import (
 )
 
 var (
+	_ endpoint.NetworkedEndpoint[key.Key8] = (*FakeEndpoint[key.Key8])(nil)
+	_ endpoint.SimEndpoint[key.Key8]       = (*FakeEndpoint[key.Key8])(nil)
+	_ endpoint.Endpoint[key.Key8]          = (*FakeEndpoint[key.Key8])(nil)
+)
+
+var (
 	protoID      = address.ProtocolID("/test/1.0.0")
 	peerstoreTTL = time.Minute
 )
@@ -34,12 +42,12 @@ func TestFakeEndpoint(t *testing.T) {
 
 	selfID := si.StringID("self")
 
-	router := NewFakeRouter()
+	router := NewFakeRouter[key.Key256]()
 	sched := simplescheduler.NewSimpleScheduler(clk)
 
-	fakeEndpoint := NewFakeEndpoint(selfID, sched, router)
+	fakeEndpoint := NewFakeEndpoint(selfID.NodeID(), sched, router)
 
-	b := selfID.Key().Equal(fakeEndpoint.KadKey())
+	b := key.Equal(selfID.Key(), fakeEndpoint.KadKey())
 	require.True(t, b)
 
 	node0 := si.StringID("node0")
@@ -61,10 +69,10 @@ func TestFakeEndpoint(t *testing.T) {
 	require.Equal(t, endpoint.ErrUnknownPeer, err)
 
 	req := simmessage.NewSimRequest(selfID.Key())
-	resp := &simmessage.SimMessage{}
+	resp := &simmessage.SimMessage[key.Key256]{}
 
 	var runCheck bool
-	respHandler := func(ctx context.Context, msg message.MinKadResponseMessage, err error) {
+	respHandler := func(ctx context.Context, msg message.MinKadResponseMessage[key.Key256], err error) {
 		require.Equal(t, endpoint.ErrUnknownPeer, err)
 		runCheck = true
 	}
@@ -91,7 +99,7 @@ func TestFakeEndpoint(t *testing.T) {
 	require.False(t, sched.RunOne(ctx))
 
 	sched0 := simplescheduler.NewSimpleScheduler(clk)
-	fakeEndpoint0 := NewFakeEndpoint(node0, sched0, router)
+	fakeEndpoint0 := NewFakeEndpoint[key.Key256](node0, sched0, router)
 	rt0 := simplert.New(node0.Key(), 2)
 	serv0 := basicserver.NewBasicServer(rt0, fakeEndpoint0)
 	err = fakeEndpoint0.AddRequestHandler(protoID, nil, serv0.HandleRequest)
@@ -102,7 +110,7 @@ func TestFakeEndpoint(t *testing.T) {
 	fakeEndpoint0.RemoveRequestHandler("/test/0.0.1")
 
 	runCheck = false
-	respHandler = func(ctx context.Context, msg message.MinKadResponseMessage, err error) {
+	respHandler = func(ctx context.Context, msg message.MinKadResponseMessage[key.Key256], err error) {
 		require.NoError(t, err)
 		runCheck = true
 	}
@@ -124,7 +132,7 @@ func TestFakeEndpoint(t *testing.T) {
 	// test response to a sent request that is not a valid MinKadResponseMessage
 	var sid endpoint.StreamID = 1000
 	fakeEndpoint.streamFollowup[sid] = func(ctx context.Context,
-		msg message.MinKadResponseMessage, err error,
+		msg message.MinKadResponseMessage[key.Key256], err error,
 	) {
 		require.Equal(t, ErrInvalidResponseType, err)
 	}
@@ -135,7 +143,7 @@ func TestFakeEndpoint(t *testing.T) {
 	require.False(t, sched.RunOne(ctx))
 
 	// test request whose handler returns an error
-	errHandler := func(ctx context.Context, id address.NodeID,
+	errHandler := func(ctx context.Context, id address.NodeID[key.Key256],
 		req message.MinKadMessage,
 	) (message.MinKadMessage, error) {
 		return nil, endpoint.ErrUnknownPeer
@@ -148,17 +156,18 @@ func TestFakeEndpoint(t *testing.T) {
 
 	var followupRan bool
 	// test that HandleMessage adds the closer peers to the peerstore
-	followup := func(ctx context.Context, resp message.MinKadResponseMessage,
-		err error) {
+	followup := func(ctx context.Context, resp message.MinKadResponseMessage[key.Key256],
+		err error,
+	) {
 		require.NoError(t, err)
 		followupRan = true
 	}
 	// add followup function for the stream and make sure it runs
 	fakeEndpoint.streamFollowup[1000] = followup
-	addrs := []address.NodeAddr{
-		kadaddr.NewKadAddr(kadid.NewKadID([]byte{0}), []string{"0"}),
-		kadaddr.NewKadAddr(kadid.NewKadID([]byte{1}), []string{"1"}),
-		kadaddr.NewKadAddr(kadid.NewKadID([]byte{2}), []string{"2"}),
+	addrs := []address.NodeAddr[key.Key256]{
+		kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0})), []string{"0"}),
+		kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{1})), []string{"1"}),
+		kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{2})), []string{"2"}),
 	}
 	msg = simmessage.NewSimResponse(addrs)
 	fakeEndpoint.HandleMessage(ctx, node0, protoID, 1000, msg)
@@ -175,14 +184,14 @@ func TestFakeEndpoint(t *testing.T) {
 func TestRequestTimeout(t *testing.T) {
 	ctx := context.Background()
 	clk := clock.NewMock()
-	router := NewFakeRouter()
+	router := NewFakeRouter[key.Key256]()
 
 	nPeers := 2
 	scheds := make([]scheduler.AwareScheduler, nPeers)
-	ids := make([]address.NodeAddr, nPeers)
-	fakeEndpoints := make([]*FakeEndpoint, nPeers)
+	ids := make([]address.NodeAddr[key.Key256], nPeers)
+	fakeEndpoints := make([]*FakeEndpoint[key.Key256], nPeers)
 	for i := 0; i < nPeers; i++ {
-		ids[i] = kadid.NewKadID([]byte{byte(i)})
+		ids[i] = kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{byte(i)})), nil)
 		scheds[i] = simplescheduler.NewSimpleScheduler(clk)
 		fakeEndpoints[i] = NewFakeEndpoint(ids[i].NodeID(), scheds[i], router)
 	}
@@ -198,7 +207,7 @@ func TestRequestTimeout(t *testing.T) {
 
 	var timeoutExecuted bool
 	// fakeEndpoints[1]'s request handler will not respond
-	dropRequestHandler := func(ctx context.Context, id address.NodeID,
+	dropRequestHandler := func(ctx context.Context, id address.NodeID[key.Key256],
 		req message.MinKadMessage,
 	) (message.MinKadMessage, error) {
 		return nil, endpoint.ErrUnknownPeer
@@ -208,7 +217,7 @@ func TestRequestTimeout(t *testing.T) {
 	// will timeout (because fakeEndpoints[1] will not respond)
 	fakeEndpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1].NodeID(), nil, nil,
 		time.Second, func(ctx context.Context,
-			msg message.MinKadResponseMessage, err error,
+			msg message.MinKadResponseMessage[key.Key256], err error,
 		) {
 			timeoutExecuted = true
 		})
@@ -243,19 +252,19 @@ func TestRequestTimeout(t *testing.T) {
 
 	// response coming back before timeout
 	var handlerHasResponded bool
-	dumbResponseHandler := func(ctx context.Context, id address.NodeID,
+	dumbResponseHandler := func(ctx context.Context, id address.NodeID[key.Key256],
 		req message.MinKadMessage,
 	) (message.MinKadMessage, error) {
 		clk.Sleep(100 * time.Millisecond)
 		return req, nil
 	}
 	// create valid message
-	msg := simmessage.NewSimResponse([]address.NodeAddr{})
+	msg := simmessage.NewSimResponse([]address.NodeAddr[key.Key256]{})
 	// overwrite request handler
 	fakeEndpoints[1].AddRequestHandler(protoID, nil, dumbResponseHandler)
 	fakeEndpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1].NodeID(), msg, nil,
 		time.Second, func(ctx context.Context,
-			msg message.MinKadResponseMessage, err error,
+			msg message.MinKadResponseMessage[key.Key256], err error,
 		) {
 			require.NoError(t, err)
 		})
