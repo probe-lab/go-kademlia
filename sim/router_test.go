@@ -1,10 +1,12 @@
-package fakeendpoint
+package sim
 
 import (
 	"context"
 	"testing"
 
 	"github.com/benbjohnson/clock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/plprobelab/go-kademlia/events/scheduler"
 	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
 	"github.com/plprobelab/go-kademlia/internal/testutil"
@@ -12,22 +14,21 @@ import (
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/kadid"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
-	"github.com/stretchr/testify/require"
 )
 
-func TestFakeRouter(t *testing.T) {
+func TestRouter(t *testing.T) {
 	ctx := context.Background()
 	clk := clock.NewMock()
-	router := NewFakeRouter[key.Key256]()
+	router := NewRouter[key.Key256]()
 
 	nPeers := 5
 	scheds := make([]scheduler.AwareScheduler, nPeers)
 	ids := make([]address.NodeID[key.Key256], nPeers)
-	fakeEndpoints := make([]*FakeEndpoint[key.Key256], nPeers)
+	fakeEndpoints := make([]*Endpoint[key.Key256], nPeers)
 	for i := 0; i < nPeers; i++ {
 		ids[i] = kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{byte(i)}))
 		scheds[i] = simplescheduler.NewSimpleScheduler(clk)
-		fakeEndpoints[i] = NewFakeEndpoint(ids[i], scheds[i], router)
+		fakeEndpoints[i] = NewEndpoint(ids[i], scheds[i], router)
 	}
 
 	protoID := address.ProtocolID("/test/proto")

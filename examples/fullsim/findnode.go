@@ -11,14 +11,12 @@ import (
 	"github.com/plprobelab/go-kademlia/network/address/kadaddr"
 	"github.com/plprobelab/go-kademlia/network/address/kadid"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
-	"github.com/plprobelab/go-kademlia/network/endpoint/fakeendpoint"
 	"github.com/plprobelab/go-kademlia/network/message"
-	"github.com/plprobelab/go-kademlia/network/message/simmessage"
 	sq "github.com/plprobelab/go-kademlia/query/simplequery"
 	"github.com/plprobelab/go-kademlia/routing"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
 	"github.com/plprobelab/go-kademlia/server"
-	"github.com/plprobelab/go-kademlia/server/simserver"
+	"github.com/plprobelab/go-kademlia/sim"
 	"github.com/plprobelab/go-kademlia/util"
 
 	"github.com/plprobelab/go-kademlia/events/scheduler"
@@ -51,7 +49,7 @@ func findNode(ctx context.Context) {
 	// create mock clock to control time
 	clk := clock.NewMock()
 	// create a fake router to virtually connect nodes
-	router := fakeendpoint.NewFakeRouter[key.Key8]()
+	router := sim.NewRouter[key.Key8]()
 
 	// create node identifiers
 	nodeCount := 4
@@ -68,7 +66,7 @@ func findNode(ctx context.Context) {
 	//  A B C D
 
 	rts := make([]*simplert.SimpleRT[key.Key8], len(nodes))
-	eps := make([]*fakeendpoint.FakeEndpoint[key.Key8], len(nodes))
+	eps := make([]*sim.Endpoint[key.Key8], len(nodes))
 	schedulers := make([]scheduler.AwareScheduler, len(nodes))
 	servers := make([]server.Server[key.Key8], len(nodes))
 
@@ -78,9 +76,9 @@ func findNode(ctx context.Context) {
 		// create a scheduler based on the mock clock
 		schedulers[i] = ss.NewSimpleScheduler(clk)
 		// create a fake endpoint for the node, communicating through the router
-		eps[i] = fakeendpoint.NewFakeEndpoint(nodes[i].NodeID(), schedulers[i], router)
+		eps[i] = sim.NewEndpoint(nodes[i].NodeID(), schedulers[i], router)
 		// create a server instance for the node
-		servers[i] = simserver.NewSimServer[key.Key8](rts[i], eps[i], simserver.DefaultConfig())
+		servers[i] = sim.NewServer[key.Key8](rts[i], eps[i], sim.DefaultConfig())
 		// add the server request handler for protoID to the endpoint
 		err := eps[i].AddRequestHandler(protoID, nil, servers[i].HandleRequest)
 		if err != nil {
@@ -100,13 +98,13 @@ func findNode(ctx context.Context) {
 	// A (ids[0]) is looking for D (ids[3])
 	// A will first ask B, B will reply with C's address (and A's address)
 	// A will then ask C, C will reply with D's address (and B's address)
-	req := simmessage.NewSimRequest(nodes[3].NodeID().Key())
+	req := sim.NewRequest(nodes[3].NodeID().Key())
 
 	// handleResFn is called when a response is received during the query process
 	handleResFn := func(_ context.Context, id address.NodeID[key.Key8],
 		msg message.MinKadResponseMessage[key.Key8],
 	) (bool, []address.NodeID[key.Key8]) {
-		resp := msg.(*simmessage.SimMessage[key.Key8])
+		resp := msg.(*sim.Message[key.Key8])
 		fmt.Println("got a response from", id, "with", resp.CloserNodes())
 
 		newIds := make([]address.NodeID[key.Key8], len(resp.CloserNodes()))

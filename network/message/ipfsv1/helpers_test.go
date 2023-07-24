@@ -14,8 +14,8 @@ import (
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
 	"github.com/plprobelab/go-kademlia/network/address/peerid"
-	"github.com/plprobelab/go-kademlia/network/endpoint/fakeendpoint"
 	"github.com/plprobelab/go-kademlia/network/message"
+	"github.com/plprobelab/go-kademlia/sim"
 )
 
 var (
@@ -60,7 +60,7 @@ func TestFindPeerResponse(t *testing.T) {
 	selfAddr, err := createDummyPeerInfo("12BoooooSELF", "/ip4/1.1.1.1")
 	require.NoError(t, err)
 
-	fakeEndpoint := fakeendpoint.NewFakeEndpoint[key.Key256](selfAddr, nil, nil)
+	fakeEndpoint := sim.NewEndpoint[key.Key256](selfAddr, nil, nil)
 
 	nPeers := 5
 	closerPeers := make([]address.NodeAddr[key.Key256], nPeers)
@@ -93,7 +93,7 @@ func TestCornerCases(t *testing.T) {
 	// require.Nil(t, resp.Target())
 	require.Equal(t, 0, len(resp.CloserNodes()))
 
-	fakeEndpoint := fakeendpoint.NewFakeEndpoint[key.Key256](addrinfo.AddrInfo{}, nil, nil)
+	fakeEndpoint := sim.NewEndpoint[key.Key256](addrinfo.AddrInfo{}, nil, nil)
 	n0, err := peer.Decode("1D3oooUnknownPeer")
 	require.NoError(t, err)
 	ids = append(ids, &peerid.PeerID{ID: n0})

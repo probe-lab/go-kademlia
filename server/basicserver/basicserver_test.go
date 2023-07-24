@@ -20,11 +20,10 @@ import (
 	"github.com/plprobelab/go-kademlia/network/address/kadid"
 	"github.com/plprobelab/go-kademlia/network/address/peerid"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
-	"github.com/plprobelab/go-kademlia/network/endpoint/fakeendpoint"
 	"github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/network/message/ipfsv1"
-	"github.com/plprobelab/go-kademlia/network/message/simmessage"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
+	"github.com/plprobelab/go-kademlia/sim"
 	"github.com/stretchr/testify/require"
 )
 
@@ -50,9 +49,9 @@ func TestSimMessageHandling(t *testing.T) {
 
 	self := kadaddr.NewKadAddr(kadid.NewKadID(key.ZeroKey256()), nil) // 0000 0000
 
-	router := fakeendpoint.NewFakeRouter[key.Key256]()
+	router := sim.NewRouter[key.Key256]()
 	sched := simplescheduler.NewSimpleScheduler(clk)
-	fakeEndpoint := fakeendpoint.NewFakeEndpoint(self.NodeID(), sched, router)
+	fakeEndpoint := sim.NewEndpoint(self.NodeID(), sched, router)
 	rt := simplert.New(self.NodeID().Key(), 2)
 
 	// add peers to routing table and peerstore
@@ -70,7 +69,7 @@ func TestSimMessageHandling(t *testing.T) {
 	requester := kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0b00000001})), nil) // 0000 0001
 	fakeEndpoint.MaybeAddToPeerstore(ctx, requester, peerstoreTTL)
 
-	req0 := simmessage.NewSimRequest[key.Key256](testutil.Key256WithLeadingBytes([]byte{0b00000000}))
+	req0 := sim.NewRequest[key.Key256](testutil.Key256WithLeadingBytes([]byte{0b00000000}))
 	msg, err := s0.HandleRequest(ctx, requester.NodeID(), req0)
 	require.NoError(t, err)
 
@@ -87,7 +86,7 @@ func TestSimMessageHandling(t *testing.T) {
 		require.Equal(t, order[i], p)
 	}
 
-	req1 := simmessage.NewSimRequest[key.Key256](testutil.Key256WithLeadingBytes([]byte{0b11111111}))
+	req1 := sim.NewRequest[key.Key256](testutil.Key256WithLeadingBytes([]byte{0b11111111}))
 	msg, err = s0.HandleRequest(ctx, requester.NodeID(), req1)
 	require.NoError(t, err)
 	resp, ok = msg.(message.MinKadResponseMessage[key.Key256])
@@ -106,7 +105,7 @@ func TestSimMessageHandling(t *testing.T) {
 	numberOfCloserPeersToSend = 3
 	s1 := NewBasicServer(rt, fakeEndpoint, WithNumberUsefulCloserPeers(3))
 
-	req2 := simmessage.NewSimRequest(testutil.Key256WithLeadingBytes([]byte{0b01100000}))
+	req2 := sim.NewRequest(testutil.Key256WithLeadingBytes([]byte{0b01100000}))
 	msg, err = s1.HandleRequest(ctx, requester.NodeID(), req2)
 	require.NoError(t, err)
 	resp, ok = msg.(message.MinKadResponseMessage[key.Key256])
@@ -131,13 +130,13 @@ func TestInvalidSimRequests(t *testing.T) {
 	peerstoreTTL := time.Second // doesn't matter as we use fakeendpoint
 
 	clk := clock.New()
-	router := fakeendpoint.NewFakeRouter[key.Key256]()
+	router := sim.NewRouter[key.Key256]()
 
 	self := kadaddr.NewKadAddr(kadid.NewKadID(key.ZeroKey256()), nil) // 0000 0000
 
 	// create a valid server
 	sched := simplescheduler.NewSimpleScheduler(clk)
-	fakeEndpoint := fakeendpoint.NewFakeEndpoint(self.NodeID(), sched, router)
+	fakeEndpoint := sim.NewEndpoint(self.NodeID(), sched, router)
 	rt := simplert.New(self.NodeID().Key(), 2)
 
 	// add peers to routing table and peerstore
@@ -160,11 +159,11 @@ func TestInvalidSimRequests(t *testing.T) {
 	require.Error(t, err)
 
 	// empty request
-	req1 := &simmessage.SimMessage[key.Key256]{}
+	req1 := &sim.Message[key.Key256]{}
 	s.HandleFindNodeRequest(ctx, requester, req1)
 
 	// request with invalid key (not matching the expected length)
-	req2 := simmessage.NewSimRequest[key.Key32](key.Key32(0b00000000000000010000000000000000))
+	req2 := sim.NewRequest[key.Key32](key.Key32(0b00000000000000010000000000000000))
 	s.HandleFindNodeRequest(ctx, requester, req2)
 }
 
@@ -177,13 +176,13 @@ func TestSimRequestNoNetworkAddress(t *testing.T) {
 	require.Nil(t, s)
 
 	clk := clock.New()
-	router := fakeendpoint.NewFakeRouter[key.Key256]()
+	router := sim.NewRouter[key.Key256]()
 
 	self := kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0})), nil) // 0000 0000
 
 	// create a valid server
 	sched := simplescheduler.NewSimpleScheduler(clk)
-	fakeEndpoint := fakeendpoint.NewFakeEndpoint(self.NodeID(), sched, router)
+	fakeEndpoint := sim.NewEndpoint(self.NodeID(), sched, router)
 	rt := simplert.New(self.NodeID().Key(), 2)
 
 	parsed, err := peer.Decode("1EooooPEER")
@@ -206,7 +205,7 @@ func TestSimRequestNoNetworkAddress(t *testing.T) {
 	requester := kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0x80}))
 
 	// sim request message (for any key)
-	req := simmessage.NewSimRequest(requester.Key())
+	req := sim.NewRequest(requester.Key())
 	msg, err := s.HandleFindNodeRequest(ctx, requester, req)
 	require.NoError(t, err)
 	resp, ok := msg.(message.MinKadResponseMessage[key.Key256])
@@ -226,9 +225,9 @@ func TestIPFSv1Handling(t *testing.T) {
 	require.NoError(t, err)
 	self := peerid.NewPeerID(selfPid)
 
-	router := fakeendpoint.NewFakeRouter[key.Key256]()
+	router := sim.NewRouter[key.Key256]()
 	sched := simplescheduler.NewSimpleScheduler(clk)
-	fakeEndpoint := fakeendpoint.NewFakeEndpoint(self.NodeID(), sched, router)
+	fakeEndpoint := sim.NewEndpoint(self.NodeID(), sched, router)
 	rt := simplert.New(self.Key(), 4)
 
 	nPeers := 6

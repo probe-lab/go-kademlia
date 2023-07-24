@@ -11,8 +11,8 @@ import (
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/network/message/ipfsv1"
-	"github.com/plprobelab/go-kademlia/network/message/simmessage"
 	"github.com/plprobelab/go-kademlia/routing"
+	"github.com/plprobelab/go-kademlia/sim"
 	"github.com/plprobelab/go-kademlia/util"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -48,7 +48,7 @@ func (s *BasicServer) HandleRequest(ctx context.Context, rpeer address.NodeID[ke
 	msg message.MinKadMessage,
 ) (message.MinKadMessage, error) {
 	switch msg := msg.(type) {
-	case *simmessage.SimMessage[key.Key256]:
+	case *sim.Message[key.Key256]:
 		return s.HandleFindNodeRequest(ctx, rpeer, msg)
 	case *ipfsv1.Message:
 		switch msg.GetType() {
@@ -68,7 +68,7 @@ func (s *BasicServer) HandleFindNodeRequest(ctx context.Context,
 	var target key.Key256
 
 	switch msg := msg.(type) {
-	case *simmessage.SimMessage[key.Key256]:
+	case *sim.Message[key.Key256]:
 		target = msg.Target()
 	case *ipfsv1.Message:
 		p := peer.ID("")
@@ -101,7 +101,7 @@ func (s *BasicServer) HandleFindNodeRequest(ctx context.Context,
 
 	var resp message.MinKadMessage
 	switch msg.(type) {
-	case *simmessage.SimMessage[key.Key256]:
+	case *sim.Message[key.Key256]:
 		peerAddrs := make([]address.NodeAddr[key.Key256], len(peers))
 		var index int
 		for _, p := range peers {
@@ -113,7 +113,7 @@ func (s *BasicServer) HandleFindNodeRequest(ctx context.Context,
 			peerAddrs[index] = na
 			index++
 		}
-		resp = simmessage.NewSimResponse(peerAddrs[:index])
+		resp = sim.NewResponse(peerAddrs[:index])
 	case *ipfsv1.Message:
 		nEndpoint, ok := s.endpoint.(endpoint.NetworkedEndpoint[key.Key256])
 		if !ok {

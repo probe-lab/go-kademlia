@@ -24,7 +24,7 @@ import (
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/network/message/ipfsv1"
-	"github.com/plprobelab/go-kademlia/network/message/simmessage"
+	"github.com/plprobelab/go-kademlia/sim"
 	"github.com/stretchr/testify/require"
 )
 
@@ -259,7 +259,7 @@ func TestRequestHandler(t *testing.T) {
 	require.Equal(t, endpoint.ErrNilRequestHandler, err)
 
 	// invalid message format for handler
-	err = endpoints[0].AddRequestHandler("/fail/1.0.0", &simmessage.SimMessage[key.Key256]{}, requestHandler)
+	err = endpoints[0].AddRequestHandler("/fail/1.0.0", &sim.Message[key.Key256]{}, requestHandler)
 	require.Equal(t, ErrRequireProtoKadMessage, err)
 
 	// remove request handler
@@ -275,12 +275,12 @@ func TestReqFailFast(t *testing.T) {
 	req := ipfsv1.FindPeerRequest(ids[1])
 	// invalid response format (not protobuf)
 	err := endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], req,
-		&simmessage.SimMessage[key.Key256]{}, time.Second, nil)
+		&sim.Message[key.Key256]{}, time.Second, nil)
 	require.Equal(t, ErrRequireProtoKadResponse, err)
 
 	// invalid request format (not protobuf)
 	err = endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1],
-		&simmessage.SimMessage[key.Key256]{}, &ipfsv1.Message{}, time.Second, nil)
+		&sim.Message[key.Key256]{}, &ipfsv1.Message{}, time.Second, nil)
 	require.Equal(t, ErrRequireProtoKadMessage, err)
 
 	// invalid recipient (not a peerid)
@@ -518,7 +518,7 @@ func TestReqHandlerReturnsWrongType(t *testing.T) {
 		id address.NodeID[key.Key256], req message.MinKadMessage,
 	) (message.MinKadMessage, error) {
 		// request handler returns error
-		return &simmessage.SimMessage[key.Key256]{}, nil
+		return &sim.Message[key.Key256]{}, nil
 	})
 	require.NoError(t, err)
 	// responseHandler is run after context is cancelled
