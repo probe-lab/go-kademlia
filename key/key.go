@@ -16,7 +16,7 @@ type Key256 struct {
 
 var _ kad.Key[Key256] = Key256{}
 
-// ZeroKey256 returns a 256-bit Kademlia key whose bits are set from the supplied bytes.
+// NewKey256 returns a 256-bit Kademlia key whose bits are set from the supplied bytes.
 func NewKey256(data []byte) Key256 {
 	if len(data) != 32 {
 		panic("invalid data length for key")
