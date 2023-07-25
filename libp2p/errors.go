@@ -1,4 +1,4 @@
-package libp2pendpoint
+package libp2p
 
 import "errors"
 

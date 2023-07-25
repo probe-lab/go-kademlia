@@ -11,31 +11,31 @@ import (
 	"github.com/plprobelab/go-kademlia/network/message"
 )
 
-type Router[K kad.Key[K]] struct {
+type Router[K kad.Key[K], A any] struct {
 	currStream endpoint.StreamID
-	peers      map[string]endpoint.SimEndpoint[K]
+	peers      map[string]endpoint.SimEndpoint[K, A]
 	scheds     map[string]scheduler.Scheduler
 }
 
-func NewRouter[K kad.Key[K]]() *Router[K] {
-	return &Router[K]{
+func NewRouter[K kad.Key[K], A any]() *Router[K, A] {
+	return &Router[K, A]{
 		currStream: 1,
-		peers:      make(map[string]endpoint.SimEndpoint[K]),
+		peers:      make(map[string]endpoint.SimEndpoint[K, A]),
 		scheds:     make(map[string]scheduler.Scheduler),
 	}
 }
 
-func (r *Router[K]) AddPeer(id address.NodeID[K], peer endpoint.SimEndpoint[K], sched scheduler.Scheduler) {
+func (r *Router[K, A]) AddPeer(id kad.NodeID[K], peer endpoint.SimEndpoint[K, A], sched scheduler.Scheduler) {
 	r.peers[id.String()] = peer
 	r.scheds[id.String()] = sched
 }
 
-func (r *Router[K]) RemovePeer(id address.NodeID[K]) {
+func (r *Router[K, A]) RemovePeer(id kad.NodeID[K]) {
 	delete(r.peers, id.String())
 	delete(r.scheds, id.String())
 }
 
-func (r *Router[K]) SendMessage(ctx context.Context, from, to address.NodeID[K],
+func (r *Router[K, A]) SendMessage(ctx context.Context, from, to kad.NodeID[K],
 	protoID address.ProtocolID, sid endpoint.StreamID,
 	msg message.MinKadMessage,
 ) (endpoint.StreamID, error) {

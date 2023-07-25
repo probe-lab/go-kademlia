@@ -82,15 +82,19 @@ type NodeID[K Key[K]] interface {
 	// of NodeID.
 	Key() K
 
-	Equal(NodeID[K]) bool
+	String() string
 }
 
-// NodeAddr is a container type that combines node identification information
+// NodeInfo is a container type that combines node identification information
 // and network addresses at which the node is reachable.
-type NodeAddr[K Key[K], A any] interface {
+type NodeInfo[K Key[K], A any] interface {
 	// ID returns the node identifier.
 	ID() NodeID[K]
 
 	// Addresses returns the network addresses associated with the given node.
 	Addresses() []A
+}
+
+func Equal[K Key[K]](this, that NodeID[K]) bool {
+	return this.Key().Compare(that.Key()) == 0
 }

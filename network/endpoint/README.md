@@ -9,16 +9,16 @@ In order to have a `Server` node (responding to requests from other peers), a no
 type Endpoint interface {
 	// MaybeAddToPeerstore adds the given address to the peerstore if it is
 	// valid and if it is not already there.
-	MaybeAddToPeerstore(context.Context, address.NodeID, time.Duration) error
+	MaybeAddToPeerstore(context.Context, kad.NodeID, time.Duration) error
 	// SendRequestHandleResponse sends a request to the given peer and handles
 	// the response with the given handler.
-	SendRequestHandleResponse(context.Context, address.ProtocolID, address.NodeID,
+	SendRequestHandleResponse(context.Context, address.ProtocolID, kad.NodeID,
 		message.MinKadMessage, message.MinKadMessage, time.Duration, ResponseHandlerFn)
 
 	// KadKey returns the KadKey of the local node.
 	KadKey() key.KadKey
 	// NetworkAddress returns the network address of the given peer (if known).
-	NetworkAddress(address.NodeID) (address.NodeID, error)
+	NetworkAddress(kad.NodeID) (kad.NodeID, error)
 }
 
 // ServerEndpoint is a Kademlia endpoint that can handle requests from remote

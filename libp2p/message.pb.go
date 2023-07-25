@@ -4,7 +4,7 @@
 // 	protoc        v3.21.12
 // source: message.proto
 
-package ipfsv1
+package libp2p
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"

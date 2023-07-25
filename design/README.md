@@ -24,7 +24,7 @@ The libp2p message go routine, will (1) dial the remote peer, (2) send the IPFS 
 
 If the timeout even is picked up by the single worker, it means that the remote peer has failed to answer on time. The single worker will update the query, and enqueue another `SendRequest` `action`.
 
-When a `HandleResponse` `action` is picked up by the single worker, it executes the `ResponseHandlerFn` (`func(context.Context, address.NodeID, message.MinKadResponseMessage) (bool, []address.NodeID)`) that was provided by the caller when creating the query. This function should return whether the query should terminate, and the list of useful peers to query next. Hence, the caller can keep a state for the query, and decide when it should terminate. If the query shouldn't terminate yet, the single worker updates the query state, and enqueues another `SendRequest` `action`.
+When a `HandleResponse` `action` is picked up by the single worker, it executes the `ResponseHandlerFn` (`func(context.Context, kad.NodeID, message.MinKadResponseMessage) (bool, []kad.NodeID)`) that was provided by the caller when creating the query. This function should return whether the query should terminate, and the list of useful peers to query next. Hence, the caller can keep a state for the query, and decide when it should terminate. If the query shouldn't terminate yet, the single worker updates the query state, and enqueues another `SendRequest` `action`.
 
 ![alt text](./excalidraw/query-run.png)
 

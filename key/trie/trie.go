@@ -99,8 +99,8 @@ func (tr *Trie[K, D]) shrink() {
 
 // Add attempts to add a key to the trie, mutating the trie.
 // Returns true if the key was added, false otherwise.
-func (tr *Trie[K, D]) Add(kk K, data D) (bool, error) {
-	return tr.addAtDepth(0, kk, data), nil
+func (tr *Trie[K, D]) Add(kk K, data D) bool {
+	return tr.addAtDepth(0, kk, data)
 }
 
 func (tr *Trie[K, D]) addAtDepth(depth int, kk K, data D) bool {
@@ -172,8 +172,8 @@ func trieForTwo[K kad.Key[K], D any](depth int, p K, pdata D, q K, qdata D) *Tri
 
 // Remove attempts to remove a key from the trie, mutating the trie.
 // Returns true if the key was removed, false otherwise.
-func (tr *Trie[K, D]) Remove(kk K) (bool, error) {
-	return tr.removeAtDepth(0, kk), nil
+func (tr *Trie[K, D]) Remove(kk K) bool {
+	return tr.removeAtDepth(0, kk)
 }
 
 func (tr *Trie[K, D]) removeAtDepth(depth int, kk K) bool {

@@ -1,22 +1,20 @@
-package ipfsv1
+package libp2p
 
 import (
 	"errors"
 
-	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
-	"github.com/plprobelab/go-kademlia/network/address/peerid"
-	"github.com/plprobelab/go-kademlia/network/endpoint"
-	"github.com/plprobelab/go-kademlia/network/message"
-
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
+
+	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/network/endpoint"
+	"github.com/plprobelab/go-kademlia/network/message"
 )
 
 var ErrNoValidAddresses = errors.New("no valid addresses")
 
-func FindPeerRequest(p *peerid.PeerID) *Message {
+func FindPeerRequest(p *PeerID) *Message {
 	marshalledPeerid, _ := p.MarshalBinary()
 	return &Message{
 		Type: Message_FIND_NODE,
@@ -24,7 +22,7 @@ func FindPeerRequest(p *peerid.PeerID) *Message {
 	}
 }
 
-func FindPeerResponse(peers []address.NodeID[key.Key256], e endpoint.NetworkedEndpoint[key.Key256]) *Message {
+func FindPeerResponse(peers []kad.NodeID[key.Key256], e endpoint.NetworkedEndpoint[key.Key256, multiaddr.Multiaddr]) *Message {
 	return &Message{
 		Type:        Message_FIND_NODE,
 		CloserPeers: NodeIDsToPbPeers(peers, e),
@@ -36,22 +34,22 @@ func (msg *Message) Target() key.Key256 {
 	if err != nil {
 		return key.ZeroKey256()
 	}
-	return peerid.PeerID{ID: p}.Key()
+	return PeerID{ID: p}.Key()
 }
 
-func (msg *Message) EmptyResponse() message.MinKadResponseMessage[key.Key256] {
+func (msg *Message) EmptyResponse() message.MinKadResponseMessage[key.Key256, multiaddr.Multiaddr] {
 	return &Message{}
 }
 
-func (msg *Message) CloserNodes() []address.NodeAddr[key.Key256] {
+func (msg *Message) CloserNodes() []kad.NodeInfo[key.Key256, multiaddr.Multiaddr] {
 	closerPeers := msg.GetCloserPeers()
 	if closerPeers == nil {
-		return []address.NodeAddr[key.Key256]{}
+		return []kad.NodeInfo[key.Key256, multiaddr.Multiaddr]{}
 	}
 	return ParsePeers(closerPeers)
 }
 
-func PBPeerToPeerInfo(pbp *Message_Peer) (*addrinfo.AddrInfo, error) {
+func PBPeerToPeerInfo(pbp *Message_Peer) (*AddrInfo, error) {
 	addrs := make([]multiaddr.Multiaddr, 0, len(pbp.Addrs))
 	for _, a := range pbp.Addrs {
 		addr, err := multiaddr.NewMultiaddrBytes(a)
@@ -63,14 +61,14 @@ func PBPeerToPeerInfo(pbp *Message_Peer) (*addrinfo.AddrInfo, error) {
 		return nil, ErrNoValidAddresses
 	}
 
-	return addrinfo.NewAddrInfo(peer.AddrInfo{
+	return NewAddrInfo(peer.AddrInfo{
 		ID:    peer.ID(pbp.Id),
 		Addrs: addrs,
 	}), nil
 }
 
-func ParsePeers(pbps []*Message_Peer) []address.NodeAddr[key.Key256] {
-	peers := make([]address.NodeAddr[key.Key256], 0, len(pbps))
+func ParsePeers(pbps []*Message_Peer) []kad.NodeInfo[key.Key256, multiaddr.Multiaddr] {
+	peers := make([]kad.NodeInfo[key.Key256, multiaddr.Multiaddr], 0, len(pbps))
 	for _, p := range pbps {
 		pi, err := PBPeerToPeerInfo(p)
 		if err == nil {
@@ -80,21 +78,21 @@ func ParsePeers(pbps []*Message_Peer) []address.NodeAddr[key.Key256] {
 	return peers
 }
 
-func NodeIDsToPbPeers(peers []address.NodeID[key.Key256], e endpoint.NetworkedEndpoint[key.Key256]) []*Message_Peer {
+func NodeIDsToPbPeers(peers []kad.NodeID[key.Key256], e endpoint.NetworkedEndpoint[key.Key256, multiaddr.Multiaddr]) []*Message_Peer {
 	if len(peers) == 0 || e == nil {
 		return nil
 	}
 
 	pbPeers := make([]*Message_Peer, 0, len(peers))
 	for _, n := range peers {
-		p := n.(*peerid.PeerID)
+		p := n.(*PeerID)
 
 		id, err := e.NetworkAddress(n)
 		if err != nil {
 			continue
 		}
 		// convert NetworkAddress to []multiaddr.Multiaddr
-		addrs := id.(*addrinfo.AddrInfo).Addrs
+		addrs := id.(*AddrInfo).Addrs
 		pbAddrs := make([][]byte, len(addrs))
 		// convert multiaddresses to bytes
 		for i, a := range addrs {

@@ -8,12 +8,12 @@ type Table interface {
 	// Self returns the local node's Kademlia key
 	Self() key.KadKey
 	// AddPeer tries to add a peer to the routing table
-	AddPeer(context.Context, address.NodeID) (bool, error)
+	AddPeer(context.Context, kad.NodeID) (bool, error)
 	// RemovePeer tries to remove a peer identified by its Kademlia key from the
 	// routing table
 	RemoveKey(context.Context, key.KadKey) (bool, error)
 	// NearestPeers returns the closest peers to a given key
-	NearestPeers(context.Context, key.KadKey, int) ([]address.NodeID, error)
+	NearestPeers(context.Context, key.KadKey, int) ([]kad.NodeID, error)
 }
 ```
 

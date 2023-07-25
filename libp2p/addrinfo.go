@@ -1,23 +1,23 @@
-package addrinfo
+package libp2p
 
 import (
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-multiaddr"
+	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/network/address/peerid"
 )
 
 type AddrInfo struct {
 	peer.AddrInfo
-	id *peerid.PeerID
+	id *PeerID
 }
 
-var _ address.NodeAddr[key.Key256] = (*AddrInfo)(nil)
+var _ kad.NodeInfo[key.Key256, multiaddr.Multiaddr] = (*AddrInfo)(nil)
 
 func NewAddrInfo(ai peer.AddrInfo) *AddrInfo {
 	return &AddrInfo{
 		AddrInfo: ai,
-		id:       peerid.NewPeerID(ai.ID),
+		id:       NewPeerID(ai.ID),
 	}
 }
 
@@ -29,16 +29,16 @@ func (ai AddrInfo) String() string {
 	return ai.id.String()
 }
 
-func (ai AddrInfo) PeerID() *peerid.PeerID {
+func (ai AddrInfo) PeerID() *PeerID {
 	return ai.id
 }
 
-func (ai AddrInfo) NodeID() address.NodeID[key.Key256] {
+func (ai AddrInfo) ID() kad.NodeID[key.Key256] {
 	return ai.id
 }
 
-func (ai AddrInfo) Addresses() []address.Addr {
-	addrs := make([]address.Addr, len(ai.Addrs))
+func (ai AddrInfo) Addresses() []multiaddr.Multiaddr {
+	addrs := make([]multiaddr.Multiaddr, len(ai.Addrs))
 	for i, a := range ai.Addrs {
 		addrs[i] = a
 	}

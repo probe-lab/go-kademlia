@@ -7,51 +7,45 @@ import (
 	"time"
 
 	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/message"
-	"github.com/plprobelab/go-kademlia/routing"
 )
 
-type FakeNode[K kad.Key[K]] struct {
-	addr      address.NodeAddr[K]
-	rt        routing.Table[K]
-	peerstore map[address.NodeID[K]]address.NodeAddr[K]
+type FakeNode[K kad.Key[K], A any] struct {
+	addr      kad.NodeInfo[K, A]
+	rt        kad.RoutingTable[K]
+	peerstore map[kad.NodeID[K]]kad.NodeInfo[K, A]
 }
 
-func (f *FakeNode[K]) Addr() address.NodeAddr[K] {
+func (f *FakeNode[K, A]) Addr() kad.NodeInfo[K, A] {
 	return f.addr
 }
 
-func (f *FakeNode[K]) Key() K {
-	return f.addr.NodeID().Key()
+func (f *FakeNode[K, A]) Key() K {
+	return f.addr.ID().Key()
 }
 
-func (f *FakeNode[K]) NodeID() address.NodeID[K] {
-	return f.addr.NodeID()
+func (f *FakeNode[K, A]) NodeID() kad.NodeID[K] {
+	return f.addr.ID()
 }
 
-func (f *FakeNode[K]) AddNodeAddr(ctx context.Context, addr address.NodeAddr[K]) {
-	f.rt.AddPeer(ctx, addr.NodeID())
-	f.peerstore[addr.NodeID()] = addr
+func (f *FakeNode[K, A]) AddNodeAddr(addr kad.NodeInfo[K, A]) {
+	f.rt.AddNode(addr.ID())
+	f.peerstore[addr.ID()] = addr
 }
 
-func (f *FakeNode[K]) AddressOf(id address.NodeID[K]) address.NodeAddr[K] {
+func (f *FakeNode[K, A]) AddressOf(id kad.NodeID[K]) kad.NodeInfo[K, A] {
 	return f.peerstore[id]
 }
 
-func (f *FakeNode[K]) Closest(ctx context.Context, kk K, n int) ([]address.NodeID[K], error) {
-	return f.rt.NearestPeers(ctx, kk, n)
+func (f *FakeNode[K, A]) Closest(kk K, n int) []kad.NodeID[K] {
+	return f.rt.NearestNodes(kk, n)
 }
 
-func (f *FakeNode[K]) HandleMessage(ctx context.Context, msg message.MinKadRequestMessage[K]) (message.MinKadResponseMessage[K], error) {
+func (f *FakeNode[K, A]) HandleMessage(ctx context.Context, msg message.MinKadRequestMessage[K, A]) (message.MinKadResponseMessage[K, A], error) {
 	switch tmsg := msg.(type) {
-	case *FindNodeRequest[K]:
-		closer, err := f.Closest(ctx, tmsg.NodeID.Key(), 2)
-		if err != nil {
-			return nil, fmt.Errorf("failed to look up closer peers: %w", err)
-		}
-
-		addrs := make([]address.NodeAddr[K], 0, len(closer))
+	case *FindNodeRequest[K, A]:
+		closer := f.Closest(tmsg.NodeID.Key(), 2)
+		addrs := make([]kad.NodeInfo[K, A], 0, len(closer))
 		for i := range closer {
 			addr, ok := f.peerstore[closer[i]]
 			if !ok {
@@ -60,23 +54,23 @@ func (f *FakeNode[K]) HandleMessage(ctx context.Context, msg message.MinKadReque
 			addrs = append(addrs, addr)
 		}
 
-		return &FindNodeResponse[K]{NodeID: tmsg.NodeID, CloserPeers: addrs}, nil
+		return &FindNodeResponse[K, A]{NodeID: tmsg.NodeID, CloserPeers: addrs}, nil
 	default:
 		return nil, fmt.Errorf("unsupported message type: %T", tmsg)
 	}
 }
 
-type MessageRouter[K kad.Key[K]] struct {
-	nodes map[address.NodeID[K]]*FakeNode[K]
+type MessageRouter[K kad.Key[K], A any] struct {
+	nodes map[kad.NodeID[K]]*FakeNode[K, A]
 }
 
-func NewMessageRouter[K kad.Key[K]](nodes []*FakeNode[K]) *MessageRouter[K] {
-	mr := &MessageRouter[K]{
-		nodes: make(map[address.NodeID[K]]*FakeNode[K]),
+func NewMessageRouter[K kad.Key[K], A any](nodes []*FakeNode[K, A]) *MessageRouter[K, A] {
+	mr := &MessageRouter[K, A]{
+		nodes: make(map[kad.NodeID[K]]*FakeNode[K, A]),
 	}
 
 	for _, n := range nodes {
-		mr.nodes[n.addr.NodeID()] = n
+		mr.nodes[n.addr.ID()] = n
 	}
 
 	return mr
@@ -84,8 +78,8 @@ func NewMessageRouter[K kad.Key[K]](nodes []*FakeNode[K]) *MessageRouter[K] {
 
 var ErrNoKnownAddress = errors.New("no known address")
 
-func (r *MessageRouter[K]) SendMessage(ctx context.Context, addr address.NodeAddr[K], msg message.MinKadRequestMessage[K]) (message.MinKadResponseMessage[K], error) {
-	n, ok := r.nodes[addr.NodeID()]
+func (r *MessageRouter[K, A]) SendMessage(ctx context.Context, addr kad.NodeInfo[K, A], msg message.MinKadRequestMessage[K, A]) (message.MinKadResponseMessage[K, A], error) {
+	n, ok := r.nodes[addr.ID()]
 	if !ok {
 		return nil, ErrNoKnownAddress
 	}
@@ -96,23 +90,23 @@ func (r *MessageRouter[K]) SendMessage(ctx context.Context, addr address.NodeAdd
 	return n.HandleMessage(ctx, msg)
 }
 
-type FindNodeRequest[K kad.Key[K]] struct {
-	NodeID address.NodeID[K]
+type FindNodeRequest[K kad.Key[K], A any] struct {
+	NodeID kad.NodeID[K]
 }
 
-func (r FindNodeRequest[K]) Target() K {
+func (r FindNodeRequest[K, A]) Target() K {
 	return r.NodeID.Key()
 }
 
-func (FindNodeRequest[K]) EmptyResponse() message.MinKadResponseMessage[K] {
-	return &FindNodeResponse[K]{}
+func (FindNodeRequest[K, A]) EmptyResponse() message.MinKadResponseMessage[K, A] {
+	return &FindNodeResponse[K, A]{}
 }
 
-type FindNodeResponse[K kad.Key[K]] struct {
-	NodeID      address.NodeID[K] // node we were looking for
-	CloserPeers []address.NodeAddr[K]
+type FindNodeResponse[K kad.Key[K], A any] struct {
+	NodeID      kad.NodeID[K] // node we were looking for
+	CloserPeers []kad.NodeInfo[K, A]
 }
 
-func (r *FindNodeResponse[K]) CloserNodes() []address.NodeAddr[K] {
+func (r *FindNodeResponse[K, A]) CloserNodes() []kad.NodeInfo[K, A] {
 	return r.CloserPeers
 }

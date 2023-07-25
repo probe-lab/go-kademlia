@@ -5,6 +5,10 @@ import (
 	"log"
 	"time"
 
+	"github.com/plprobelab/go-kademlia/kad"
+
+	"github.com/plprobelab/go-kademlia/libp2p"
+
 	"github.com/benbjohnson/clock"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/multiformats/go-multibase"
@@ -19,11 +23,7 @@ import (
 	"github.com/plprobelab/go-kademlia/events/simulator"
 	"github.com/plprobelab/go-kademlia/events/simulator/litesimulator"
 	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
-	"github.com/plprobelab/go-kademlia/network/address/peerid"
 	"github.com/plprobelab/go-kademlia/network/message"
-	"github.com/plprobelab/go-kademlia/network/message/ipfsv1"
 	sq "github.com/plprobelab/go-kademlia/query/simplequery"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
 	"github.com/plprobelab/go-kademlia/server/basicserver"
@@ -46,16 +46,16 @@ func queryTest(ctx context.Context) {
 
 	clk := clock.NewMock()
 
-	router := sim.NewRouter[key.Key256]()
+	router := sim.NewRouter[key.Key256, multiaddr.Multiaddr]()
 
 	// create peer A
 	pidA, err := peer.Decode("12BooooALPHA")
 	if err != nil {
 		panic(err)
 	}
-	selfA := &peerid.PeerID{ID: pidA} // peer.ID is necessary for ipfskadv1 message format
+	selfA := &libp2p.PeerID{ID: pidA} // peer.ID is necessary for ipfskadv1 message format
 	addrA := multiaddr.StringCast("/ip4/1.1.1.1/tcp/4001/")
-	var naddrA address.NodeAddr[key.Key256] = addrinfo.NewAddrInfo(peer.AddrInfo{
+	var naddrA kad.NodeInfo[key.Key256, multiaddr.Multiaddr] = libp2p.NewAddrInfo(peer.AddrInfo{
 		ID:    selfA.ID,
 		Addrs: []multiaddr.Multiaddr{addrA},
 	})
@@ -73,9 +73,9 @@ func queryTest(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	selfB := &peerid.PeerID{ID: pidB}
+	selfB := &libp2p.PeerID{ID: pidB}
 	addrB := multiaddr.StringCast("/ip4/2.2.2.2/tcp/4001/")
-	var naddrB address.NodeAddr[key.Key256] = addrinfo.NewAddrInfo(peer.AddrInfo{
+	var naddrB kad.NodeInfo[key.Key256, multiaddr.Multiaddr] = libp2p.NewAddrInfo(peer.AddrInfo{
 		ID:    selfB.ID,
 		Addrs: []multiaddr.Multiaddr{addrB},
 	})
@@ -93,9 +93,9 @@ func queryTest(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	selfC := &peerid.PeerID{ID: pidC}
+	selfC := &libp2p.PeerID{ID: pidC}
 	addrC := multiaddr.StringCast("/ip4/3.3.3.3/tcp/4001/")
-	var naddrC address.NodeAddr[key.Key256] = addrinfo.NewAddrInfo(peer.AddrInfo{
+	var naddrC kad.NodeInfo[key.Key256, multiaddr.Multiaddr] = libp2p.NewAddrInfo(peer.AddrInfo{
 		ID:    selfC.ID,
 		Addrs: []multiaddr.Multiaddr{addrC},
 	})
@@ -110,42 +110,42 @@ func queryTest(ctx context.Context) {
 
 	// connect peer A and B
 	endpointA.MaybeAddToPeerstore(ctx, naddrB, peerstoreTTL)
-	rtA.AddPeer(ctx, selfB)
+	rtA.AddNode(selfB)
 	endpointB.MaybeAddToPeerstore(ctx, naddrA, peerstoreTTL)
-	rtB.AddPeer(ctx, selfA)
+	rtB.AddNode(selfA)
 
 	// connect peer B and C
 	endpointB.MaybeAddToPeerstore(ctx, naddrC, peerstoreTTL)
-	rtB.AddPeer(ctx, selfC)
+	rtB.AddNode(selfC)
 	endpointC.MaybeAddToPeerstore(ctx, naddrB, peerstoreTTL)
-	rtC.AddPeer(ctx, selfB)
+	rtC.AddNode(selfB)
 
 	// create find peer request
 	_, bin, _ := multibase.Decode(targetBytesID)
-	target := peerid.NewPeerID(peer.ID(bin))
-	req := ipfsv1.FindPeerRequest(target)
+	target := libp2p.NewPeerID(peer.ID(bin))
+	req := libp2p.FindPeerRequest(target)
 
 	// dummy parameters
-	handleResp := func(ctx context.Context, _ address.NodeID[key.Key256],
-		resp message.MinKadResponseMessage[key.Key256],
-	) (bool, []address.NodeID[key.Key256]) {
-		peerids := make([]address.NodeID[key.Key256], len(resp.CloserNodes()))
+	handleResp := func(ctx context.Context, _ kad.NodeID[key.Key256],
+		resp message.MinKadResponseMessage[key.Key256, multiaddr.Multiaddr],
+	) (bool, []kad.NodeID[key.Key256]) {
+		peerids := make([]kad.NodeID[key.Key256], len(resp.CloserNodes()))
 		for i, p := range resp.CloserNodes() {
-			peerids[i] = p.(*addrinfo.AddrInfo).PeerID()
+			peerids[i] = p.(*libp2p.AddrInfo).PeerID()
 		}
 		return false, peerids
 	}
 
-	queryOpts := []sq.Option[key.Key256]{
-		sq.WithProtocolID[key.Key256](protoID),
-		sq.WithConcurrency[key.Key256](1),
-		sq.WithRequestTimeout[key.Key256](5 * time.Second),
-		sq.WithHandleResultsFunc(handleResp),
-		sq.WithRoutingTable[key.Key256](rtA),
-		sq.WithEndpoint[key.Key256](endpointA),
-		sq.WithScheduler[key.Key256](schedA),
+	queryOpts := []sq.Option[key.Key256, multiaddr.Multiaddr]{
+		sq.WithProtocolID[key.Key256, multiaddr.Multiaddr](protoID),
+		sq.WithConcurrency[key.Key256, multiaddr.Multiaddr](1),
+		sq.WithRequestTimeout[key.Key256, multiaddr.Multiaddr](5 * time.Second),
+		sq.WithHandleResultsFunc[key.Key256, multiaddr.Multiaddr](handleResp),
+		sq.WithRoutingTable[key.Key256, multiaddr.Multiaddr](rtA),
+		sq.WithEndpoint[key.Key256, multiaddr.Multiaddr](endpointA),
+		sq.WithScheduler[key.Key256, multiaddr.Multiaddr](schedA),
 	}
-	sq.NewSimpleQuery[key.Key256](ctx, req, queryOpts...)
+	sq.NewSimpleQuery[key.Key256, multiaddr.Multiaddr](ctx, req, queryOpts...)
 
 	// create simulator
 	sim := litesimulator.NewLiteSimulator(clk)

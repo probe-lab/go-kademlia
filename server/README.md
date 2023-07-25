@@ -6,7 +6,7 @@ A Kademlia `Server` is responsible for answering requests from remote peers. It 
 // Server is the interface for handling requests from remote nodes.
 type Server interface {
 	// HandleRequest handles a request from a remote peer.
-	HandleRequest(context.Context, address.NodeID,
+	HandleRequest(context.Context, kad.NodeID,
 		message.MinKadMessage) (message.MinKadMessage, error)
 }
 ```
