@@ -145,7 +145,7 @@ func queryTest(ctx context.Context) {
 		sq.WithEndpoint[key.Key256, multiaddr.Multiaddr](endpointA),
 		sq.WithScheduler[key.Key256, multiaddr.Multiaddr](schedA),
 	}
-	sq.NewSimpleQuery[key.Key256, multiaddr.Multiaddr](ctx, req, queryOpts...)
+	sq.NewSimpleQuery[key.Key256, multiaddr.Multiaddr](ctx, selfA.NodeID(), req, queryOpts...)
 
 	// create simulator
 	sim := litesimulator.NewLiteSimulator(clk)

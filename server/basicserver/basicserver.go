@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/multiformats/go-multiaddr"
+
 	"github.com/plprobelab/go-kademlia/kad"
 
 	"github.com/plprobelab/go-kademlia/libp2p"
@@ -110,7 +112,7 @@ func (s *BasicServer[A]) HandleFindNodeRequest(ctx context.Context,
 		}
 		resp = sim.NewResponse(peerAddrs[:index])
 	case *libp2p.Message:
-		nEndpoint, ok := s.endpoint.(endpoint.NetworkedEndpoint[key.Key256, A])
+		nEndpoint, ok := s.endpoint.(endpoint.NetworkedEndpoint[key.Key256, multiaddr.Multiaddr])
 		if !ok {
 			span.RecordError(ErrNotNetworkedEndpoint)
 			return nil, ErrNotNetworkedEndpoint
