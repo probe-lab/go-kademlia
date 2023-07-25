@@ -12,7 +12,6 @@ import (
 
 	"github.com/plprobelab/go-kademlia/events/scheduler"
 	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
-	"github.com/plprobelab/go-kademlia/internal/testutil"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/kadaddr"
@@ -164,9 +163,9 @@ func TestEndpoint(t *testing.T) {
 	// add followup function for the stream and make sure it runs
 	fakeEndpoint.streamFollowup[1000] = followup
 	addrs := []address.NodeAddr[key.Key256]{
-		kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0})), []string{"0"}),
-		kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{1})), []string{"1"}),
-		kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{2})), []string{"2"}),
+		kadaddr.NewKadAddr(kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{0})), []string{"0"}),
+		kadaddr.NewKadAddr(kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{1})), []string{"1"}),
+		kadaddr.NewKadAddr(kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{2})), []string{"2"}),
 	}
 	msg = NewResponse(addrs)
 	fakeEndpoint.HandleMessage(ctx, node0, protoID, 1000, msg)
@@ -190,7 +189,7 @@ func TestRequestTimeout(t *testing.T) {
 	ids := make([]address.NodeAddr[key.Key256], nPeers)
 	fakeEndpoints := make([]*Endpoint[key.Key256], nPeers)
 	for i := 0; i < nPeers; i++ {
-		ids[i] = kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{byte(i)})), nil)
+		ids[i] = kadaddr.NewKadAddr(kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{byte(i)})), nil)
 		scheds[i] = simplescheduler.NewSimpleScheduler(clk)
 		fakeEndpoints[i] = NewEndpoint(ids[i].NodeID(), scheds[i], router)
 	}

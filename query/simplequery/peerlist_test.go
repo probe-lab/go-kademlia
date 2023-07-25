@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/plprobelab/go-kademlia/internal/testutil"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/kadaddr"
@@ -172,7 +171,7 @@ func TestChangeStatus(t *testing.T) {
 
 func TestMultiAddrs(t *testing.T) {
 	ctx := context.Background()
-	self := kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0x80}))
+	self := kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{0x80}))
 	ep := sim.NewEndpoint[key.Key256](self, nil, nil)
 
 	// create empty peer list
@@ -186,7 +185,7 @@ func TestMultiAddrs(t *testing.T) {
 	ids := make([]address.NodeID[key.Key256], nPeers)
 	addrs := make([]*kadaddr.KadAddr[key.Key256], nPeers)
 	for i := 0; i < nPeers; i++ {
-		id := kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{byte(16 * i)}))
+		id := kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{byte(16 * i)}))
 		ids[i] = id
 		addrs[i] = kadaddr.NewKadAddr(id, []string{})
 		ep.MaybeAddToPeerstore(ctx, addrs[i], 1)

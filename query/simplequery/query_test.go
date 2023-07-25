@@ -16,7 +16,6 @@ import (
 	ss "github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
 	"github.com/plprobelab/go-kademlia/events/simulator"
 	"github.com/plprobelab/go-kademlia/events/simulator/litesimulator"
-	"github.com/plprobelab/go-kademlia/internal/testutil"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
@@ -48,7 +47,7 @@ func TestTrivialQuery(t *testing.T) {
 
 	router := sim.NewRouter[key.Key256]()
 	node0 := kadaddr.NewKadAddr(kadid.NewKadID(key.ZeroKey256()), nil)
-	node1 := kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0x80})), nil)
+	node1 := kadaddr.NewKadAddr(kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{0x80})), nil)
 	sched0 := ss.NewSimpleScheduler(clk)
 	sched1 := ss.NewSimpleScheduler(clk)
 	fendpoint0 := sim.NewEndpoint[key.Key256](node0.NodeID(), sched0, router)
@@ -69,14 +68,14 @@ func TestTrivialQuery(t *testing.T) {
 
 	// add a peer in node1's routing table. this peer will be returned in the
 	// response to the query
-	node2 := kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0xf0})), nil)
+	node2 := kadaddr.NewKadAddr(kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{0xf0})), nil)
 	err = fendpoint1.MaybeAddToPeerstore(ctx, node2, peerstoreTTL)
 	require.NoError(t, err)
 	success, err = rt1.AddPeer(ctx, node2.NodeID())
 	require.NoError(t, err)
 	require.True(t, success)
 
-	req := sim.NewRequest(testutil.Key256WithLeadingBytes([]byte{0xf0}))
+	req := sim.NewRequest(kadtest.Key256WithLeadingBytes([]byte{0xf0}))
 
 	queryOpts := []Option[key.Key256]{
 		WithProtocolID[key.Key256](protoID),
@@ -486,7 +485,7 @@ func TestConcurrentQuery(t *testing.T) {
 
 	for i := 0; i < nPeers; i++ {
 		scheds[i] = ss.NewSimpleScheduler(clk)
-		ids[i] = kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{byte(i * 32)})), nil)
+		ids[i] = kadaddr.NewKadAddr(kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{byte(i * 32)})), nil)
 		fendpoints[i] = sim.NewEndpoint(ids[i].NodeID(), scheds[i], router)
 		rts[i] = simplert.New(ids[i].NodeID().Key(), bucketSize)
 		servers[i] = basicserver.NewBasicServer(rts[i], fendpoints[i],
