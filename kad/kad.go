@@ -8,6 +8,11 @@ package kad
 //
 // Keys are usually generated using cryptographic hash functions, however the specifics of key generation
 // do not matter for key operations.
+//
+// A Key is not necessarily used to identify a node in the network but a derived
+// representation. Implementations may choose to hash a logical node identifier
+// to derive a Kademlia Key. Therefore, there also exists the concept of a NodeID
+// which just defines a method to return the associated Kademlia Key.
 type Key[K any] interface {
 	// BitLen returns the length of the key in bits.
 	BitLen() int
@@ -31,31 +36,55 @@ type Key[K any] interface {
 
 // RoutingTable is the interface all Kademlia Routing Tables types support.
 type RoutingTable[K Key[K]] interface {
-	// Self returns the local node's Kademlia key
-	Self() K
+	// AddNode tries to add a peer to the routing table. It returns true if
+	// the node was added and false if it wasn't added, e.g., because it
+	// was already part of the routing table.
+	//
+	// Because NodeID[K]'s are often preimages to Kademlia keys K
+	// there's no way to derive a NodeID[K] from just K. Therefore, to be
+	// able to return NodeID[K]'s from the `NearestNodes` method, this
+	// `AddNode` method signature takes a NodeID[K] instead of only K.
+	//
+	// Nodes added to the routing table are grouped into buckets based on their
+	// XOR distance to the local node's identifier. The details of the XOR
+	// arithmetics are defined on K.
+	AddNode(NodeID[K]) bool
 
-	// AddPeer tries to add a peer to the routing table
-	AddPeer(NodeID[K]) (bool, error)
+	// RemoveKey tries to remove a node identified by its Kademlia key from the
+	// routing table.
+	//
+	// It returns true if the key existed in the routing table and was removed.
+	// It returns false if the key didn't exist in the routing table and
+	// therefore, was not removed.
+	RemoveKey(K) bool
 
-	// RemoveKey tries to remove a peer identified by its Kademlia key from the
-	// routing table
-	RemoveKey(K) (NodeID[K], error)
-
-	// NearestPeers returns the closest peers to a given key
-	NearestPeers(K, int) ([]NodeID[K], error)
+	// NearestNodes returns the given number of closest nodes to a given
+	// Kademlia key that are currently present in the routing table.
+	// The returned list of nodes will be ordered from closest to furthest and
+	// contain at maximum the given number of entries, but also possibly less
+	// if the number exceeds the number of nodes in the routing table.
+	NearestNodes(K, int) []NodeID[K]
 }
 
-// NodeID is a generic node identifier. It is used to identify a node.
+// NodeID is a generic node identifier and not equal to a Kademlia key. Some
+// implementations use NodeID's as preimages for Kademlia keys. Kademlia keys
+// are used for calculating distances between nodes while NodeID's are the
+// original logical identifier of a node.
+//
+// The NodeID interface only defines a method that returns the Kademlia key
+// for the given NodeID. E.g., the operation to go from a NodeID to a Kademlia key
+// can be as simple as hashing the NodeID.
+//
+// Implementations may choose to equate NodeID's and Kademlia keys.
 type NodeID[K Key[K]] interface {
-	// Key returns the KadKey of the NodeID.
+	// Key returns the Kademlia key of the given NodeID. E.g., NodeID's can be
+	// preimages to Kademlia keys, in which case, Key() could return the SHA256
+	// of NodeID.
 	Key() K
-
-	// String returns the string representation of the NodeID. String
-	// representation should be unique for each NodeID.
-	String() string
 }
 
-// NodeAddr is a generic type that captures node ID and address information at once.
+// NodeAddr is a container type that combines node identification information
+// and network addresses at which the node is reachable.
 type NodeAddr[K Key[K]] interface {
 	// ID returns the node identifier.
 	ID() NodeID[K]
