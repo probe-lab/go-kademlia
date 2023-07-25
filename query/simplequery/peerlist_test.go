@@ -11,7 +11,7 @@ import (
 	"github.com/plprobelab/go-kademlia/network/address/kadaddr"
 	"github.com/plprobelab/go-kademlia/network/address/kadid"
 	"github.com/plprobelab/go-kademlia/network/address/peerid"
-	"github.com/plprobelab/go-kademlia/network/endpoint/fakeendpoint"
+	"github.com/plprobelab/go-kademlia/sim"
 	"github.com/stretchr/testify/require"
 )
 
@@ -173,7 +173,7 @@ func TestChangeStatus(t *testing.T) {
 func TestMultiAddrs(t *testing.T) {
 	ctx := context.Background()
 	self := kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0x80}))
-	ep := fakeendpoint.NewFakeEndpoint[key.Key256](self, nil, nil)
+	ep := sim.NewEndpoint[key.Key256](self, nil, nil)
 
 	// create empty peer list
 	pl := newPeerList[key.Key256](key.ZeroKey256(), ep)

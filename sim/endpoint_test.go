@@ -1,4 +1,4 @@
-package fakeendpoint
+package sim
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/stretchr/testify/require"
+
 	"github.com/plprobelab/go-kademlia/events/scheduler"
 	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
 	"github.com/plprobelab/go-kademlia/internal/testutil"
@@ -19,16 +21,13 @@ import (
 	si "github.com/plprobelab/go-kademlia/network/address/stringid"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"github.com/plprobelab/go-kademlia/network/message"
-	"github.com/plprobelab/go-kademlia/network/message/simmessage"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
-	"github.com/plprobelab/go-kademlia/server/basicserver"
-	"github.com/stretchr/testify/require"
 )
 
 var (
-	_ endpoint.NetworkedEndpoint[key.Key8] = (*FakeEndpoint[key.Key8])(nil)
-	_ endpoint.SimEndpoint[key.Key8]       = (*FakeEndpoint[key.Key8])(nil)
-	_ endpoint.Endpoint[key.Key8]          = (*FakeEndpoint[key.Key8])(nil)
+	_ endpoint.NetworkedEndpoint[key.Key8] = (*Endpoint[key.Key8])(nil)
+	_ endpoint.SimEndpoint[key.Key8]       = (*Endpoint[key.Key8])(nil)
+	_ endpoint.Endpoint[key.Key8]          = (*Endpoint[key.Key8])(nil)
 )
 
 var (
@@ -36,16 +35,16 @@ var (
 	peerstoreTTL = time.Minute
 )
 
-func TestFakeEndpoint(t *testing.T) {
+func TestEndpoint(t *testing.T) {
 	ctx := context.Background()
 	clk := clock.NewMock()
 
 	selfID := si.StringID("self")
 
-	router := NewFakeRouter[key.Key256]()
+	router := NewRouter[key.Key256]()
 	sched := simplescheduler.NewSimpleScheduler(clk)
 
-	fakeEndpoint := NewFakeEndpoint(selfID.NodeID(), sched, router)
+	fakeEndpoint := NewEndpoint(selfID.NodeID(), sched, router)
 
 	b := key.Equal(selfID.Key(), fakeEndpoint.KadKey())
 	require.True(t, b)
@@ -68,8 +67,8 @@ func TestFakeEndpoint(t *testing.T) {
 	_, err = fakeEndpoint.NetworkAddress(pid)
 	require.Equal(t, endpoint.ErrUnknownPeer, err)
 
-	req := simmessage.NewSimRequest(selfID.Key())
-	resp := &simmessage.SimMessage[key.Key256]{}
+	req := NewRequest(selfID.Key())
+	resp := &Message[key.Key256]{}
 
 	var runCheck bool
 	respHandler := func(ctx context.Context, msg message.MinKadResponseMessage[key.Key256], err error) {
@@ -99,9 +98,9 @@ func TestFakeEndpoint(t *testing.T) {
 	require.False(t, sched.RunOne(ctx))
 
 	sched0 := simplescheduler.NewSimpleScheduler(clk)
-	fakeEndpoint0 := NewFakeEndpoint[key.Key256](node0, sched0, router)
+	fakeEndpoint0 := NewEndpoint[key.Key256](node0, sched0, router)
 	rt0 := simplert.New(node0.Key(), 2)
-	serv0 := basicserver.NewBasicServer(rt0, fakeEndpoint0)
+	serv0 := NewServer[key.Key256](rt0, fakeEndpoint0, DefaultServerConfig())
 	err = fakeEndpoint0.AddRequestHandler(protoID, nil, serv0.HandleRequest)
 	require.NoError(t, err)
 	err = fakeEndpoint0.AddRequestHandler(protoID, nil, nil)
@@ -169,7 +168,7 @@ func TestFakeEndpoint(t *testing.T) {
 		kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{1})), []string{"1"}),
 		kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{2})), []string{"2"}),
 	}
-	msg = simmessage.NewSimResponse(addrs)
+	msg = NewResponse(addrs)
 	fakeEndpoint.HandleMessage(ctx, node0, protoID, 1000, msg)
 
 	a, err := fakeEndpoint.NetworkAddress(addrs[0].NodeID())
@@ -184,16 +183,16 @@ func TestFakeEndpoint(t *testing.T) {
 func TestRequestTimeout(t *testing.T) {
 	ctx := context.Background()
 	clk := clock.NewMock()
-	router := NewFakeRouter[key.Key256]()
+	router := NewRouter[key.Key256]()
 
 	nPeers := 2
 	scheds := make([]scheduler.AwareScheduler, nPeers)
 	ids := make([]address.NodeAddr[key.Key256], nPeers)
-	fakeEndpoints := make([]*FakeEndpoint[key.Key256], nPeers)
+	fakeEndpoints := make([]*Endpoint[key.Key256], nPeers)
 	for i := 0; i < nPeers; i++ {
 		ids[i] = kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{byte(i)})), nil)
 		scheds[i] = simplescheduler.NewSimpleScheduler(clk)
-		fakeEndpoints[i] = NewFakeEndpoint(ids[i].NodeID(), scheds[i], router)
+		fakeEndpoints[i] = NewEndpoint(ids[i].NodeID(), scheds[i], router)
 	}
 
 	// connect the peers to each other
@@ -259,7 +258,7 @@ func TestRequestTimeout(t *testing.T) {
 		return req, nil
 	}
 	// create valid message
-	msg := simmessage.NewSimResponse([]address.NodeAddr[key.Key256]{})
+	msg := NewResponse([]address.NodeAddr[key.Key256]{})
 	// overwrite request handler
 	fakeEndpoints[1].AddRequestHandler(protoID, nil, dumbResponseHandler)
 	fakeEndpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1].NodeID(), msg, nil,

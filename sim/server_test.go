@@ -1,4 +1,4 @@
-package simserver
+package sim
 
 import (
 	"context"
@@ -7,16 +7,15 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/kadaddr"
 	"github.com/plprobelab/go-kademlia/network/address/kadid"
-	"github.com/plprobelab/go-kademlia/network/endpoint/fakeendpoint"
 	"github.com/plprobelab/go-kademlia/network/message"
-	"github.com/plprobelab/go-kademlia/network/message/simmessage"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
-	"github.com/stretchr/testify/require"
 )
 
 // remotePeers with bucket assignments wrt to self
@@ -32,7 +31,7 @@ var kadRemotePeers = []address.NodeAddr[key.Key8]{
 	kadaddr.NewKadAddr(kadid.NewKadID(key.Key8(0b00001000)), nil), // 0000 1000 (bucket 4)
 }
 
-func TestSimMessageHandling(t *testing.T) {
+func TestMessageHandling(t *testing.T) {
 	ctx := context.Background()
 	clk := clock.NewMock()
 
@@ -41,9 +40,9 @@ func TestSimMessageHandling(t *testing.T) {
 
 	self := kadaddr.NewKadAddr(kadid.NewKadID(key.Key8(0)), nil) // 0000 0000
 
-	router := fakeendpoint.NewFakeRouter[key.Key8]()
+	router := NewRouter[key.Key8]()
 	sched := simplescheduler.NewSimpleScheduler(clk)
-	fakeEndpoint := fakeendpoint.NewFakeEndpoint(self.NodeID(), sched, router)
+	fakeEndpoint := NewEndpoint(self.NodeID(), sched, router)
 	rt := simplert.New(self.NodeID().Key(), 2)
 
 	// add peers to routing table and peerstore
@@ -55,7 +54,7 @@ func TestSimMessageHandling(t *testing.T) {
 		require.True(t, success)
 	}
 
-	s0 := NewSimServer[key.Key8](rt, fakeEndpoint, &Config{
+	s0 := NewServer[key.Key8](rt, fakeEndpoint, &ServerConfig{
 		PeerstoreTTL:            peerstoreTTL,
 		NumberUsefulCloserPeers: numberOfCloserPeersToSend,
 	})
@@ -63,7 +62,7 @@ func TestSimMessageHandling(t *testing.T) {
 	requester := kadaddr.NewKadAddr(kadid.NewKadID(key.Key8(0b00000001)), nil) // 0000 0001
 	fakeEndpoint.MaybeAddToPeerstore(ctx, requester, peerstoreTTL)
 
-	req0 := simmessage.NewSimRequest[key.Key8](key.Key8(0b00000000))
+	req0 := NewRequest[key.Key8](key.Key8(0b00000000))
 	msg, err := s0.HandleRequest(ctx, requester.NodeID(), req0)
 	require.NoError(t, err)
 
@@ -80,7 +79,7 @@ func TestSimMessageHandling(t *testing.T) {
 		require.Equal(t, order[i], p)
 	}
 
-	req1 := simmessage.NewSimRequest[key.Key8](key.Key8(0b11111111))
+	req1 := NewRequest[key.Key8](key.Key8(0b11111111))
 	msg, err = s0.HandleRequest(ctx, requester.NodeID(), req1)
 	require.NoError(t, err)
 	resp, ok = msg.(message.MinKadResponseMessage[key.Key8])
@@ -97,12 +96,12 @@ func TestSimMessageHandling(t *testing.T) {
 	}
 
 	numberOfCloserPeersToSend = 3
-	s1 := NewSimServer[key.Key8](rt, fakeEndpoint, &Config{
+	s1 := NewServer[key.Key8](rt, fakeEndpoint, &ServerConfig{
 		PeerstoreTTL:            peerstoreTTL,
 		NumberUsefulCloserPeers: numberOfCloserPeersToSend,
 	})
 
-	req2 := simmessage.NewSimRequest(key.Key8(0b01100000))
+	req2 := NewRequest(key.Key8(0b01100000))
 	msg, err = s1.HandleRequest(ctx, requester.NodeID(), req2)
 	require.NoError(t, err)
 	resp, ok = msg.(message.MinKadResponseMessage[key.Key8])
@@ -119,19 +118,19 @@ func TestSimMessageHandling(t *testing.T) {
 func TestInvalidSimRequests(t *testing.T) {
 	ctx := context.Background()
 	// invalid option
-	s := (*SimServer[key.Key8])(nil)
+	s := (*Server[key.Key8])(nil)
 	require.Nil(t, s)
 
 	peerstoreTTL := time.Second // doesn't matter as we use fakeendpoint
 
 	clk := clock.New()
-	router := fakeendpoint.NewFakeRouter[key.Key8]()
+	router := NewRouter[key.Key8]()
 
 	self := kadaddr.NewKadAddr(kadid.NewKadID(key.Key8(0)), nil) // 0000 0000
 
 	// create a valid server
 	sched := simplescheduler.NewSimpleScheduler(clk)
-	fakeEndpoint := fakeendpoint.NewFakeEndpoint(self.NodeID(), sched, router)
+	fakeEndpoint := NewEndpoint(self.NodeID(), sched, router)
 	rt := simplert.New(self.NodeID().Key(), 2)
 
 	// add peers to routing table and peerstore
@@ -143,7 +142,7 @@ func TestInvalidSimRequests(t *testing.T) {
 		require.True(t, success)
 	}
 
-	s = NewSimServer[key.Key8](rt, fakeEndpoint, DefaultConfig())
+	s = NewServer[key.Key8](rt, fakeEndpoint, DefaultServerConfig())
 	require.NotNil(t, s)
 
 	requester := kadid.NewKadID(key.Key8(0b00000001)) // 0000 0001
@@ -154,25 +153,25 @@ func TestInvalidSimRequests(t *testing.T) {
 	require.Error(t, err)
 
 	// empty request
-	req1 := &simmessage.SimMessage[key.Key8]{}
+	req1 := &Message[key.Key8]{}
 	s.HandleFindNodeRequest(ctx, requester, req1)
 
 	// request with invalid key (not matching the expected length)
-	req2 := simmessage.NewSimRequest[key.Key32](key.Key32(0b00000000000000010000000000000000))
+	req2 := NewRequest[key.Key32](key.Key32(0b00000000000000010000000000000000))
 	s.HandleFindNodeRequest(ctx, requester, req2)
 }
 
-func TestSimRequestNoNetworkAddress(t *testing.T) {
+func TestRequestNoNetworkAddress(t *testing.T) {
 	ctx := context.Background()
 
 	clk := clock.New()
-	router := fakeendpoint.NewFakeRouter[key.Key8]()
+	router := NewRouter[key.Key8]()
 
 	self := kadaddr.NewKadAddr(kadid.NewKadID(key.Key8(0)), nil) // 0000 0000
 
 	// create a valid server
 	sched := simplescheduler.NewSimpleScheduler(clk)
-	fakeEndpoint := fakeendpoint.NewFakeEndpoint(self.NodeID(), sched, router)
+	fakeEndpoint := NewEndpoint(self.NodeID(), sched, router)
 	rt := simplert.New(self.NodeID().Key(), 2)
 
 	node := kadid.NewKadID(key.Key8(0xf6))
@@ -182,13 +181,13 @@ func TestSimRequestNoNetworkAddress(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, success)
 
-	s := NewSimServer[key.Key8](rt, fakeEndpoint, DefaultConfig())
+	s := NewServer[key.Key8](rt, fakeEndpoint, DefaultServerConfig())
 	require.NotNil(t, s)
 
 	requester := kadid.NewKadID(key.Key8(0x80))
 
 	// sim request message (for any key)
-	req := simmessage.NewSimRequest(requester.Key())
+	req := NewRequest(requester.Key())
 	msg, err := s.HandleFindNodeRequest(ctx, requester, req)
 	require.NoError(t, err)
 	resp, ok := msg.(message.MinKadResponseMessage[key.Key8])

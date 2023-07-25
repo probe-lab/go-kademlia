@@ -22,12 +22,12 @@ import (
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
 	"github.com/plprobelab/go-kademlia/network/address/peerid"
-	"github.com/plprobelab/go-kademlia/network/endpoint/fakeendpoint"
 	"github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/network/message/ipfsv1"
 	sq "github.com/plprobelab/go-kademlia/query/simplequery"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
 	"github.com/plprobelab/go-kademlia/server/basicserver"
+	"github.com/plprobelab/go-kademlia/sim"
 	"github.com/plprobelab/go-kademlia/util"
 
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -46,7 +46,7 @@ func queryTest(ctx context.Context) {
 
 	clk := clock.NewMock()
 
-	router := fakeendpoint.NewFakeRouter[key.Key256]()
+	router := sim.NewRouter[key.Key256]()
 
 	// create peer A
 	pidA, err := peer.Decode("12BooooALPHA")
@@ -61,7 +61,7 @@ func queryTest(ctx context.Context) {
 	})
 	rtA := simplert.New(selfA.Key(), 2)
 	schedA := ss.NewSimpleScheduler(clk)
-	endpointA := fakeendpoint.NewFakeEndpoint(selfA.NodeID(), schedA, router)
+	endpointA := sim.NewEndpoint(selfA.NodeID(), schedA, router)
 	servA := basicserver.NewBasicServer(rtA, endpointA)
 	err = endpointA.AddRequestHandler(protoID, nil, servA.HandleRequest)
 	if err != nil {
@@ -81,7 +81,7 @@ func queryTest(ctx context.Context) {
 	})
 	rtB := simplert.New(selfB.Key(), 2)
 	schedB := ss.NewSimpleScheduler(clk)
-	endpointB := fakeendpoint.NewFakeEndpoint(selfB.NodeID(), schedB, router)
+	endpointB := sim.NewEndpoint(selfB.NodeID(), schedB, router)
 	servB := basicserver.NewBasicServer(rtB, endpointB)
 	err = endpointB.AddRequestHandler(protoID, nil, servB.HandleRequest)
 	if err != nil {
@@ -101,7 +101,7 @@ func queryTest(ctx context.Context) {
 	})
 	rtC := simplert.New(selfC.Key(), 2)
 	schedC := ss.NewSimpleScheduler(clk)
-	endpointC := fakeendpoint.NewFakeEndpoint(selfC.NodeID(), schedC, router)
+	endpointC := sim.NewEndpoint(selfC.NodeID(), schedC, router)
 	servC := basicserver.NewBasicServer(rtC, endpointC)
 	err = endpointC.AddRequestHandler(protoID, nil, servC.HandleRequest)
 	if err != nil {
