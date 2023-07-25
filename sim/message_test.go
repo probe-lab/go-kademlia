@@ -1,13 +1,13 @@
 package sim
 
 import (
+	si "github.com/plprobelab/go-kademlia/kad"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
-	si "github.com/plprobelab/go-kademlia/network/address/stringid"
 	"github.com/plprobelab/go-kademlia/network/message"
 )
 

@@ -24,7 +24,6 @@ import (
 	"github.com/plprobelab/go-kademlia/network/address/kadaddr"
 	"github.com/plprobelab/go-kademlia/network/address/kadid"
 	"github.com/plprobelab/go-kademlia/network/address/peerid"
-	si "github.com/plprobelab/go-kademlia/network/address/stringid"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"github.com/plprobelab/go-kademlia/network/endpoint/libp2pendpoint"
 	"github.com/plprobelab/go-kademlia/network/message"
@@ -114,7 +113,7 @@ func TestInvalidQueryOptions(t *testing.T) {
 	clk := clock.NewMock()
 
 	router := sim.NewRouter[key.Key256]()
-	node := si.StringID("node0")
+	node := kadtest.StringID("node0")
 	sched := ss.NewSimpleScheduler(clk)
 	fendpoint := sim.NewEndpoint[key.Key256](node, sched, router)
 	rt := simplert.New(node.Key(), 1)
@@ -776,7 +775,7 @@ func TestLibp2pCornerCase(t *testing.T) {
 		WithScheduler[key.Key256](sched),
 	}
 
-	req := sim.NewRequest(si.NewStringID("RandomKey").Key())
+	req := sim.NewRequest(kadtest.NewStringID("RandomKey").Key())
 
 	q2, err := NewSimpleQuery[key.Key256](ctx, req, queryOpts...)
 	require.NoError(t, err)

@@ -3,6 +3,7 @@ package libp2pendpoint
 import (
 	"context"
 	"errors"
+	stringid "github.com/plprobelab/go-kademlia/kad"
 	"sync"
 	"testing"
 	"time"
@@ -20,7 +21,6 @@ import (
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
 	"github.com/plprobelab/go-kademlia/network/address/peerid"
-	stringid "github.com/plprobelab/go-kademlia/network/address/stringid"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/network/message/ipfsv1"
