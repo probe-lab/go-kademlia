@@ -29,8 +29,8 @@ func TestRequest(t *testing.T) {
 
 func TestResponse(t *testing.T) {
 	closerPeers := []kad.NodeInfo[key.Key256, any]{
-		kadtest.NewAddr[key.Key256, any](kadtest.NewID(kadtest.StringID("peer1").Key()), nil),
-		kadtest.NewAddr[key.Key256, any](kadtest.NewID(kadtest.StringID("peer2").Key()), nil),
+		kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.StringID("peer1").Key()), nil),
+		kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.StringID("peer2").Key()), nil),
 	}
 	msg := NewResponse(closerPeers)
 

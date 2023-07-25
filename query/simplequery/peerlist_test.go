@@ -183,11 +183,11 @@ func TestMultiAddrs(t *testing.T) {
 	// create initial peers
 	nPeers := 5
 	ids := make([]kad.NodeID[key.Key256], nPeers)
-	addrs := make([]*kadtest.Addr[key.Key256, string], nPeers)
+	addrs := make([]*kadtest.Info[key.Key256, string], nPeers)
 	for i := 0; i < nPeers; i++ {
 		id := kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{byte(16 * i)}))
 		ids[i] = id
-		addrs[i] = kadtest.NewAddr[key.Key256, string](id, []string{})
+		addrs[i] = kadtest.NewInfo[key.Key256, string](id, []string{})
 		ep.MaybeAddToPeerstore(ctx, addrs[i], 1)
 	}
 

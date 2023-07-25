@@ -23,15 +23,15 @@ import (
 
 // remotePeers with bucket assignments wrt to self
 var kadRemotePeers = []kad.NodeInfo[key.Key256, any]{
-	kadtest.NewAddr[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b10001000})), nil), // 1000 1000 (bucket 0)
-	kadtest.NewAddr[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b11010010})), nil), // 1101 0010 (bucket 0)
-	kadtest.NewAddr[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b01001011})), nil), // 0100 1011 (bucket 1)
-	kadtest.NewAddr[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b01010011})), nil), // 0101 0011 (bucket 1)
-	kadtest.NewAddr[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b00101110})), nil), // 0010 1110 (bucket 2)
-	kadtest.NewAddr[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b00110110})), nil), // 0011 0110 (bucket 2)
-	kadtest.NewAddr[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b00011111})), nil), // 0001 1111 (bucket 3)
-	kadtest.NewAddr[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b00010001})), nil), // 0001 0001 (bucket 3)
-	kadtest.NewAddr[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b00001000})), nil), // 0000 1000 (bucket 4)
+	kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b10001000})), nil), // 1000 1000 (bucket 0)
+	kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b11010010})), nil), // 1101 0010 (bucket 0)
+	kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b01001011})), nil), // 0100 1011 (bucket 1)
+	kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b01010011})), nil), // 0101 0011 (bucket 1)
+	kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b00101110})), nil), // 0010 1110 (bucket 2)
+	kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b00110110})), nil), // 0011 0110 (bucket 2)
+	kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b00011111})), nil), // 0001 1111 (bucket 3)
+	kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b00010001})), nil), // 0001 0001 (bucket 3)
+	kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b00001000})), nil), // 0000 1000 (bucket 4)
 }
 
 func TestSimMessageHandling(t *testing.T) {
@@ -41,7 +41,7 @@ func TestSimMessageHandling(t *testing.T) {
 	peerstoreTTL := time.Second // doesn't matter as we use fakeendpoint
 	numberOfCloserPeersToSend := 4
 
-	self := kadtest.NewAddr[key.Key256, any](kadtest.NewID(key.ZeroKey256()), nil) // 0000 0000
+	self := kadtest.NewInfo[key.Key256, any](kadtest.NewID(key.ZeroKey256()), nil) // 0000 0000
 
 	router := sim.NewRouter[key.Key256, any]()
 	sched := simplescheduler.NewSimpleScheduler(clk)
@@ -52,15 +52,14 @@ func TestSimMessageHandling(t *testing.T) {
 	for _, p := range kadRemotePeers {
 		err := fakeEndpoint.MaybeAddToPeerstore(ctx, p, peerstoreTTL)
 		require.NoError(t, err)
-		success, err := rt.AddNode(ctx, p.ID())
-		require.NoError(t, err)
+		success := rt.AddNode(p.ID())
 		require.True(t, success)
 	}
 
 	s0 := NewBasicServer[any](rt, fakeEndpoint, WithPeerstoreTTL(peerstoreTTL),
 		WithNumberUsefulCloserPeers(numberOfCloserPeersToSend))
 
-	requester := kadtest.NewAddr[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b00000001})), nil) // 0000 0001
+	requester := kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0b00000001})), nil) // 0000 0001
 	fakeEndpoint.MaybeAddToPeerstore(ctx, requester, peerstoreTTL)
 
 	req0 := sim.NewRequest[key.Key256, any](kadtest.Key256WithLeadingBytes([]byte{0b00000000}))
@@ -126,7 +125,7 @@ func TestInvalidSimRequests(t *testing.T) {
 	clk := clock.New()
 	router := sim.NewRouter[key.Key256, any]()
 
-	self := kadtest.NewAddr[key.Key256, any](kadtest.NewID(key.ZeroKey256()), nil) // 0000 0000
+	self := kadtest.NewInfo[key.Key256, any](kadtest.NewID(key.ZeroKey256()), nil) // 0000 0000
 
 	// create a valid server
 	sched := simplescheduler.NewSimpleScheduler(clk)
@@ -137,8 +136,7 @@ func TestInvalidSimRequests(t *testing.T) {
 	for _, p := range kadRemotePeers {
 		err := fakeEndpoint.MaybeAddToPeerstore(ctx, p, peerstoreTTL)
 		require.NoError(t, err)
-		success, err := rt.AddNode(ctx, p.ID())
-		require.NoError(t, err)
+		success := rt.AddNode(p.ID())
 		require.True(t, success)
 	}
 
@@ -172,7 +170,7 @@ func TestSimRequestNoNetworkAddress(t *testing.T) {
 	clk := clock.New()
 	router := sim.NewRouter[key.Key256, any]()
 
-	self := kadtest.NewAddr[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0})), nil) // 0000 0000
+	self := kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0})), nil) // 0000 0000
 
 	// create a valid server
 	sched := simplescheduler.NewSimpleScheduler(clk)
@@ -187,8 +185,7 @@ func TestSimRequestNoNetworkAddress(t *testing.T) {
 	})
 
 	// add peer to routing table, but NOT to peerstore
-	success, err := rt.AddNode(ctx, addrInfo.ID())
-	require.NoError(t, err)
+	success := rt.AddNode(addrInfo.ID())
 	require.True(t, success)
 
 	s = NewBasicServer[any](rt, fakeEndpoint)

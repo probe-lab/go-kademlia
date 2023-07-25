@@ -37,8 +37,8 @@ func TestTrivialQuery(t *testing.T) {
 	peerstoreTTL := 10 * time.Minute
 
 	router := sim.NewRouter[key.Key256, any]()
-	node0 := kadtest.NewAddr[key.Key256, any](kadtest.NewID(key.ZeroKey256()), nil)
-	node1 := kadtest.NewAddr[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0x80})), nil)
+	node0 := kadtest.NewInfo[key.Key256, any](kadtest.NewID(key.ZeroKey256()), nil)
+	node1 := kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0x80})), nil)
 	sched0 := ss.NewSimpleScheduler(clk)
 	sched1 := ss.NewSimpleScheduler(clk)
 	fendpoint0 := sim.NewEndpoint[key.Key256, any](node0.ID(), sched0, router)
@@ -47,7 +47,7 @@ func TestTrivialQuery(t *testing.T) {
 	rt1 := simplert.New[key.Key256, any](node1.ID().Key(), 1)
 
 	// make node1 a server
-	server1 := basicserver.NewBasicServer[key.Key256, any](rt1, fendpoint1)
+	server1 := basicserver.NewBasicServer[any](rt1, fendpoint1)
 	fendpoint1.AddRequestHandler(protoID, &sim.Message[key.Key256, any]{}, server1.HandleRequest)
 
 	// connect add node1 address to node0
@@ -58,7 +58,7 @@ func TestTrivialQuery(t *testing.T) {
 
 	// add a peer in node1's routing table. this peer will be returned in the
 	// response to the query
-	node2 := kadtest.NewAddr[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0xf0})), nil)
+	node2 := kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0xf0})), nil)
 	err = fendpoint1.MaybeAddToPeerstore(ctx, node2, peerstoreTTL)
 	require.NoError(t, err)
 	success = rt1.AddNode(node2.ID())
@@ -211,7 +211,7 @@ func simulationSetup(t *testing.T, ctx context.Context, n, bucketSize int,
 
 	for i := 0; i < n; i++ {
 		scheds[i] = ss.NewSimpleScheduler(clk)
-		ids[i] = kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(uint8(i*spacing))), nil)
+		ids[i] = kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(uint8(i*spacing))), nil)
 		fendpoints[i] = sim.NewEndpoint[key.Key8, any](ids[i].ID(), scheds[i], router)
 		rts[i] = simplert.New[key.Key8, any](ids[i].ID().Key(), bucketSize)
 		cfg := sim.DefaultServerConfig()
@@ -467,14 +467,12 @@ func TestConcurrentQuery(t *testing.T) {
 	fendpoints := make([]endpoint.SimEndpoint[key.Key256, any], nPeers)
 	rts := make([]kad.RoutingTable[key.Key256], nPeers)
 	servers := make([]server.Server[key.Key256], nPeers)
-
 	for i := 0; i < nPeers; i++ {
 		scheds[i] = ss.NewSimpleScheduler(clk)
-		ids[i] = kadtest.NewAddr[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{byte(i * 32)})), nil)
+		ids[i] = kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{byte(i * 32)})), nil)
 		fendpoints[i] = sim.NewEndpoint(ids[i].ID(), scheds[i], router)
 		rts[i] = simplert.New[key.Key256, any](ids[i].ID().Key(), bucketSize)
-		servers[i] = basicserver.NewBasicServer[key.Key256, any](rts[i], fendpoints[i],
-			basicserver.WithNumberUsefulCloserPeers(bucketSize))
+		servers[i] = basicserver.NewBasicServer[any](rts[i], fendpoints[i], basicserver.WithNumberUsefulCloserPeers(bucketSize))
 		fendpoints[i].AddRequestHandler(protoID, &sim.Message[key.Key256, any]{}, servers[i].HandleRequest)
 	}
 
@@ -573,8 +571,8 @@ func TestUnresponsivePeer(t *testing.T) {
 	bucketSize := 1
 
 	router := sim.NewRouter[key.Key8, any]()
-	node0 := kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0)), nil)
-	node1 := kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(1)), nil)
+	node0 := kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0)), nil)
+	node1 := kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(1)), nil)
 	sched0 := ss.NewSimpleScheduler(clk)
 	sched1 := ss.NewSimpleScheduler(clk)
 	fendpoint0 := sim.NewEndpoint[key.Key8, any](node0.ID(), sched0, router)
@@ -639,12 +637,12 @@ func TestCornerCases(t *testing.T) {
 	peerstoreTTL := time.Minute
 
 	router := sim.NewRouter[key.Key8, any]()
-	node0 := kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0x00)), nil)
+	node0 := kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0x00)), nil)
 	sched0 := ss.NewSimpleScheduler(clk)
 	fendpoint0 := sim.NewEndpoint(node0.ID(), sched0, router)
 	rt0 := simplert.New[key.Key8, any](node0.ID().Key(), bucketSize)
 
-	node1 := kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0x01)), nil)
+	node1 := kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0x01)), nil)
 	fendpoint0.MaybeAddToPeerstore(ctx, node1, peerstoreTTL)
 
 	success := rt0.AddNode(node1.ID())
@@ -680,9 +678,9 @@ func TestCornerCases(t *testing.T) {
 	q.handleResponse(ctx, node1.ID(), nil)
 
 	addrs := []kad.NodeInfo[key.Key8, any]{
-		kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0xee)), nil),
-		// kadtest.NewAddr()(kadtest.NewID()([]byte{0x66, 0x66}), nil), // invalid key length
-		kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0x88)), nil),
+		kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0xee)), nil),
+		// kadtest.NewInfo()(kadtest.NewID()([]byte{0x66, 0x66}), nil), // invalid key length
+		kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0x88)), nil),
 	}
 	forgedResponse := sim.NewResponse(addrs)
 	q.handleResponse(ctx, node1.ID(), forgedResponse)

@@ -80,7 +80,7 @@ func TestEndpoint(t *testing.T) {
 	require.False(t, sched.RunOne(ctx))
 	require.True(t, runCheck)
 
-	err = fakeEndpoint.MaybeAddToPeerstore(ctx, kadtest.NewAddr[key.Key256, any](kadtest.NewID(node0.Key()), nil), peerstoreTTL)
+	err = fakeEndpoint.MaybeAddToPeerstore(ctx, kadtest.NewInfo[key.Key256, any](kadtest.NewID(node0.Key()), nil), peerstoreTTL)
 	require.NoError(t, err)
 
 	connectedness, err = fakeEndpoint.Connectedness(node0)
@@ -164,9 +164,9 @@ func TestEndpoint(t *testing.T) {
 	// add followup function for the stream and make sure it runs
 	fakeEndpoint.streamFollowup[1000] = followup
 	addrs := []kad.NodeInfo[key.Key256, string]{
-		kadtest.NewAddr(kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0})), []string{"0"}),
-		kadtest.NewAddr(kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{1})), []string{"1"}),
-		kadtest.NewAddr(kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{2})), []string{"2"}),
+		kadtest.NewInfo(kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0})), []string{"0"}),
+		kadtest.NewInfo(kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{1})), []string{"1"}),
+		kadtest.NewInfo(kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{2})), []string{"2"}),
 	}
 	msg = NewResponse(addrs)
 	fakeEndpoint.HandleMessage(ctx, node0, protoID, 1000, msg)
@@ -190,7 +190,7 @@ func TestRequestTimeout(t *testing.T) {
 	ids := make([]kad.NodeInfo[key.Key256, any], nPeers)
 	fakeEndpoints := make([]*Endpoint[key.Key256, any], nPeers)
 	for i := 0; i < nPeers; i++ {
-		ids[i] = kadtest.NewAddr[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{byte(i)})), nil)
+		ids[i] = kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{byte(i)})), nil)
 		scheds[i] = simplescheduler.NewSimpleScheduler(clk)
 		fakeEndpoints[i] = NewEndpoint[key.Key256, any](ids[i].ID(), scheds[i], router)
 	}

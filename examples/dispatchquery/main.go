@@ -62,7 +62,7 @@ func queryTest(ctx context.Context) {
 	rtA := simplert.New(selfA.Key(), 2)
 	schedA := ss.NewSimpleScheduler(clk)
 	endpointA := sim.NewEndpoint(selfA.NodeID(), schedA, router)
-	servA := basicserver.NewBasicServer(rtA, endpointA)
+	servA := basicserver.NewBasicServer[multiaddr.Multiaddr](rtA, endpointA)
 	err = endpointA.AddRequestHandler(protoID, nil, servA.HandleRequest)
 	if err != nil {
 		panic(err)
@@ -82,7 +82,7 @@ func queryTest(ctx context.Context) {
 	rtB := simplert.New(selfB.Key(), 2)
 	schedB := ss.NewSimpleScheduler(clk)
 	endpointB := sim.NewEndpoint(selfB.NodeID(), schedB, router)
-	servB := basicserver.NewBasicServer(rtB, endpointB)
+	servB := basicserver.NewBasicServer[multiaddr.Multiaddr](rtB, endpointB)
 	err = endpointB.AddRequestHandler(protoID, nil, servB.HandleRequest)
 	if err != nil {
 		panic(err)
@@ -102,7 +102,7 @@ func queryTest(ctx context.Context) {
 	rtC := simplert.New(selfC.Key(), 2)
 	schedC := ss.NewSimpleScheduler(clk)
 	endpointC := sim.NewEndpoint(selfC.NodeID(), schedC, router)
-	servC := basicserver.NewBasicServer(rtC, endpointC)
+	servC := basicserver.NewBasicServer[multiaddr.Multiaddr](rtC, endpointC)
 	err = endpointC.AddRequestHandler(protoID, nil, servC.HandleRequest)
 	if err != nil {
 		panic(err)

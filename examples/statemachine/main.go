@@ -51,7 +51,7 @@ func setupSimulation(ctx context.Context) ([]*FakeNode[key.Key256, string], *Mes
 
 	addrs := make([]kad.NodeInfo[key.Key256, string], nodeCount)
 	for i := 0; i < nodeCount; i++ {
-		addrs[i] = kadtest.NewAddr(ids[i], []string{})
+		addrs[i] = kadtest.NewInfo(ids[i], []string{})
 	}
 
 	nodes := make([]*FakeNode[key.Key256, string], nodeCount)

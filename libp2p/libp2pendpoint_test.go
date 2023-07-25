@@ -85,7 +85,7 @@ func TestConnections(t *testing.T) {
 	// create endpoints
 	endpoints, addrs, ids, _ := createEndpoints(t, ctx, 4)
 
-	invalidID := kadtest.NewAddr[key.Key256, ma.Multiaddr](kadtest.NewID(kadtest.NewStringID("invalid").Key()), nil)
+	invalidID := kadtest.NewInfo[key.Key256, ma.Multiaddr](kadtest.NewID(kadtest.NewStringID("invalid").Key()), nil)
 
 	// test that the endpoint's kademlia key is as expected
 	for i, ep := range endpoints {

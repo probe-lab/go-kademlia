@@ -20,15 +20,15 @@ import (
 
 // remotePeers with bucket assignments wrt to self
 var kadRemotePeers = []kad.NodeInfo[key.Key8, any]{
-	kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0b10001000)), nil), // 1000 1000 (bucket 0)
-	kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0b11010010)), nil), // 1101 0010 (bucket 0)
-	kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0b01001011)), nil), // 0100 1011 (bucket 1)
-	kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0b01010011)), nil), // 0101 0011 (bucket 1)
-	kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0b00101110)), nil), // 0010 1110 (bucket 2)
-	kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0b00110110)), nil), // 0011 0110 (bucket 2)
-	kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0b00011111)), nil), // 0001 1111 (bucket 3)
-	kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0b00010001)), nil), // 0001 0001 (bucket 3)
-	kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0b00001000)), nil), // 0000 1000 (bucket 4)
+	kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0b10001000)), nil), // 1000 1000 (bucket 0)
+	kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0b11010010)), nil), // 1101 0010 (bucket 0)
+	kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0b01001011)), nil), // 0100 1011 (bucket 1)
+	kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0b01010011)), nil), // 0101 0011 (bucket 1)
+	kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0b00101110)), nil), // 0010 1110 (bucket 2)
+	kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0b00110110)), nil), // 0011 0110 (bucket 2)
+	kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0b00011111)), nil), // 0001 1111 (bucket 3)
+	kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0b00010001)), nil), // 0001 0001 (bucket 3)
+	kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0b00001000)), nil), // 0000 1000 (bucket 4)
 }
 
 func TestMessageHandling(t *testing.T) {
@@ -38,7 +38,7 @@ func TestMessageHandling(t *testing.T) {
 	peerstoreTTL := time.Second
 	numberOfCloserPeersToSend := 4
 
-	self := kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0)), nil) // 0000 0000
+	self := kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0)), nil) // 0000 0000
 
 	router := NewRouter[key.Key8, any]()
 	sched := simplescheduler.NewSimpleScheduler(clk)
@@ -59,7 +59,7 @@ func TestMessageHandling(t *testing.T) {
 		NumberUsefulCloserPeers: numberOfCloserPeersToSend,
 	})
 
-	requester := kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0b00000001)), nil) // 0000 0001
+	requester := kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0b00000001)), nil) // 0000 0001
 	fakeEndpoint.MaybeAddToPeerstore(ctx, requester, peerstoreTTL)
 
 	req0 := NewRequest[key.Key8, any](key.Key8(0b00000000))
@@ -126,7 +126,7 @@ func TestInvalidSimRequests(t *testing.T) {
 	clk := clock.New()
 	router := NewRouter[key.Key8, any]()
 
-	self := kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0)), nil) // 0000 0000
+	self := kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0)), nil) // 0000 0000
 
 	// create a valid server
 	sched := simplescheduler.NewSimpleScheduler(clk)
@@ -167,7 +167,7 @@ func TestRequestNoNetworkAddress(t *testing.T) {
 	clk := clock.New()
 	router := NewRouter[key.Key8, any]()
 
-	self := kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0)), nil) // 0000 0000
+	self := kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0)), nil) // 0000 0000
 
 	// create a valid server
 	sched := simplescheduler.NewSimpleScheduler(clk)

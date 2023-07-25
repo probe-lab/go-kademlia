@@ -65,25 +65,25 @@ func (s StringID) String() string {
 	return string(s)
 }
 
-type Addr[K kad.Key[K], A comparable] struct {
+type Info[K kad.Key[K], A any] struct {
 	id    *ID[K]
 	addrs []A
 }
 
-var _ kad.NodeInfo[key.Key8, any] = (*Addr[key.Key8, any])(nil)
+var _ kad.NodeInfo[key.Key8, any] = (*Info[key.Key8, any])(nil)
 
-func NewAddr[K kad.Key[K], A comparable](id *ID[K], addrs []A) *Addr[K, A] {
-	return &Addr[K, A]{
+func NewInfo[K kad.Key[K], A any](id *ID[K], addrs []A) *Info[K, A] {
+	return &Info[K, A]{
 		id:    id,
 		addrs: addrs,
 	}
 }
 
-func (a *Addr[K, A]) AddAddr(addr A) {
+func (a *Info[K, A]) AddAddr(addr A) {
 	a.addrs = append(a.addrs, addr)
 }
 
-func (a *Addr[K, A]) RemoveAddr(addr A) {
+func (a *Info[K, A]) RemoveAddr(addr A) {
 	writeIndex := 0
 	// remove all occurrences of addr
 	for _, ad := range a.addrs {
@@ -95,11 +95,11 @@ func (a *Addr[K, A]) RemoveAddr(addr A) {
 	a.addrs = a.addrs[:writeIndex]
 }
 
-func (a *Addr[K, A]) ID() kad.NodeID[K] {
+func (a *Info[K, A]) ID() kad.NodeID[K] {
 	return a.id
 }
 
-func (a *Addr[K, A]) Addresses() []A {
+func (a *Info[K, A]) Addresses() []A {
 	addresses := make([]A, len(a.addrs))
 	for i, addr := range a.addrs {
 		addresses[i] = addr

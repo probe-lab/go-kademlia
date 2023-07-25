@@ -52,11 +52,11 @@ func findNode(ctx context.Context) {
 
 	// create node identifiers
 	nodeCount := 4
-	nodes := make([]*kadtest.Addr[key.Key8, any], nodeCount)
-	nodes[0] = kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0)), nil)
-	nodes[1] = kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0x01)), nil)
-	nodes[2] = kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0x02)), nil)
-	nodes[3] = kadtest.NewAddr[key.Key8, any](kadtest.NewID(key.Key8(0x03)), nil)
+	nodes := make([]*kadtest.Info[key.Key8, any], nodeCount)
+	nodes[0] = kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0)), nil)
+	nodes[1] = kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0x01)), nil)
+	nodes[2] = kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0x02)), nil)
+	nodes[3] = kadtest.NewInfo[key.Key8, any](kadtest.NewID(key.Key8(0x03)), nil)
 
 	// Kademlia trie:
 	//     ^

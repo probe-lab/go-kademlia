@@ -1,7 +1,6 @@
 package triert
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -12,8 +11,6 @@ import (
 )
 
 func TestBucketLimit20(t *testing.T) {
-	ctx := context.Background()
-
 	cfg := DefaultConfig[key.Key32]()
 	cfg.KeyFilter = BucketLimit20[key.Key32]
 	rt, err := New(key0, cfg)
@@ -27,30 +24,25 @@ func TestBucketLimit20(t *testing.T) {
 
 	// Add 20 peers with cpl 3
 	for i := 0; i < 20; i++ {
-		success, err := rt.AddNode(ctx, nodes[i])
-		require.NoError(t, err)
+		success := rt.AddNode(nodes[i])
 		require.True(t, success)
 	}
 
 	// cannot add 21st
-	success, err := rt.AddNode(ctx, nodes[20])
-	require.NoError(t, err)
+	success := rt.AddNode(nodes[20])
 	require.False(t, success)
 
 	// add peer with different cpl
 	kk := kadtest.RandomKeyWithPrefix("0000100")
 	node22 := NewNode("QmPeer22", kk)
-	success, err = rt.AddNode(ctx, node22)
-	require.NoError(t, err)
+	success = rt.AddNode(node22)
 	require.True(t, success)
 
 	// make space for another cpl 3 key
-	success, err = rt.RemoveKey(ctx, nodes[0].Key())
-	require.NoError(t, err)
+	success = rt.RemoveKey(nodes[0].Key())
 	require.True(t, success)
 
 	// now can add cpl 3 key
-	success, err = rt.AddNode(ctx, nodes[20])
-	require.NoError(t, err)
+	success = rt.AddNode(nodes[20])
 	require.True(t, success)
 }
