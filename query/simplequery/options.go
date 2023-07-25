@@ -14,7 +14,7 @@ import (
 
 // Config is a structure containing all the options that can be used when
 // constructing a SimpleQuery.
-type Config[K kad.Key[K], A any] struct {
+type Config[K kad.Key[K], A kad.Address[A]] struct {
 	// ProtocolID is the protocol identifier used to send the request
 	ProtocolID address.ProtocolID
 	// NumberUsefulCloserPeers is the number of closer peers to look for in the
@@ -66,12 +66,12 @@ func (cfg *Config[K, A]) Apply(opts ...Option[K, A]) error {
 }
 
 // Option type for SimpleQuery
-type Option[K kad.Key[K], A any] func(*Config[K, A]) error
+type Option[K kad.Key[K], A kad.Address[A]] func(*Config[K, A]) error
 
 // DefaultConfig is the default options for SimpleQuery. This option is always
 // prepended to the list of options passed to the SimpleQuery constructor.
 // Note that most of the fields are left empty, and must be filled by the user.
-func DefaultConfig[K kad.Key[K], A any](cfg *Config[K, A]) error {
+func DefaultConfig[K kad.Key[K], A kad.Address[A]](cfg *Config[K, A]) error {
 	cfg.NumberUsefulCloserPeers = 20
 	cfg.Concurrency = 10
 
@@ -92,14 +92,14 @@ func DefaultConfig[K kad.Key[K], A any](cfg *Config[K, A]) error {
 	return nil
 }
 
-func WithProtocolID[K kad.Key[K], A any](pid address.ProtocolID) Option[K, A] {
+func WithProtocolID[K kad.Key[K], A kad.Address[A]](pid address.ProtocolID) Option[K, A] {
 	return func(cfg *Config[K, A]) error {
 		cfg.ProtocolID = pid
 		return nil
 	}
 }
 
-func WithNumberUsefulCloserPeers[K kad.Key[K], A any](n int) Option[K, A] {
+func WithNumberUsefulCloserPeers[K kad.Key[K], A kad.Address[A]](n int) Option[K, A] {
 	return func(cfg *Config[K, A]) error {
 		if n <= 0 {
 			return fmt.Errorf("NumberUsefulCloserPeers must be positive")
@@ -109,7 +109,7 @@ func WithNumberUsefulCloserPeers[K kad.Key[K], A any](n int) Option[K, A] {
 	}
 }
 
-func WithConcurrency[K kad.Key[K], A any](n int) Option[K, A] {
+func WithConcurrency[K kad.Key[K], A kad.Address[A]](n int) Option[K, A] {
 	return func(cfg *Config[K, A]) error {
 		if n <= 0 {
 			return fmt.Errorf("concurrency parameter must be positive")
@@ -119,21 +119,21 @@ func WithConcurrency[K kad.Key[K], A any](n int) Option[K, A] {
 	}
 }
 
-func WithRequestTimeout[K kad.Key[K], A any](timeout time.Duration) Option[K, A] {
+func WithRequestTimeout[K kad.Key[K], A kad.Address[A]](timeout time.Duration) Option[K, A] {
 	return func(cfg *Config[K, A]) error {
 		cfg.RequestTimeout = timeout
 		return nil
 	}
 }
 
-func WithPeerstoreTTL[K kad.Key[K], A any](ttl time.Duration) Option[K, A] {
+func WithPeerstoreTTL[K kad.Key[K], A kad.Address[A]](ttl time.Duration) Option[K, A] {
 	return func(cfg *Config[K, A]) error {
 		cfg.PeerstoreTTL = ttl
 		return nil
 	}
 }
 
-func WithHandleResultsFunc[K kad.Key[K], A any](fn HandleResultFn[K, A]) Option[K, A] {
+func WithHandleResultsFunc[K kad.Key[K], A kad.Address[A]](fn HandleResultFn[K, A]) Option[K, A] {
 	return func(cfg *Config[K, A]) error {
 		if fn == nil {
 			return fmt.Errorf("HandleResultsFunc cannot be nil")
@@ -143,7 +143,7 @@ func WithHandleResultsFunc[K kad.Key[K], A any](fn HandleResultFn[K, A]) Option[
 	}
 }
 
-func WithNotifyFailureFunc[K kad.Key[K], A any](fn NotifyFailureFn) Option[K, A] {
+func WithNotifyFailureFunc[K kad.Key[K], A kad.Address[A]](fn NotifyFailureFn) Option[K, A] {
 	return func(cfg *Config[K, A]) error {
 		if fn == nil {
 			return fmt.Errorf("NotifyFailureFunc cannot be nil")
@@ -153,7 +153,7 @@ func WithNotifyFailureFunc[K kad.Key[K], A any](fn NotifyFailureFn) Option[K, A]
 	}
 }
 
-func WithRoutingTable[K kad.Key[K], A any](rt kad.RoutingTable[K]) Option[K, A] {
+func WithRoutingTable[K kad.Key[K], A kad.Address[A]](rt kad.RoutingTable[K]) Option[K, A] {
 	return func(cfg *Config[K, A]) error {
 		if rt == nil {
 			return fmt.Errorf("SimpleQuery option RoutingTable cannot be nil")
@@ -163,7 +163,7 @@ func WithRoutingTable[K kad.Key[K], A any](rt kad.RoutingTable[K]) Option[K, A] 
 	}
 }
 
-func WithEndpoint[K kad.Key[K], A any](ep endpoint.Endpoint[K, A]) Option[K, A] {
+func WithEndpoint[K kad.Key[K], A kad.Address[A]](ep endpoint.Endpoint[K, A]) Option[K, A] {
 	return func(cfg *Config[K, A]) error {
 		if ep == nil {
 			return fmt.Errorf("SimpleQuery option Endpoint cannot be nil")
@@ -173,7 +173,7 @@ func WithEndpoint[K kad.Key[K], A any](ep endpoint.Endpoint[K, A]) Option[K, A] 
 	}
 }
 
-func WithScheduler[K kad.Key[K], A any](sched scheduler.Scheduler) Option[K, A] {
+func WithScheduler[K kad.Key[K], A kad.Address[A]](sched scheduler.Scheduler) Option[K, A] {
 	return func(cfg *Config[K, A]) error {
 		if sched == nil {
 			return fmt.Errorf("SimpleQuery option Scheduler cannot be nil")

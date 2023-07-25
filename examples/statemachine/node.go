@@ -10,7 +10,7 @@ import (
 	"github.com/plprobelab/go-kademlia/network/message"
 )
 
-type FakeNode[K kad.Key[K], A any] struct {
+type FakeNode[K kad.Key[K], A kad.Address[A]] struct {
 	addr      kad.NodeInfo[K, A]
 	rt        kad.RoutingTable[K]
 	peerstore map[kad.NodeID[K]]kad.NodeInfo[K, A]
@@ -60,11 +60,11 @@ func (f *FakeNode[K, A]) HandleMessage(ctx context.Context, msg message.MinKadRe
 	}
 }
 
-type MessageRouter[K kad.Key[K], A any] struct {
+type MessageRouter[K kad.Key[K], A kad.Address[A]] struct {
 	nodes map[kad.NodeID[K]]*FakeNode[K, A]
 }
 
-func NewMessageRouter[K kad.Key[K], A any](nodes []*FakeNode[K, A]) *MessageRouter[K, A] {
+func NewMessageRouter[K kad.Key[K], A kad.Address[A]](nodes []*FakeNode[K, A]) *MessageRouter[K, A] {
 	mr := &MessageRouter[K, A]{
 		nodes: make(map[kad.NodeID[K]]*FakeNode[K, A]),
 	}
@@ -90,7 +90,7 @@ func (r *MessageRouter[K, A]) SendMessage(ctx context.Context, addr kad.NodeInfo
 	return n.HandleMessage(ctx, msg)
 }
 
-type FindNodeRequest[K kad.Key[K], A any] struct {
+type FindNodeRequest[K kad.Key[K], A kad.Address[A]] struct {
 	NodeID kad.NodeID[K]
 }
 
@@ -102,7 +102,7 @@ func (FindNodeRequest[K, A]) EmptyResponse() message.MinKadResponseMessage[K, A]
 	return &FindNodeResponse[K, A]{}
 }
 
-type FindNodeResponse[K kad.Key[K], A any] struct {
+type FindNodeResponse[K kad.Key[K], A kad.Address[A]] struct {
 	NodeID      kad.NodeID[K] // node we were looking for
 	CloserPeers []kad.NodeInfo[K, A]
 }

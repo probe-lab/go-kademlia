@@ -3,11 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-
-	"github.com/plprobelab/go-kademlia/kad"
+	"net"
 
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
-
+	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
 )
@@ -17,7 +16,7 @@ func main() {
 
 	nodes, mr := setupSimulation(ctx)
 
-	kad := NewKademliaHandler[key.Key256, string](nodes[0], mr)
+	kad := NewKademliaHandler[key.Key256, net.IP](nodes[0], mr)
 
 	ih := NewIpfsDht(kad)
 	ih.Start(ctx)
@@ -34,7 +33,7 @@ func main() {
 	fmt.Printf("FindNode found address for: %s\n", addr.ID().String())
 }
 
-func setupSimulation(ctx context.Context) ([]*FakeNode[key.Key256, string], *MessageRouter[key.Key256, string]) {
+func setupSimulation(ctx context.Context) ([]*FakeNode[key.Key256, net.IP], *MessageRouter[key.Key256, net.IP]) {
 	// create node identifiers
 	nodeCount := 4
 	ids := make([]*kadtest.ID[key.Key256], nodeCount)
@@ -49,17 +48,17 @@ func setupSimulation(ctx context.Context) ([]*FakeNode[key.Key256, string], *Mes
 	//   ^   ^
 	//  A B C D
 
-	addrs := make([]kad.NodeInfo[key.Key256, string], nodeCount)
+	addrs := make([]kad.NodeInfo[key.Key256, net.IP], nodeCount)
 	for i := 0; i < nodeCount; i++ {
-		addrs[i] = kadtest.NewInfo(ids[i], []string{})
+		addrs[i] = kadtest.NewInfo(ids[i], []net.IP{})
 	}
 
-	nodes := make([]*FakeNode[key.Key256, string], nodeCount)
+	nodes := make([]*FakeNode[key.Key256, net.IP], nodeCount)
 	for i := 0; i < nodeCount; i++ {
-		nodes[i] = &FakeNode[key.Key256, string]{
+		nodes[i] = &FakeNode[key.Key256, net.IP]{
 			addr:      addrs[i],
 			rt:        simplert.New(ids[i].Key(), 2),
-			peerstore: make(map[kad.NodeID[key.Key256]]kad.NodeInfo[key.Key256, string]),
+			peerstore: make(map[kad.NodeID[key.Key256]]kad.NodeInfo[key.Key256, net.IP]),
 		}
 	}
 
@@ -78,7 +77,7 @@ func setupSimulation(ctx context.Context) ([]*FakeNode[key.Key256, string], *Mes
 }
 
 // connectNodes adds nodes to each other's peerstores and routing tables
-func connectNodes(ctx context.Context, a, b *FakeNode[key.Key256, string]) {
+func connectNodes(ctx context.Context, a, b *FakeNode[key.Key256, net.IP]) {
 	// add b to a's peerstore and routing table
 	a.AddNodeAddr(b.Addr())
 

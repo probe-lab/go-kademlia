@@ -3,22 +3,22 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 
 	"github.com/plprobelab/go-kademlia/kad"
-
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/message"
 )
 
 type IpfsDht struct {
-	kad          *KademliaHandler[key.Key256, string]
-	queryWaiters map[QueryID]chan<- message.MinKadResponseMessage[key.Key256, string]
+	kad          *KademliaHandler[key.Key256, net.IP]
+	queryWaiters map[QueryID]chan<- message.MinKadResponseMessage[key.Key256, net.IP]
 }
 
-func NewIpfsDht(kad *KademliaHandler[key.Key256, string]) *IpfsDht {
+func NewIpfsDht(kad *KademliaHandler[key.Key256, net.IP]) *IpfsDht {
 	return &IpfsDht{
 		kad:          kad,
-		queryWaiters: make(map[QueryID]chan<- message.MinKadResponseMessage[key.Key256, string]),
+		queryWaiters: make(map[QueryID]chan<- message.MinKadResponseMessage[key.Key256, net.IP]),
 	}
 }
 
@@ -34,7 +34,7 @@ func (d *IpfsDht) mainloop(ctx context.Context) {
 			return
 		case ev := <-kadEvents:
 			switch tev := ev.(type) {
-			case *KademliaOutboundQueryProgressedEvent[key.Key256, string]:
+			case *KademliaOutboundQueryProgressedEvent[key.Key256, net.IP]:
 				// TODO: locking
 				ch, ok := d.queryWaiters[tev.QueryID]
 				if !ok {
@@ -53,25 +53,25 @@ func (d *IpfsDht) mainloop(ctx context.Context) {
 	}
 }
 
-func (d *IpfsDht) registerQueryWaiter(queryID QueryID, ch chan<- message.MinKadResponseMessage[key.Key256, string]) {
+func (d *IpfsDht) registerQueryWaiter(queryID QueryID, ch chan<- message.MinKadResponseMessage[key.Key256, net.IP]) {
 	// TODO: locking
 	d.queryWaiters[queryID] = ch
 }
 
 // Initiates an iterative query for the the address of the given peer.
 // FindNode is a fundamental Kademlia operation so this logic should be on KademliaHandler
-func (d *IpfsDht) FindNode(ctx context.Context, node kad.NodeID[key.Key256]) (kad.NodeInfo[key.Key256, string], error) {
+func (d *IpfsDht) FindNode(ctx context.Context, node kad.NodeID[key.Key256]) (kad.NodeInfo[key.Key256, net.IP], error) {
 	trace("IpfsHandler.FindNode")
 	// TODO: look in local peer store first
 
 	// If not in peer store then query the Kademlia dht
-	queryID, err := d.kad.StartQuery(ctx, &FindNodeRequest[key.Key256, string]{NodeID: node})
+	queryID, err := d.kad.StartQuery(ctx, &FindNodeRequest[key.Key256, net.IP]{NodeID: node})
 	if err != nil {
 		return nil, fmt.Errorf("failed to start query: %w", err)
 	}
 	trace("Query id is %d", queryID)
 
-	ch := make(chan message.MinKadResponseMessage[key.Key256, string])
+	ch := make(chan message.MinKadResponseMessage[key.Key256, net.IP])
 	d.registerQueryWaiter(queryID, ch)
 
 	// wait for query to finish
@@ -88,7 +88,7 @@ func (d *IpfsDht) FindNode(ctx context.Context, node kad.NodeID[key.Key256]) (ka
 			trace("IpfsHandler.FindNode: got event from kademlia")
 			// we got a response from a message sent by query
 			switch tresp := resp.(type) {
-			case *FindNodeResponse[key.Key256, string]:
+			case *FindNodeResponse[key.Key256, net.IP]:
 				// interpret the response
 				for _, found := range tresp.CloserPeers {
 					// TODO: is this the best way to test for node equality?

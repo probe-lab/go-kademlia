@@ -38,7 +38,7 @@ func TestLibp2pCornerCase(t *testing.T) {
 	id := NewPeerID(h.ID())
 	sched := ss.NewSimpleScheduler(clk)
 	libp2pEndpoint := NewLibp2pEndpoint(ctx, h, sched)
-	rt := simplert.New[key.Key256, any](id.Key(), bucketSize)
+	rt := simplert.New[key.Key256, multiaddr.Multiaddr](id.Key(), bucketSize)
 
 	parsed, err := peer.Decode("1D3oooUnknownPeer")
 	require.NoError(t, err)
@@ -63,7 +63,7 @@ func TestLibp2pCornerCase(t *testing.T) {
 
 	req := sim.NewRequest[key.Key256, multiaddr.Multiaddr](kadtest.NewStringID("RandomKey").Key())
 
-	q2, err := simplequery.NewSimpleQuery[key.Key256, multiaddr.Multiaddr](ctx, req, queryOpts...)
+	q2, err := simplequery.NewSimpleQuery[key.Key256, multiaddr.Multiaddr](ctx, NewPeerID(h.ID()), req, queryOpts...)
 	require.NoError(t, err)
 
 	// TODO: moved this test here from simplequery to remove libp2p dependency from there

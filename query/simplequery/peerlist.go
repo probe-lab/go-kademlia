@@ -17,7 +17,7 @@ const (
 	unreachable
 )
 
-type nodeInfo[K kad.Key[K], A any] struct {
+type nodeInfo[K kad.Key[K], A kad.Address[A]] struct {
 	distance          K
 	status            nodeStatus
 	id                kad.NodeID[K]
@@ -27,7 +27,7 @@ type nodeInfo[K kad.Key[K], A any] struct {
 	next *nodeInfo[K, A]
 }
 
-type peerList[K kad.Key[K], A any] struct {
+type peerList[K kad.Key[K], A kad.Address[A]] struct {
 	target   K
 	endpoint endpoint.NetworkedEndpoint[K, A]
 
@@ -37,7 +37,7 @@ type peerList[K kad.Key[K], A any] struct {
 	queuedCount int
 }
 
-func newPeerList[K kad.Key[K], A any](target K, ep endpoint.Endpoint[K, A]) *peerList[K, A] {
+func newPeerList[K kad.Key[K], A kad.Address[A]](target K, ep endpoint.Endpoint[K, A]) *peerList[K, A] {
 	nep, ok := ep.(endpoint.NetworkedEndpoint[K, A])
 	if !ok {
 		nep = nil
@@ -129,7 +129,7 @@ func (pl *peerList[K, A]) addToPeerlist(ids []kad.NodeID[K]) {
 						for _, addr := range na.Addresses() {
 							found := false
 							for _, oldAddr := range oldHead.addrs {
-								if addr == oldAddr {
+								if addr.Equal(oldAddr) {
 									found = true
 									break
 								}
@@ -171,7 +171,7 @@ func (pl *peerList[K, A]) addToPeerlist(ids []kad.NodeID[K]) {
 	}
 }
 
-func sliceToPeerInfos[K kad.Key[K], A any](target K, ids []kad.NodeID[K]) *nodeInfo[K, A] {
+func sliceToPeerInfos[K kad.Key[K], A kad.Address[A]](target K, ids []kad.NodeID[K]) *nodeInfo[K, A] {
 	// create a new list of nodeInfo
 	newPeers := make([]*nodeInfo[K, A], 0, len(ids))
 	for _, id := range ids {
@@ -202,7 +202,7 @@ func sliceToPeerInfos[K kad.Key[K], A any](target K, ids []kad.NodeID[K]) *nodeI
 	return newPeers[0]
 }
 
-func addrInfoToPeerInfo[K kad.Key[K], A any](target K, id kad.NodeID[K]) *nodeInfo[K, A] {
+func addrInfoToPeerInfo[K kad.Key[K], A kad.Address[A]](target K, id kad.NodeID[K]) *nodeInfo[K, A] {
 	if id == nil || id.String() == "" || target.BitLen() != id.Key().BitLen() {
 		return nil
 	}
@@ -290,7 +290,7 @@ func (pl *peerList[K, A]) unreachablePeer(id kad.NodeID[K]) {
 	}
 }
 
-func findNextQueued[K kad.Key[K], A any](pi *nodeInfo[K, A]) *nodeInfo[K, A] {
+func findNextQueued[K kad.Key[K], A kad.Address[A]](pi *nodeInfo[K, A]) *nodeInfo[K, A] {
 	curr := pi
 	for curr != nil && curr.status != queued {
 		curr = curr.next

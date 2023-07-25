@@ -7,23 +7,22 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
-	"github.com/plprobelab/go-kademlia/sim"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-multiaddr"
+	"github.com/stretchr/testify/require"
 
+	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"github.com/plprobelab/go-kademlia/network/message"
-	"github.com/plprobelab/go-kademlia/server/basicserver"
-
-	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/multiformats/go-multiaddr"
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
-	"github.com/stretchr/testify/require"
+	"github.com/plprobelab/go-kademlia/server/basicserver"
+	"github.com/plprobelab/go-kademlia/sim"
 )
 
-type invalidEndpoint[K kad.Key[K], A any] struct{}
+type invalidEndpoint[K kad.Key[K], A kad.Address[A]] struct{}
 
 // var _ endpoint.Endpoint = (*invalidEndpoint)(nil)
 
@@ -81,8 +80,7 @@ func TestInvalidIpfsv1Requests(t *testing.T) {
 		// add peers to routing table and peerstore
 		err = invalidEP.MaybeAddToPeerstore(ctx, addrInfo, peerstoreTTL)
 		require.NoError(t, err)
-		success, err := rt.AddNode(ctx, peerids[i])
-		require.NoError(t, err)
+		success := rt.AddNode(peerids[i])
 		require.True(t, success)
 	}
 
@@ -167,8 +165,7 @@ func TestIPFSv1Handling(t *testing.T) {
 		// add peers to routing table and peerstore
 		err = fakeEndpoint.MaybeAddToPeerstore(ctx, addrInfo, peerstoreTTL)
 		require.NoError(t, err)
-		success, err := rt.AddNode(ctx, peerids[i])
-		require.NoError(t, err)
+		success := rt.AddNode(peerids[i])
 		require.True(t, success)
 	}
 

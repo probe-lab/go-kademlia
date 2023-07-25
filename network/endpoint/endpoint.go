@@ -16,10 +16,10 @@ type RequestHandlerFn[K kad.Key[K]] func(context.Context, kad.NodeID[K],
 
 // ResponseHandlerFn defines a function that deals with the response to a
 // request previously sent to a remote peer.
-type ResponseHandlerFn[K kad.Key[K], A any] func(context.Context, message.MinKadResponseMessage[K, A], error)
+type ResponseHandlerFn[K kad.Key[K], A kad.Address[A]] func(context.Context, message.MinKadResponseMessage[K, A], error)
 
 // Endpoint defines how Kademlia nodes interacts with each other.
-type Endpoint[K kad.Key[K], A any] interface {
+type Endpoint[K kad.Key[K], A kad.Address[A]] interface {
 	// MaybeAddToPeerstore adds the given address to the peerstore if it is
 	// valid and if it is not already there.
 	MaybeAddToPeerstore(context.Context, kad.NodeInfo[K, A], time.Duration) error
@@ -37,7 +37,7 @@ type Endpoint[K kad.Key[K], A any] interface {
 
 // ServerEndpoint is a Kademlia endpoint that can handle requests from remote
 // peers.
-type ServerEndpoint[K kad.Key[K], A any] interface {
+type ServerEndpoint[K kad.Key[K], A kad.Address[A]] interface {
 	Endpoint[K, A]
 	// AddRequestHandler registers a handler for a given protocol ID.
 	AddRequestHandler(address.ProtocolID, message.MinKadMessage, RequestHandlerFn[K]) error
@@ -47,7 +47,7 @@ type ServerEndpoint[K kad.Key[K], A any] interface {
 
 // NetworkedEndpoint is an endpoint keeping track of the connectedness with
 // known remote peers.
-type NetworkedEndpoint[K kad.Key[K], A any] interface {
+type NetworkedEndpoint[K kad.Key[K], A kad.Address[A]] interface {
 	Endpoint[K, A]
 	// Connectedness returns the connectedness of the given peer.
 	Connectedness(kad.NodeID[K]) (network.Connectedness, error)
@@ -57,7 +57,7 @@ type NetworkedEndpoint[K kad.Key[K], A any] interface {
 type StreamID uint64
 
 // SimEndpoint is a simulated endpoint that doesn't operate on real network
-type SimEndpoint[K kad.Key[K], A any] interface {
+type SimEndpoint[K kad.Key[K], A kad.Address[A]] interface {
 	ServerEndpoint[K, A]
 	// HandleMessage handles a message from the given peer.
 	HandleMessage(context.Context, kad.NodeID[K], address.ProtocolID,

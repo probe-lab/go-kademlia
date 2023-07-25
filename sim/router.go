@@ -11,13 +11,13 @@ import (
 	"github.com/plprobelab/go-kademlia/network/message"
 )
 
-type Router[K kad.Key[K], A any] struct {
+type Router[K kad.Key[K], A kad.Address[A]] struct {
 	currStream endpoint.StreamID
 	peers      map[string]endpoint.SimEndpoint[K, A]
 	scheds     map[string]scheduler.Scheduler
 }
 
-func NewRouter[K kad.Key[K], A any]() *Router[K, A] {
+func NewRouter[K kad.Key[K], A kad.Address[A]]() *Router[K, A] {
 	return &Router[K, A]{
 		currStream: 1,
 		peers:      make(map[string]endpoint.SimEndpoint[K, A]),

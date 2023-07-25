@@ -24,13 +24,14 @@ import (
 // kad.NodeID returned by resp.CloserNodes() is not necessarily of the same
 // type as the one returned by the routing table's NearestNodes method. so
 // kad.NodeID s may need to be converted in this function.
-type HandleResultFn[K kad.Key[K], A any] func(context.Context, kad.NodeID[K],
+type HandleResultFn[K kad.Key[K], A kad.Address[A]] func(context.Context, kad.NodeID[K],
 	message.MinKadResponseMessage[K, A]) (bool, []kad.NodeID[K])
 
 type NotifyFailureFn func(context.Context)
 
-type SimpleQuery[K kad.Key[K], A any] struct {
+type SimpleQuery[K kad.Key[K], A kad.Address[A]] struct {
 	ctx          context.Context
+	self         kad.NodeID[K]
 	done         bool
 	protoID      address.ProtocolID
 	req          message.MinKadRequestMessage[K, A]
@@ -58,7 +59,7 @@ type SimpleQuery[K kad.Key[K], A any] struct {
 // reader, and the parameters to these events are determined by the query's
 // parameters. The query keeps track of the closest known peers to the target
 // key, and the peers that have been queried so far.
-func NewSimpleQuery[K kad.Key[K], A any](ctx context.Context, req message.MinKadRequestMessage[K, A],
+func NewSimpleQuery[K kad.Key[K], A kad.Address[A]](ctx context.Context, self kad.NodeID[K], req message.MinKadRequestMessage[K, A],
 	opts ...Option[K, A],
 ) (*SimpleQuery[K, A], error) {
 	ctx, span := util.StartSpan(ctx, "SimpleQuery.NewSimpleQuery",
@@ -88,6 +89,7 @@ func NewSimpleQuery[K kad.Key[K], A any](ctx context.Context, req message.MinKad
 	q := &SimpleQuery[K, A]{
 		ctx:             ctx,
 		req:             req,
+		self:            self,
 		protoID:         cfg.ProtocolID,
 		concurrency:     cfg.Concurrency,
 		timeout:         cfg.RequestTimeout,
@@ -249,7 +251,7 @@ func (q *SimpleQuery[K, A]) handleResponse(ctx context.Context, id kad.NodeID[K]
 	// remove all occurreneces of q.self from usefulNodeIDs
 	writeIndex := 0
 	for _, id := range usefulNodeIDs {
-		if !key.Equal(q.rt.Self(), id.Key()) {
+		if !key.Equal(q.self.Key(), id.Key()) {
 			// id is valid and isn't self
 			usefulNodeIDs[writeIndex] = id
 			writeIndex++

@@ -18,7 +18,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-type BasicServer[A any] struct {
+type BasicServer[A kad.Address[A]] struct {
 	rt       kad.RoutingTable[key.Key256]
 	endpoint endpoint.Endpoint[key.Key256, A]
 
@@ -28,7 +28,7 @@ type BasicServer[A any] struct {
 
 // var _ server.Server = (*BasicServer)(nil)
 
-func NewBasicServer[A any](rt kad.RoutingTable[key.Key256], endpoint endpoint.Endpoint[key.Key256, A],
+func NewBasicServer[A kad.Address[A]](rt kad.RoutingTable[key.Key256], endpoint endpoint.Endpoint[key.Key256, A],
 	options ...Option,
 ) *BasicServer[A] {
 	var cfg Config

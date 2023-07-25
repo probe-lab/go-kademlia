@@ -10,7 +10,7 @@ import (
 	"github.com/plprobelab/go-kademlia/network/message"
 )
 
-type KademliaHandler[K kad.Key[K], A any] struct {
+type KademliaHandler[K kad.Key[K], A kad.Address[A]] struct {
 	self           *FakeNode[K, A]
 	qp             *QueryPool[K, A]
 	mr             *MessageRouter[K, A]
@@ -20,7 +20,7 @@ type KademliaHandler[K kad.Key[K], A any] struct {
 	startOnce      sync.Once
 }
 
-func NewKademliaHandler[K kad.Key[K], A any](node *FakeNode[K, A], mr *MessageRouter[K, A]) *KademliaHandler[K, A] {
+func NewKademliaHandler[K kad.Key[K], A kad.Address[A]](node *FakeNode[K, A], mr *MessageRouter[K, A]) *KademliaHandler[K, A] {
 	qp := NewQueryPool(node, mr)
 	return &KademliaHandler[K, A]{
 		self:           node,
@@ -154,7 +154,7 @@ type KademliaHandlerEvent interface {
 
 type KademliaRoutingUpdatedEvent[K kad.Key[K]] struct{}
 
-type KademliaOutboundQueryProgressedEvent[K kad.Key[K], A any] struct {
+type KademliaOutboundQueryProgressedEvent[K kad.Key[K], A kad.Address[A]] struct {
 	NodeID   kad.NodeID[K]
 	QueryID  QueryID
 	Response message.MinKadResponseMessage[K, A]
@@ -186,7 +186,7 @@ type MessageFailedEvent[K kad.Key[K]] struct {
 	QueryID QueryID
 }
 
-type MessageResponseEvent[K kad.Key[K], A any] struct {
+type MessageResponseEvent[K kad.Key[K], A kad.Address[A]] struct {
 	NodeID   kad.NodeID[K]
 	QueryID  QueryID
 	Response message.MinKadResponseMessage[K, A]

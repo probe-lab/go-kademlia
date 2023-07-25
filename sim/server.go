@@ -11,19 +11,18 @@ import (
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"github.com/plprobelab/go-kademlia/network/message"
-	"github.com/plprobelab/go-kademlia/routing"
 	"github.com/plprobelab/go-kademlia/util"
 )
 
-type Server[K kad.Key[K], A any] struct {
-	rt       routing.Table[K]
+type Server[K kad.Key[K], A kad.Address[A]] struct {
+	rt       kad.RoutingTable[K]
 	endpoint endpoint.Endpoint[K, A]
 
 	peerstoreTTL              time.Duration
 	numberOfCloserPeersToSend int
 }
 
-func NewServer[K kad.Key[K], A any](rt routing.Table[K], endpoint endpoint.Endpoint[K, A], cfg *ServerConfig) *Server[K, A] {
+func NewServer[K kad.Key[K], A kad.Address[A]](rt kad.RoutingTable[K], endpoint endpoint.Endpoint[K, A], cfg *ServerConfig) *Server[K, A] {
 	if cfg == nil {
 		cfg = DefaultServerConfig()
 	}
@@ -64,22 +63,17 @@ func (s *Server[K, A]) HandleFindNodeRequest(ctx context.Context,
 		attribute.String("Target", key.HexString(target))))
 	defer span.End()
 
-	peers, err := s.rt.NearestPeers(ctx, target, s.numberOfCloserPeersToSend)
-	if err != nil {
-		span.RecordError(err)
-		// invalid request, don't reply
-		return nil, err
-	}
-	span.AddEvent("Nearest peers", trace.WithAttributes(
-		attribute.Int("count", len(peers)),
+	nodes := s.rt.NearestNodes(target, s.numberOfCloserPeersToSend)
+	span.AddEvent("Nearest nodes", trace.WithAttributes(
+		attribute.Int("count", len(nodes)),
 	))
 
 	var resp message.MinKadMessage
 	switch msg.(type) {
 	case *Message[K, A]:
-		peerAddrs := make([]kad.NodeInfo[K, A], len(peers))
+		peerAddrs := make([]kad.NodeInfo[K, A], len(nodes))
 		var index int
-		for _, p := range peers {
+		for _, p := range nodes {
 			na, err := s.endpoint.NetworkAddress(p)
 			if err != nil {
 				span.RecordError(err)

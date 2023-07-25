@@ -131,7 +131,7 @@ func FindPeer(ctx context.Context) {
 		simplequery.WithEndpoint[key.Key256, multiaddr.Multiaddr](msgEndpoint),
 		simplequery.WithScheduler[key.Key256, multiaddr.Multiaddr](sched),
 	}
-	_, err = simplequery.NewSimpleQuery[key.Key256, multiaddr.Multiaddr](ctx, req, queryOpts...)
+	_, err = simplequery.NewSimpleQuery[key.Key256, multiaddr.Multiaddr](ctx, pid.NodeID(), req, queryOpts...)
 	if err != nil {
 		panic(err)
 	}

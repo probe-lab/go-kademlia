@@ -87,12 +87,16 @@ type NodeID[K Key[K]] interface {
 
 // NodeInfo is a container type that combines node identification information
 // and network addresses at which the node is reachable.
-type NodeInfo[K Key[K], A any] interface {
+type NodeInfo[K Key[K], A Address[A]] interface {
 	// ID returns the node identifier.
 	ID() NodeID[K]
 
 	// Addresses returns the network addresses associated with the given node.
 	Addresses() []A
+}
+
+type Address[T any] interface {
+	Equal(T) bool
 }
 
 func Equal[K Key[K]](this, that NodeID[K]) bool {

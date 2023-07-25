@@ -3,6 +3,7 @@ package sim
 import (
 	"context"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/plprobelab/go-kademlia/key"
@@ -23,7 +24,7 @@ import (
 
 // Endpoint is a single threaded endpoint implementation simulating a network.
 // It simulates a network and handles message exchanges between multiple peers in a simulation.
-type Endpoint[K kad.Key[K], A any] struct {
+type Endpoint[K kad.Key[K], A kad.Address[A]] struct {
 	self  kad.NodeID[K]
 	sched scheduler.Scheduler // client
 
@@ -36,9 +37,9 @@ type Endpoint[K kad.Key[K], A any] struct {
 	router *Router[K, A]
 }
 
-var _ endpoint.SimEndpoint[key.Key256, any] = *Endpoint[key.Key256, any](nil)
+var _ endpoint.SimEndpoint[key.Key256, net.IP] = (*Endpoint[key.Key256, net.IP])(nil)
 
-func NewEndpoint[K kad.Key[K], A any](self kad.NodeID[K], sched scheduler.Scheduler, router *Router[K, A]) *Endpoint[K, A] {
+func NewEndpoint[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], sched scheduler.Scheduler, router *Router[K, A]) *Endpoint[K, A] {
 	e := &Endpoint[K, A]{
 		self:         self,
 		sched:        sched,

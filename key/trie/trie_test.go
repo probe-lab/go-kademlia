@@ -4,6 +4,8 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/plprobelab/go-kademlia/internal/kadtest"
+
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/stretchr/testify/require"
@@ -168,15 +170,13 @@ func TestSize(t *testing.T) {
 func TestAddIgnoresDuplicates(t *testing.T) {
 	tr := New[key.Key32, any]()
 	for _, kk := range sampleKeySet.Keys {
-		added, err := tr.Add(kk, nil)
-		require.NoError(t, err)
+		added := tr.Add(kk, nil)
 		require.True(t, added)
 	}
 	require.Equal(t, len(sampleKeySet.Keys), tr.Size())
 
 	for _, kk := range sampleKeySet.Keys {
-		added, err := tr.Add(kk, nil)
-		require.NoError(t, err)
+		added := tr.Add(kk, nil)
 		require.False(t, added)
 	}
 	require.Equal(t, len(sampleKeySet.Keys), tr.Size())
@@ -209,8 +209,7 @@ func TestImmutableAddIgnoresDuplicates(t *testing.T) {
 func TestAddWithData(t *testing.T) {
 	tr := New[key.Key32, int]()
 	for i, kk := range sampleKeySet.Keys {
-		added, err := tr.Add(kk, i)
-		require.NoError(t, err)
+		added := tr.Add(kk, i)
 		require.True(t, added)
 	}
 	require.Equal(t, len(sampleKeySet.Keys), tr.Size())
@@ -245,8 +244,7 @@ func TestRemove(t *testing.T) {
 	}
 	require.Equal(t, len(sampleKeySet.Keys), tr.Size())
 
-	removed, err := tr.Remove(sampleKeySet.Keys[0])
-	require.NoError(t, err)
+	removed := tr.Remove(sampleKeySet.Keys[0])
 	require.True(t, removed)
 	require.Equal(t, len(sampleKeySet.Keys)-1, tr.Size())
 
@@ -273,8 +271,7 @@ func TestImmutableRemove(t *testing.T) {
 
 func TestRemoveFromEmpty(t *testing.T) {
 	tr := New[key.Key32, any]()
-	removed, err := tr.Remove(sampleKeySet.Keys[0])
-	require.NoError(t, err)
+	removed := tr.Remove(sampleKeySet.Keys[0])
 	require.False(t, removed)
 	require.Equal(t, 0, tr.Size())
 
@@ -302,8 +299,7 @@ func TestRemoveUnknown(t *testing.T) {
 
 	unknown := newKeyNotInSet(sampleKeySet.Keys[0].BitLen(), sampleKeySet)
 
-	removed, err := tr.Remove(unknown)
-	require.NoError(t, err)
+	removed := tr.Remove(unknown)
 	require.False(t, removed)
 	require.Equal(t, len(sampleKeySet.Keys), tr.Size())
 

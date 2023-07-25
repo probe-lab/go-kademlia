@@ -2,6 +2,7 @@ package kadtest
 
 import (
 	"crypto/sha256"
+	"net"
 
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
@@ -65,14 +66,14 @@ func (s StringID) String() string {
 	return string(s)
 }
 
-type Info[K kad.Key[K], A any] struct {
+type Info[K kad.Key[K], A kad.Address[A]] struct {
 	id    *ID[K]
 	addrs []A
 }
 
-var _ kad.NodeInfo[key.Key8, any] = (*Info[key.Key8, any])(nil)
+var _ kad.NodeInfo[key.Key8, net.IP] = (*Info[key.Key8, net.IP])(nil)
 
-func NewInfo[K kad.Key[K], A any](id *ID[K], addrs []A) *Info[K, A] {
+func NewInfo[K kad.Key[K], A kad.Address[A]](id *ID[K], addrs []A) *Info[K, A] {
 	return &Info[K, A]{
 		id:    id,
 		addrs: addrs,
@@ -87,7 +88,7 @@ func (a *Info[K, A]) RemoveAddr(addr A) {
 	writeIndex := 0
 	// remove all occurrences of addr
 	for _, ad := range a.addrs {
-		if ad != addr {
+		if !ad.Equal(addr) {
 			a.addrs[writeIndex] = ad
 			writeIndex++
 		}

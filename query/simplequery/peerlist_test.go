@@ -2,6 +2,7 @@ package simplequery
 
 import (
 	"context"
+	"net"
 	"testing"
 
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
@@ -18,7 +19,7 @@ func TestAddPeers(t *testing.T) {
 	target := kadtest.NewID(key.Key8(0x00))
 
 	// create empty peer list
-	pl := newPeerList[key.Key8, any](target.Key(), nil)
+	pl := newPeerList[key.Key8, net.IP](target.Key(), nil)
 
 	require.Nil(t, pl.closest)
 	require.Nil(t, pl.closestQueued)
@@ -113,7 +114,7 @@ func TestChangeStatus(t *testing.T) {
 	target := kadtest.NewID(key.Key8(0x00))
 
 	// create empty peer list
-	pl := newPeerList[key.Key8, any](target.Key(), nil)
+	pl := newPeerList[key.Key8, net.IP](target.Key(), nil)
 
 	require.Nil(t, pl.closest)
 	require.Nil(t, pl.closestQueued)
@@ -172,10 +173,10 @@ func TestChangeStatus(t *testing.T) {
 func TestMultiAddrs(t *testing.T) {
 	ctx := context.Background()
 	self := kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0x80}))
-	ep := sim.NewEndpoint[key.Key256, string](self, nil, nil)
+	ep := sim.NewEndpoint[key.Key256, net.IP](self, nil, nil)
 
 	// create empty peer list
-	pl := newPeerList[key.Key256, string](key.ZeroKey256(), ep)
+	pl := newPeerList[key.Key256, net.IP](key.ZeroKey256(), ep)
 
 	require.Nil(t, pl.closest)
 	require.Nil(t, pl.closestQueued)
@@ -183,11 +184,11 @@ func TestMultiAddrs(t *testing.T) {
 	// create initial peers
 	nPeers := 5
 	ids := make([]kad.NodeID[key.Key256], nPeers)
-	addrs := make([]*kadtest.Info[key.Key256, string], nPeers)
+	addrs := make([]*kadtest.Info[key.Key256, net.IP], nPeers)
 	for i := 0; i < nPeers; i++ {
 		id := kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{byte(16 * i)}))
 		ids[i] = id
-		addrs[i] = kadtest.NewInfo[key.Key256, string](id, []string{})
+		addrs[i] = kadtest.NewInfo[key.Key256, net.IP](id, []net.IP{})
 		ep.MaybeAddToPeerstore(ctx, addrs[i], 1)
 	}
 
@@ -217,7 +218,7 @@ func TestMultiAddrs(t *testing.T) {
 	require.Equal(t, unreachable, pl.closest.next.status)
 
 	// ids[1] added again, with a different address, its status should be queued
-	addrs[1].AddAddr("0")
+	addrs[1].AddAddr(net.ParseIP("127.0.0.1"))
 	ep.MaybeAddToPeerstore(ctx, addrs[1], 1)
 	pl.addToPeerlist([]kad.NodeID[key.Key256]{ids[1]})
 	require.Equal(t, queued, pl.closest.next.status)
@@ -234,7 +235,7 @@ func TestMultiAddrs(t *testing.T) {
 	require.Equal(t, unreachable, pl.closest.next.status)
 
 	// add new addr to ids[1]
-	addrs[1].AddAddr("1")
+	addrs[1].AddAddr(net.ParseIP("127.0.0.2"))
 	ep.MaybeAddToPeerstore(ctx, addrs[1], 1)
 	// add ids[1] again to peerlist, this time it should be queued
 	pl.addToPeerlist([]kad.NodeID[key.Key256]{ids[1]})
@@ -242,7 +243,7 @@ func TestMultiAddrs(t *testing.T) {
 	require.Equal(t, ids[1], pl.popClosestQueued())
 
 	// ids[0] is still waiting
-	addrs[0].AddAddr("0")
+	addrs[0].AddAddr(net.ParseIP("127.0.0.1"))
 	ep.MaybeAddToPeerstore(ctx, addrs[0], 1)
 	// add ids[0] new address to peerlist
 	pl.addToPeerlist([]kad.NodeID[key.Key256]{ids[0]})

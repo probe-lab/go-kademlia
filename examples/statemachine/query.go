@@ -14,7 +14,7 @@ import (
 
 // var _ Task[QueryPoolState] = (*QueryPool)(nil)
 
-type QueryPool[K kad.Key[K], A any] struct {
+type QueryPool[K kad.Key[K], A kad.Address[A]] struct {
 	self        *FakeNode[K, A]
 	mr          *MessageRouter[K, A]
 	timeout     time.Duration
@@ -24,7 +24,7 @@ type QueryPool[K kad.Key[K], A any] struct {
 	nextID      uint64
 }
 
-func NewQueryPool[K kad.Key[K], A any](self *FakeNode[K, A], mr *MessageRouter[K, A]) *QueryPool[K, A] {
+func NewQueryPool[K kad.Key[K], A kad.Address[A]](self *FakeNode[K, A], mr *MessageRouter[K, A]) *QueryPool[K, A] {
 	return &QueryPool[K, A]{
 		self:        self,
 		mr:          mr,
@@ -139,7 +139,7 @@ func (q *QueryPool[K, A]) Cancel(context.Context) {
 
 // var _ Task[QueryState] = (*Query)(nil)
 
-type Query[K kad.Key[K], A any] struct {
+type Query[K kad.Key[K], A kad.Address[A]] struct {
 	id    QueryID
 	iter  PeerIter[K, A]
 	msg   message.MinKadRequestMessage[K, A]
@@ -195,7 +195,7 @@ type QueryPoolWaiting struct {
 }
 
 // QueryPoolWaitingMessage indicates that at a query is waiting to message a peer.
-type QueryPoolWaitingMessage[K kad.Key[K], A any] struct {
+type QueryPoolWaitingMessage[K kad.Key[K], A kad.Address[A]] struct {
 	QueryID QueryID
 	NodeID  kad.NodeID[K]
 	Message message.MinKadRequestMessage[K, A]
@@ -238,7 +238,7 @@ type PeerIterState interface {
 type PeerIterStateFinished struct{}
 
 // PeerIterStateWaitingMessage indicates that the PeerIter is waiting to send a message to a peer.
-type PeerIterStateWaitingMessage[K kad.Key[K], A any] struct {
+type PeerIterStateWaitingMessage[K kad.Key[K], A kad.Address[A]] struct {
 	NodeID  kad.NodeID[K]
 	Message message.MinKadRequestMessage[K, A]
 }
@@ -260,14 +260,14 @@ func (*PeerIterStateWaitingAtCapacity) peerIterState()    {}
 func (*PeerIterStateWaitingWithCapacity) peerIterState()  {}
 
 // A PeerIter iterates peers according to some strategy.
-type PeerIter[K kad.Key[K], A any] interface {
+type PeerIter[K kad.Key[K], A kad.Address[A]] interface {
 	Task[PeerIterState]
 	OnMessageSuccess(context.Context, kad.NodeID[K], message.MinKadResponseMessage[K, A])
 }
 
 // var _ PeerIter = (*ClosestPeersIter)(nil)
 
-type ClosestPeersIter[K kad.Key[K], A any] struct {
+type ClosestPeersIter[K kad.Key[K], A kad.Address[A]] struct {
 	// The target whose distance to any peer determines the position of the peer in the iterator.
 	target K
 
@@ -293,7 +293,7 @@ type ClosestPeersIter[K kad.Key[K], A any] struct {
 	inFlight int
 }
 
-func NewClosestPeersIter[K kad.Key[K], A any](target K, mr *MessageRouter[K, A], knownClosestPeers []kad.NodeID[K], numResults int, concurrency int, timeout time.Duration) *ClosestPeersIter[K, A] {
+func NewClosestPeersIter[K kad.Key[K], A kad.Address[A]](target K, mr *MessageRouter[K, A], knownClosestPeers []kad.NodeID[K], numResults int, concurrency int, timeout time.Duration) *ClosestPeersIter[K, A] {
 	iter := &ClosestPeersIter[K, A]{
 		target:      target,
 		mr:          mr,

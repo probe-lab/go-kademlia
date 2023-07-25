@@ -1,6 +1,7 @@
 package sim
 
 import (
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -12,15 +13,15 @@ import (
 )
 
 var (
-	_ message.MinKadRequestMessage[key.Key8, any]  = (*Message[key.Key8, any])(nil)
-	_ message.MinKadResponseMessage[key.Key8, any] = (*Message[key.Key8, any])(nil)
+	_ message.MinKadRequestMessage[key.Key8, net.IP]  = (*Message[key.Key8, net.IP])(nil)
+	_ message.MinKadResponseMessage[key.Key8, net.IP] = (*Message[key.Key8, net.IP])(nil)
 )
 
 func TestRequest(t *testing.T) {
 	target := kadtest.StringID("target")
-	msg := NewRequest[key.Key256, any](target.Key())
+	msg := NewRequest[key.Key256, net.IP](target.Key())
 
-	require.Equal(t, &Message[key.Key256, any]{}, msg.EmptyResponse())
+	require.Equal(t, &Message[key.Key256, net.IP]{}, msg.EmptyResponse())
 
 	b := key.Equal(msg.Target(), target.Key())
 	require.True(t, b)
@@ -28,9 +29,9 @@ func TestRequest(t *testing.T) {
 }
 
 func TestResponse(t *testing.T) {
-	closerPeers := []kad.NodeInfo[key.Key256, any]{
-		kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.StringID("peer1").Key()), nil),
-		kadtest.NewInfo[key.Key256, any](kadtest.NewID(kadtest.StringID("peer2").Key()), nil),
+	closerPeers := []kad.NodeInfo[key.Key256, net.IP]{
+		kadtest.NewInfo[key.Key256, net.IP](kadtest.NewID(kadtest.StringID("peer1").Key()), nil),
+		kadtest.NewInfo[key.Key256, net.IP](kadtest.NewID(kadtest.StringID("peer2").Key()), nil),
 	}
 	msg := NewResponse(closerPeers)
 

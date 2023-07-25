@@ -2,6 +2,7 @@ package sim
 
 import (
 	"context"
+	"net"
 	"testing"
 
 	"github.com/benbjohnson/clock"
@@ -19,16 +20,16 @@ import (
 func TestRouter(t *testing.T) {
 	ctx := context.Background()
 	clk := clock.NewMock()
-	router := NewRouter[key.Key256, any]()
+	router := NewRouter[key.Key256, net.IP]()
 
 	nPeers := 5
 	scheds := make([]scheduler.AwareScheduler, nPeers)
 	ids := make([]kad.NodeID[key.Key256], nPeers)
-	fakeEndpoints := make([]*Endpoint[key.Key256, any], nPeers)
+	fakeEndpoints := make([]*Endpoint[key.Key256, net.IP], nPeers)
 	for i := 0; i < nPeers; i++ {
 		ids[i] = kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{byte(i)}))
 		scheds[i] = simplescheduler.NewSimpleScheduler(clk)
-		fakeEndpoints[i] = NewEndpoint[key.Key256, any](ids[i], scheds[i], router)
+		fakeEndpoints[i] = NewEndpoint[key.Key256, net.IP](ids[i], scheds[i], router)
 	}
 
 	protoID := address.ProtocolID("/test/proto")

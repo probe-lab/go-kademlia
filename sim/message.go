@@ -7,18 +7,18 @@ import (
 
 // Message is a simple implementation of `MinKadRequestMessage` and `MinKadResponseMessage`.
 // It only contains the minimal fields that are required by Kademlia to operate.
-type Message[K kad.Key[K], A any] struct {
+type Message[K kad.Key[K], A kad.Address[A]] struct {
 	target      K
 	closerPeers []kad.NodeInfo[K, A]
 }
 
-func NewRequest[K kad.Key[K], A any](target K) *Message[K, A] {
+func NewRequest[K kad.Key[K], A kad.Address[A]](target K) *Message[K, A] {
 	return &Message[K, A]{
 		target: target,
 	}
 }
 
-func NewResponse[K kad.Key[K], A any](closerPeers []kad.NodeInfo[K, A]) *Message[K, A] {
+func NewResponse[K kad.Key[K], A kad.Address[A]](closerPeers []kad.NodeInfo[K, A]) *Message[K, A] {
 	return &Message[K, A]{
 		closerPeers: closerPeers,
 	}

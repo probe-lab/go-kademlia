@@ -2,13 +2,12 @@ package message
 
 import (
 	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
 	"google.golang.org/protobuf/proto"
 )
 
 type MinKadMessage interface{}
 
-type MinKadRequestMessage[K kad.Key[K], A any] interface {
+type MinKadRequestMessage[K kad.Key[K], A kad.Address[A]] interface {
 	MinKadMessage
 
 	// Target returns the target key and true, or false if no target key has been specfied.
@@ -16,7 +15,7 @@ type MinKadRequestMessage[K kad.Key[K], A any] interface {
 	EmptyResponse() MinKadResponseMessage[K, A]
 }
 
-type MinKadResponseMessage[K kad.Key[K], A any] interface {
+type MinKadResponseMessage[K kad.Key[K], A kad.Address[A]] interface {
 	MinKadMessage
 
 	CloserNodes() []kad.NodeInfo[K, A]
@@ -26,12 +25,12 @@ type ProtoKadMessage interface {
 	proto.Message
 }
 
-type ProtoKadRequestMessage[A any] interface {
+type ProtoKadRequestMessage[K kad.Key[K], A kad.Address[A]] interface {
 	ProtoKadMessage
-	MinKadRequestMessage[key.Key256, A]
+	MinKadRequestMessage[K, A]
 }
 
-type ProtoKadResponseMessage[A any] interface {
+type ProtoKadResponseMessage[K kad.Key[K], A kad.Address[A]] interface {
 	ProtoKadMessage
-	MinKadResponseMessage[key.Key256, A]
+	MinKadResponseMessage[K, A]
 }

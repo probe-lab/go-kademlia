@@ -162,7 +162,7 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 		))
 	defer span.End()
 
-	protoResp, ok := resp.(message.ProtoKadResponseMessage[multiaddr.Multiaddr])
+	protoResp, ok := resp.(message.ProtoKadResponseMessage[key.Key256, multiaddr.Multiaddr])
 	if !ok {
 		span.RecordError(ErrRequireProtoKadResponse)
 		return ErrRequireProtoKadResponse
