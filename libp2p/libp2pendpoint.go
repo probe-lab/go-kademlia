@@ -3,6 +3,7 @@ package libp2p
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -41,8 +42,10 @@ type Libp2pEndpoint struct {
 	readers sync.Pool
 }
 
-// var _ endpoint.NetworkedEndpoint = (*Libp2pEndpoint)(nil)
-// var _ endpoint.ServerEndpoint = (*Libp2pEndpoint)(nil)
+var (
+	_ endpoint.NetworkedEndpoint[key.Key256] = (*Libp2pEndpoint)(nil)
+	_ endpoint.ServerEndpoint[key.Key256]    = (*Libp2pEndpoint)(nil)
+)
 
 func NewLibp2pEndpoint(ctx context.Context, host host.Host,
 	sched scheduler.Scheduler,
@@ -148,6 +151,33 @@ func (e *Libp2pEndpoint) MaybeAddToPeerstore(ctx context.Context,
 	}
 	e.host.Peerstore().AddAddrs(ai.PeerID().ID, ai.Addrs, ttl)
 	return nil
+}
+
+func (e *Libp2pEndpoint) SendMessage(ctx context.Context, protoID address.ProtocolID, id address.NodeID[key.Key256], req message.MinKadRequestMessage[key.Key256]) (message.MinKadResponseMessage[key.Key256], error) {
+	respCh := make(chan message.MinKadResponseMessage[key.Key256], 1)
+	errCh := make(chan error, 1)
+
+	handleResp := func(ctx context.Context, resp message.MinKadResponseMessage[key.Key256], err error) {
+		if err != nil {
+			errCh <- err
+			return
+		}
+		respCh <- resp
+	}
+
+	err := e.SendRequestHandleResponse(ctx, protoID, id, req, req.EmptyResponse(), time.Second, handleResp)
+	if err != nil {
+		return nil, fmt.Errorf("send request: %w", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case err = <-errCh:
+		return nil, fmt.Errorf("handler error: %w", err)
+	case resp := <-respCh:
+		return resp, nil
+	}
 }
 
 func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,

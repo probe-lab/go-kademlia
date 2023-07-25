@@ -103,6 +103,33 @@ func (e *Endpoint[K, A]) MaybeAddToPeerstore(ctx context.Context, id kad.NodeInf
 	return nil
 }
 
+func (e *Endpoint[K, A]) SendMessage(ctx context.Context, protoID address.ProtocolID, id kad.NodeID[K], req kad.Request[K, A]) (kad.Response[K, A], error) {
+	respCh := make(chan kad.Response[K, A], 1)
+	errCh := make(chan error, 1)
+
+	handleResp := func(ctx context.Context, resp kad.Response[K, A], err error) {
+		if err != nil {
+			errCh <- err
+			return
+		}
+		respCh <- resp
+	}
+
+	err := e.SendRequestHandleResponse(ctx, protoID, id, req, req.EmptyResponse(), 0, handleResp)
+	if err != nil {
+		return nil, fmt.Errorf("send request: %w", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case err = <-errCh:
+		return nil, fmt.Errorf("handler error: %w", err)
+	case resp := <-respCh:
+		return resp, nil
+	}
+}
+
 func (e *Endpoint[K, A]) SendRequestHandleResponse(ctx context.Context,
 	protoID address.ProtocolID, id kad.NodeID[K], req kad.Message,
 	resp kad.Message, timeout time.Duration,
