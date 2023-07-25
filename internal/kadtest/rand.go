@@ -1,4 +1,4 @@
-package testutil
+package kadtest
 
 import (
 	"math/rand"

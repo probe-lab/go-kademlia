@@ -9,7 +9,6 @@ import (
 
 	"github.com/plprobelab/go-kademlia/events/scheduler"
 	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
-	"github.com/plprobelab/go-kademlia/internal/testutil"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/address/kadid"
@@ -26,7 +25,7 @@ func TestRouter(t *testing.T) {
 	ids := make([]address.NodeID[key.Key256], nPeers)
 	fakeEndpoints := make([]*Endpoint[key.Key256], nPeers)
 	for i := 0; i < nPeers; i++ {
-		ids[i] = kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{byte(i)}))
+		ids[i] = kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{byte(i)}))
 		scheds[i] = simplescheduler.NewSimpleScheduler(clk)
 		fakeEndpoints[i] = NewEndpoint(ids[i], scheds[i], router)
 	}
@@ -51,7 +50,7 @@ func TestRouter(t *testing.T) {
 	require.True(t, scheds[3].RunOne(ctx))
 	require.False(t, scheds[3].RunOne(ctx))
 
-	notRegisteredID := kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{byte(100)}))
+	notRegisteredID := kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{byte(100)}))
 	sid, err = router.SendMessage(ctx, ids[3], notRegisteredID, protoID, 0, nil)
 	require.Error(t, err)
 	require.Equal(t, endpoint.ErrUnknownPeer, err)

@@ -11,7 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
-	"github.com/plprobelab/go-kademlia/internal/testutil"
+	"github.com/plprobelab/go-kademlia/internal/kadtest"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
@@ -29,15 +29,15 @@ import (
 
 // remotePeers with bucket assignments wrt to self
 var kadRemotePeers = []address.NodeAddr[key.Key256]{
-	kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0b10001000})), nil), // 1000 1000 (bucket 0)
-	kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0b11010010})), nil), // 1101 0010 (bucket 0)
-	kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0b01001011})), nil), // 0100 1011 (bucket 1)
-	kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0b01010011})), nil), // 0101 0011 (bucket 1)
-	kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0b00101110})), nil), // 0010 1110 (bucket 2)
-	kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0b00110110})), nil), // 0011 0110 (bucket 2)
-	kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0b00011111})), nil), // 0001 1111 (bucket 3)
-	kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0b00010001})), nil), // 0001 0001 (bucket 3)
-	kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0b00001000})), nil), // 0000 1000 (bucket 4)
+	kadaddr.NewKadAddr(kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{0b10001000})), nil), // 1000 1000 (bucket 0)
+	kadaddr.NewKadAddr(kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{0b11010010})), nil), // 1101 0010 (bucket 0)
+	kadaddr.NewKadAddr(kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{0b01001011})), nil), // 0100 1011 (bucket 1)
+	kadaddr.NewKadAddr(kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{0b01010011})), nil), // 0101 0011 (bucket 1)
+	kadaddr.NewKadAddr(kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{0b00101110})), nil), // 0010 1110 (bucket 2)
+	kadaddr.NewKadAddr(kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{0b00110110})), nil), // 0011 0110 (bucket 2)
+	kadaddr.NewKadAddr(kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{0b00011111})), nil), // 0001 1111 (bucket 3)
+	kadaddr.NewKadAddr(kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{0b00010001})), nil), // 0001 0001 (bucket 3)
+	kadaddr.NewKadAddr(kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{0b00001000})), nil), // 0000 1000 (bucket 4)
 }
 
 func TestSimMessageHandling(t *testing.T) {
@@ -66,10 +66,10 @@ func TestSimMessageHandling(t *testing.T) {
 	s0 := NewBasicServer(rt, fakeEndpoint, WithPeerstoreTTL(peerstoreTTL),
 		WithNumberUsefulCloserPeers(numberOfCloserPeersToSend))
 
-	requester := kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0b00000001})), nil) // 0000 0001
+	requester := kadaddr.NewKadAddr(kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{0b00000001})), nil) // 0000 0001
 	fakeEndpoint.MaybeAddToPeerstore(ctx, requester, peerstoreTTL)
 
-	req0 := sim.NewRequest[key.Key256](testutil.Key256WithLeadingBytes([]byte{0b00000000}))
+	req0 := sim.NewRequest[key.Key256](kadtest.Key256WithLeadingBytes([]byte{0b00000000}))
 	msg, err := s0.HandleRequest(ctx, requester.NodeID(), req0)
 	require.NoError(t, err)
 
@@ -86,7 +86,7 @@ func TestSimMessageHandling(t *testing.T) {
 		require.Equal(t, order[i], p)
 	}
 
-	req1 := sim.NewRequest[key.Key256](testutil.Key256WithLeadingBytes([]byte{0b11111111}))
+	req1 := sim.NewRequest[key.Key256](kadtest.Key256WithLeadingBytes([]byte{0b11111111}))
 	msg, err = s0.HandleRequest(ctx, requester.NodeID(), req1)
 	require.NoError(t, err)
 	resp, ok = msg.(message.MinKadResponseMessage[key.Key256])
@@ -105,7 +105,7 @@ func TestSimMessageHandling(t *testing.T) {
 	numberOfCloserPeersToSend = 3
 	s1 := NewBasicServer(rt, fakeEndpoint, WithNumberUsefulCloserPeers(3))
 
-	req2 := sim.NewRequest(testutil.Key256WithLeadingBytes([]byte{0b01100000}))
+	req2 := sim.NewRequest(kadtest.Key256WithLeadingBytes([]byte{0b01100000}))
 	msg, err = s1.HandleRequest(ctx, requester.NodeID(), req2)
 	require.NoError(t, err)
 	resp, ok = msg.(message.MinKadResponseMessage[key.Key256])
@@ -151,7 +151,7 @@ func TestInvalidSimRequests(t *testing.T) {
 	s = NewBasicServer(rt, fakeEndpoint)
 	require.NotNil(t, s)
 
-	requester := kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0b00000001})) // 0000 0001
+	requester := kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{0b00000001})) // 0000 0001
 
 	// invalid message format (not a SimMessage)
 	req0 := struct{}{}
@@ -178,7 +178,7 @@ func TestSimRequestNoNetworkAddress(t *testing.T) {
 	clk := clock.New()
 	router := sim.NewRouter[key.Key256]()
 
-	self := kadaddr.NewKadAddr(kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0})), nil) // 0000 0000
+	self := kadaddr.NewKadAddr(kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{0})), nil) // 0000 0000
 
 	// create a valid server
 	sched := simplescheduler.NewSimpleScheduler(clk)
@@ -202,7 +202,7 @@ func TestSimRequestNoNetworkAddress(t *testing.T) {
 
 	require.NotNil(t, s)
 
-	requester := kadid.NewKadID(testutil.Key256WithLeadingBytes([]byte{0x80}))
+	requester := kadid.NewKadID(kadtest.Key256WithLeadingBytes([]byte{0x80}))
 
 	// sim request message (for any key)
 	req := sim.NewRequest(requester.Key())
