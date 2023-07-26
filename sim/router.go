@@ -36,7 +36,7 @@ func (r *Router[K, A]) RemovePeer(id kad.NodeID[K]) {
 
 func (r *Router[K, A]) SendMessage(ctx context.Context, from, to kad.NodeID[K],
 	protoID address.ProtocolID, sid endpoint.StreamID,
-	msg kad.MinKadMessage,
+	msg kad.Message,
 ) (endpoint.StreamID, error) {
 	if _, ok := r.peers[to.String()]; !ok {
 		return 0, endpoint.ErrUnknownPeer

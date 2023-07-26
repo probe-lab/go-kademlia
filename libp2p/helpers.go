@@ -36,7 +36,7 @@ func (msg *Message) Target() key.Key256 {
 	return PeerID{ID: p}.Key()
 }
 
-func (msg *Message) EmptyResponse() kad.MinKadResponseMessage[key.Key256, multiaddr.Multiaddr] {
+func (msg *Message) EmptyResponse() kad.Response[key.Key256, multiaddr.Multiaddr] {
 	return &Message{}
 }
 

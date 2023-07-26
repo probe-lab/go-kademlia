@@ -29,11 +29,11 @@ const (
 
 // RequestHandlerFn defines a function that handles a request from a remote peer
 type RequestHandlerFn[K kad.Key[K]] func(context.Context, kad.NodeID[K],
-	kad.MinKadMessage) (kad.MinKadMessage, error)
+	kad.Message) (kad.Message, error)
 
 // ResponseHandlerFn defines a function that deals with the response to a
 // request previously sent to a remote peer.
-type ResponseHandlerFn[K kad.Key[K], A kad.Address[A]] func(context.Context, kad.MinKadResponseMessage[K, A], error)
+type ResponseHandlerFn[K kad.Key[K], A kad.Address[A]] func(context.Context, kad.Response[K, A], error)
 
 // Endpoint defines how Kademlia nodes interacts with each other.
 type Endpoint[K kad.Key[K], A kad.Address[A]] interface {
@@ -43,7 +43,7 @@ type Endpoint[K kad.Key[K], A kad.Address[A]] interface {
 	// SendRequestHandleResponse sends a request to the given peer and handles
 	// the response with the given handler.
 	SendRequestHandleResponse(context.Context, address.ProtocolID, kad.NodeID[K],
-		kad.MinKadMessage, kad.MinKadMessage, time.Duration,
+		kad.Message, kad.Message, time.Duration,
 		ResponseHandlerFn[K, A]) error
 
 	// KadKey returns the KadKey of the local node.
@@ -57,7 +57,7 @@ type Endpoint[K kad.Key[K], A kad.Address[A]] interface {
 type ServerEndpoint[K kad.Key[K], A kad.Address[A]] interface {
 	Endpoint[K, A]
 	// AddRequestHandler registers a handler for a given protocol ID.
-	AddRequestHandler(address.ProtocolID, kad.MinKadMessage, RequestHandlerFn[K]) error
+	AddRequestHandler(address.ProtocolID, kad.Message, RequestHandlerFn[K]) error
 	// RemoveRequestHandler removes a handler for a given protocol ID.
 	RemoveRequestHandler(address.ProtocolID)
 }
@@ -78,5 +78,5 @@ type SimEndpoint[K kad.Key[K], A kad.Address[A]] interface {
 	ServerEndpoint[K, A]
 	// HandleMessage handles a message from the given peer.
 	HandleMessage(context.Context, kad.NodeID[K], address.ProtocolID,
-		StreamID, kad.MinKadMessage)
+		StreamID, kad.Message)
 }

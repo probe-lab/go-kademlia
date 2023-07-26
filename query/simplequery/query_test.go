@@ -252,13 +252,13 @@ func simulationSetup(t *testing.T, ctx context.Context, n, bucketSize int,
 	return ids, scheds, fendpoints, rts, servers, queryOpts
 }
 
-func getHandleResults[K kad.Key[K], A kad.Address[A]](t *testing.T, req kad.MinKadRequestMessage[K, A],
+func getHandleResults[K kad.Key[K], A kad.Address[A]](t *testing.T, req kad.Request[K, A],
 	expectedPeers []K, expectedResponses [][]K) func(
-	ctx context.Context, id kad.NodeID[K], resp kad.MinKadResponseMessage[K, A]) (
+	ctx context.Context, id kad.NodeID[K], resp kad.Response[K, A]) (
 	bool, []kad.NodeID[K]) {
 	var responseCount int
 	return func(ctx context.Context, id kad.NodeID[K],
-		resp kad.MinKadResponseMessage[K, A],
+		resp kad.Response[K, A],
 	) (bool, []kad.NodeID[K]) {
 		// check that the request was sent to the correct peer
 		require.Equal(t, expectedPeers[responseCount], id.Key(), "responseCount: ", responseCount)
@@ -584,8 +584,8 @@ func TestUnresponsivePeer(t *testing.T) {
 	rt0 := simplert.New[key.Key8](node0.ID().Key(), bucketSize)
 
 	serverRequestHandler := func(context.Context, kad.NodeID[key.Key8],
-		kad.MinKadMessage,
-	) (kad.MinKadMessage, error) {
+		kad.Message,
+	) (kad.Message, error) {
 		return nil, errors.New("")
 	}
 	fendpoint1.AddRequestHandler(protoID, &sim.SimMessage[key.Key8, net.IP]{}, serverRequestHandler)
@@ -593,7 +593,7 @@ func TestUnresponsivePeer(t *testing.T) {
 	req := sim.NewRequest[key.Key8, net.IP](key.Key8(0xff))
 
 	responseHandler := func(ctx context.Context, sender kad.NodeID[key.Key8],
-		msg kad.MinKadResponseMessage[key.Key8, net.IP],
+		msg kad.Response[key.Key8, net.IP],
 	) (bool, []kad.NodeID[key.Key8]) {
 		require.Fail(t, "response handler shouldn't be called")
 		return false, nil
@@ -655,7 +655,7 @@ func TestCornerCases(t *testing.T) {
 	req := sim.NewRequest[key.Key8, net.IP](key.Key8(0xff))
 
 	responseHandler := func(ctx context.Context, sender kad.NodeID[key.Key8],
-		msg kad.MinKadResponseMessage[key.Key8, net.IP],
+		msg kad.Response[key.Key8, net.IP],
 	) (bool, []kad.NodeID[key.Key8]) {
 		ids := make([]kad.NodeID[key.Key8], len(msg.CloserNodes()))
 		for i, peer := range msg.CloserNodes() {

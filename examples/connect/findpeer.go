@@ -83,7 +83,7 @@ func FindPeer(ctx context.Context) {
 	// endCond is used to terminate the simulation once the query is done
 	endCond := false
 	handleResultsFn := func(ctx context.Context, id kad.NodeID[key.Key256],
-		resp kad.MinKadResponseMessage[key.Key256, multiaddr.Multiaddr],
+		resp kad.Response[key.Key256, multiaddr.Multiaddr],
 	) (bool, []kad.NodeID[key.Key256]) {
 		// parse response to ipfs dht message
 		msg, ok := resp.(*libp2p.Message)

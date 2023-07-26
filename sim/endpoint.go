@@ -96,8 +96,8 @@ func (e *Endpoint[K, A]) MaybeAddToPeerstore(ctx context.Context, id kad.NodeInf
 }
 
 func (e *Endpoint[K, A]) SendRequestHandleResponse(ctx context.Context,
-	protoID address.ProtocolID, id kad.NodeID[K], req kad.MinKadMessage,
-	resp kad.MinKadMessage, timeout time.Duration,
+	protoID address.ProtocolID, id kad.NodeID[K], req kad.Message,
+	resp kad.Message, timeout time.Duration,
 	handleResp endpoint.ResponseHandlerFn[K, A],
 ) error {
 	ctx, span := util.StartSpan(ctx, "SendRequestHandleResponse",
@@ -173,7 +173,7 @@ func (e *Endpoint[K, A]) KadKey() K {
 }
 
 func (e *Endpoint[K, A]) HandleMessage(ctx context.Context, id kad.NodeID[K],
-	protoID address.ProtocolID, sid endpoint.StreamID, msg kad.MinKadMessage,
+	protoID address.ProtocolID, sid endpoint.StreamID, msg kad.Message,
 ) {
 	_, span := util.StartSpan(ctx, "HandleMessage",
 		trace.WithAttributes(attribute.Stringer("id", id),
@@ -191,7 +191,7 @@ func (e *Endpoint[K, A]) HandleMessage(ctx context.Context, id kad.NodeID[K],
 		delete(e.streamFollowup, sid)
 		delete(e.streamTimeout, sid)
 
-		resp, ok := msg.(kad.MinKadResponseMessage[K, A])
+		resp, ok := msg.(kad.Response[K, A])
 		var err error
 		if ok {
 			for _, p := range resp.CloserNodes() {
@@ -221,7 +221,7 @@ func (e *Endpoint[K, A]) HandleMessage(ctx context.Context, id kad.NodeID[K],
 }
 
 func (e *Endpoint[K, A]) AddRequestHandler(protoID address.ProtocolID,
-	req kad.MinKadMessage, reqHandler endpoint.RequestHandlerFn[K],
+	req kad.Message, reqHandler endpoint.RequestHandlerFn[K],
 ) error {
 	if reqHandler == nil {
 		return endpoint.ErrNilRequestHandler

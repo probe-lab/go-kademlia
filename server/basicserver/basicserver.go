@@ -44,8 +44,8 @@ func NewBasicServer[A kad.Address[A]](rt kad.RoutingTable[key.Key256], endpoint 
 }
 
 func (s *BasicServer[A]) HandleRequest(ctx context.Context, rpeer kad.NodeID[key.Key256],
-	msg kad.MinKadMessage,
-) (kad.MinKadMessage, error) {
+	msg kad.Message,
+) (kad.Message, error) {
 	switch msg := msg.(type) {
 	case *sim.SimMessage[key.Key256, A]:
 		return s.HandleFindNodeRequest(ctx, rpeer, msg)
@@ -62,8 +62,8 @@ func (s *BasicServer[A]) HandleRequest(ctx context.Context, rpeer kad.NodeID[key
 }
 
 func (s *BasicServer[A]) HandleFindNodeRequest(ctx context.Context,
-	rpeer kad.NodeID[key.Key256], msg kad.MinKadMessage,
-) (kad.MinKadMessage, error) {
+	rpeer kad.NodeID[key.Key256], msg kad.Message,
+) (kad.Message, error) {
 	var target key.Key256
 
 	switch msg := msg.(type) {
@@ -93,7 +93,7 @@ func (s *BasicServer[A]) HandleFindNodeRequest(ctx context.Context,
 		attribute.Int("count", len(peers)),
 	))
 
-	var resp kad.MinKadMessage
+	var resp kad.Message
 	switch msg.(type) {
 	case *sim.SimMessage[key.Key256, A]:
 		peerAddrs := make([]kad.NodeInfo[key.Key256, A], len(peers))

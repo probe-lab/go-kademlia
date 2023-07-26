@@ -82,6 +82,8 @@ type NodeID[K Key[K]] interface {
 	// of NodeID.
 	Key() K
 
+	// String returns a string reprensentation for this NodeID.
+	// TODO: Try to get rid of this as it's also used for map keys which is not great.
 	String() string
 }
 
@@ -99,6 +101,8 @@ type Address[T any] interface {
 	Equal(T) bool
 }
 
+// Equal checks the equality of two NodeIDs.
+// TODO: move somewhere else.
 func Equal[K Key[K]](this, that NodeID[K]) bool {
 	return this.Key().Compare(that.Key()) == 0
 }

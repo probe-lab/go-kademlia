@@ -78,7 +78,7 @@ func DefaultConfig[K kad.Key[K], A kad.Address[A]](cfg *Config[K, A]) error {
 	cfg.PeerstoreTTL = 30 * time.Minute
 
 	cfg.HandleResultsFunc = func(ctx context.Context, id kad.NodeID[K],
-		resp kad.MinKadResponseMessage[K, A],
+		resp kad.Response[K, A],
 	) (bool, []kad.NodeID[K]) {
 		ids := make([]kad.NodeID[K], len(resp.CloserNodes()))
 		for i, n := range resp.CloserNodes() {

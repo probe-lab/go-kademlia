@@ -92,7 +92,7 @@ func (k *KademliaHandler[K, A]) mainloop(ctx context.Context) {
 	}
 }
 
-func (k *KademliaHandler[K, A]) attemptSendMessage(ctx context.Context, to kad.NodeID[K], msg kad.MinKadRequestMessage[K, A], queryID QueryID) {
+func (k *KademliaHandler[K, A]) attemptSendMessage(ctx context.Context, to kad.NodeID[K], msg kad.Request[K, A], queryID QueryID) {
 	trace("KademliaHandler.attemptSendMessage")
 	go func() {
 		// HACK: assume always works
@@ -111,7 +111,7 @@ func (k *KademliaHandler[K, A]) attemptSendMessage(ctx context.Context, to kad.N
 	}()
 }
 
-func (k *KademliaHandler[K, A]) onMessageSuccess(ctx context.Context, queryID QueryID, node kad.NodeID[K], resp kad.MinKadResponseMessage[K, A]) {
+func (k *KademliaHandler[K, A]) onMessageSuccess(ctx context.Context, queryID QueryID, node kad.NodeID[K], resp kad.Response[K, A]) {
 	// HACK: add closer nodes to peer store
 	// TODO: make this an inbound event
 	for _, cn := range resp.CloserNodes() {
@@ -127,7 +127,7 @@ func (k *KademliaHandler[K, A]) onMessageSuccess(ctx context.Context, queryID Qu
 	k.qp.onMessageSuccess(ctx, queryID, node, resp)
 }
 
-func (k *KademliaHandler[K, A]) StartQuery(ctx context.Context, msg kad.MinKadRequestMessage[K, A]) (QueryID, error) {
+func (k *KademliaHandler[K, A]) StartQuery(ctx context.Context, msg kad.Request[K, A]) (QueryID, error) {
 	trace("KademliaHandler.StartQuery")
 	// If not in peer store then query the Kademlia dht
 	queryID, err := k.qp.AddQuery(ctx, msg.Target(), msg)
@@ -156,7 +156,7 @@ type KademliaRoutingUpdatedEvent[K kad.Key[K]] struct{}
 type KademliaOutboundQueryProgressedEvent[K kad.Key[K], A kad.Address[A]] struct {
 	NodeID   kad.NodeID[K]
 	QueryID  QueryID
-	Response kad.MinKadResponseMessage[K, A]
+	Response kad.Response[K, A]
 }
 
 type KademliaUnroutablePeerEvent[K kad.Key[K]] struct{}
@@ -188,7 +188,7 @@ type MessageFailedEvent[K kad.Key[K]] struct {
 type MessageResponseEvent[K kad.Key[K], A kad.Address[A]] struct {
 	NodeID   kad.NodeID[K]
 	QueryID  QueryID
-	Response kad.MinKadResponseMessage[K, A]
+	Response kad.Response[K, A]
 }
 
 func (*UnroutablePeerEvent[K]) kademliaHandlerInternalEvent()     {}

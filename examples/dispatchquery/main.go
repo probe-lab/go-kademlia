@@ -127,7 +127,7 @@ func queryTest(ctx context.Context) {
 
 	// dummy parameters
 	handleResp := func(ctx context.Context, _ kad.NodeID[key.Key256],
-		resp kad.MinKadResponseMessage[key.Key256, multiaddr.Multiaddr],
+		resp kad.Response[key.Key256, multiaddr.Multiaddr],
 	) (bool, []kad.NodeID[key.Key256]) {
 		peerids := make([]kad.NodeID[key.Key256], len(resp.CloserNodes()))
 		for i, p := range resp.CloserNodes() {

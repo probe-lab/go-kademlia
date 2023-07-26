@@ -64,7 +64,7 @@ func TestMessageHandling(t *testing.T) {
 	msg, err := s0.HandleRequest(ctx, requester.ID(), req0)
 	require.NoError(t, err)
 
-	resp, ok := msg.(kad.MinKadResponseMessage[key.Key8, net.IP])
+	resp, ok := msg.(kad.Response[key.Key8, net.IP])
 	require.True(t, ok)
 	require.Len(t, resp.CloserNodes(), numberOfCloserPeersToSend)
 	// closer peers should be ordered by distance to 0000 0000
@@ -80,7 +80,7 @@ func TestMessageHandling(t *testing.T) {
 	req1 := NewRequest[key.Key8, net.IP](key.Key8(0b11111111))
 	msg, err = s0.HandleRequest(ctx, requester.ID(), req1)
 	require.NoError(t, err)
-	resp, ok = msg.(kad.MinKadResponseMessage[key.Key8, net.IP])
+	resp, ok = msg.(kad.Response[key.Key8, net.IP])
 	require.True(t, ok)
 	require.Len(t, resp.CloserNodes(), numberOfCloserPeersToSend)
 	// closer peers should be ordered by distance to 1111 1111
@@ -102,7 +102,7 @@ func TestMessageHandling(t *testing.T) {
 	req2 := NewRequest[key.Key8, net.IP](key.Key8(0b01100000))
 	msg, err = s1.HandleRequest(ctx, requester.ID(), req2)
 	require.NoError(t, err)
-	resp, ok = msg.(kad.MinKadResponseMessage[key.Key8, net.IP])
+	resp, ok = msg.(kad.Response[key.Key8, net.IP])
 	require.True(t, ok)
 	require.Len(t, resp.CloserNodes(), numberOfCloserPeersToSend)
 	// closer peers should be ordered by distance to 0110 0000
@@ -187,7 +187,7 @@ func TestRequestNoNetworkAddress(t *testing.T) {
 	req := NewRequest[key.Key8, net.IP](requester.Key())
 	msg, err := s.HandleFindNodeRequest(ctx, requester, req)
 	require.NoError(t, err)
-	resp, ok := msg.(kad.MinKadResponseMessage[key.Key8, net.IP])
+	resp, ok := msg.(kad.Response[key.Key8, net.IP])
 	require.True(t, ok)
 	fmt.Println(resp.CloserNodes())
 	require.Len(t, resp.CloserNodes(), 0)

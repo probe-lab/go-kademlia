@@ -17,8 +17,8 @@ import (
 )
 
 var (
-	_ kad.ProtoKadRequestMessage[key.Key256, multiaddr.Multiaddr]  = (*Message)(nil)
-	_ kad.ProtoKadResponseMessage[key.Key256, multiaddr.Multiaddr] = (*Message)(nil)
+	_ ProtoKadRequestMessage[key.Key256, multiaddr.Multiaddr]  = (*Message)(nil)
+	_ ProtoKadResponseMessage[key.Key256, multiaddr.Multiaddr] = (*Message)(nil)
 )
 
 var testPeerstoreTTL = 10 * time.Minute

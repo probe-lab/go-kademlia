@@ -101,7 +101,7 @@ func findNode(ctx context.Context) {
 
 	// handleResFn is called when a response is received during the query process
 	handleResFn := func(_ context.Context, id kad.NodeID[key.Key8],
-		msg kad.MinKadResponseMessage[key.Key8, net.IP],
+		msg kad.Response[key.Key8, net.IP],
 	) (bool, []kad.NodeID[key.Key8]) {
 		resp := msg.(*sim.SimMessage[key.Key8, net.IP])
 		fmt.Println("got a response from", id, "with", resp.CloserNodes())

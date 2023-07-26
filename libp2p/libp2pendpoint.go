@@ -151,8 +151,8 @@ func (e *Libp2pEndpoint) MaybeAddToPeerstore(ctx context.Context,
 }
 
 func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
-	protoID address.ProtocolID, n kad.NodeID[key.Key256], req kad.MinKadMessage,
-	resp kad.MinKadMessage, timeout time.Duration,
+	protoID address.ProtocolID, n kad.NodeID[key.Key256], req kad.Message,
+	resp kad.Message, timeout time.Duration,
 	responseHandlerFn endpoint.ResponseHandlerFn[key.Key256, multiaddr.Multiaddr],
 ) error {
 	_, span := util.StartSpan(ctx,
@@ -161,13 +161,13 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 		))
 	defer span.End()
 
-	protoResp, ok := resp.(kad.ProtoKadResponseMessage[key.Key256, multiaddr.Multiaddr])
+	protoResp, ok := resp.(ProtoKadResponseMessage[key.Key256, multiaddr.Multiaddr])
 	if !ok {
 		span.RecordError(ErrRequireProtoKadResponse)
 		return ErrRequireProtoKadResponse
 	}
 
-	protoReq, ok := req.(kad.ProtoKadMessage)
+	protoReq, ok := req.(ProtoKadMessage)
 	if !ok {
 		span.RecordError(ErrRequireProtoKadMessage)
 		return ErrRequireProtoKadMessage
@@ -291,9 +291,9 @@ func (e *Libp2pEndpoint) NetworkAddress(n kad.NodeID[key.Key256]) (kad.NodeInfo[
 }
 
 func (e *Libp2pEndpoint) AddRequestHandler(protoID address.ProtocolID,
-	req kad.MinKadMessage, reqHandler endpoint.RequestHandlerFn[key.Key256],
+	req kad.Message, reqHandler endpoint.RequestHandlerFn[key.Key256],
 ) error {
-	protoReq, ok := req.(kad.ProtoKadMessage)
+	protoReq, ok := req.(ProtoKadMessage)
 	if !ok {
 		return ErrRequireProtoKadMessage
 	}
@@ -335,7 +335,7 @@ func (e *Libp2pEndpoint) AddRequestHandler(protoID address.ProtocolID,
 					return
 				}
 
-				protoResp, ok := resp.(kad.ProtoKadMessage)
+				protoResp, ok := resp.(ProtoKadMessage)
 				if !ok {
 					err = errors.New("Libp2pEndpoint requires ProtoKadMessage")
 					span.RecordError(err)

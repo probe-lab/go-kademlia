@@ -248,8 +248,8 @@ func TestRequestHandler(t *testing.T) {
 
 	// set node 1 to server mode
 	requestHandler := func(ctx context.Context, id kad.NodeID[key.Key256],
-		req kad.MinKadMessage,
-	) (kad.MinKadMessage, error) {
+		req kad.Message,
+	) (kad.Message, error) {
 		// request handler returning the received message
 		return req, nil
 	}
@@ -294,7 +294,7 @@ func TestReqFailFast(t *testing.T) {
 	require.Equal(t, endpoint.ErrNilResponseHandler, err)
 
 	// non nil response handler that should not be called
-	responseHandler := func(_ context.Context, _ kad.MinKadResponseMessage[key.Key256, ma.Multiaddr], err error) {
+	responseHandler := func(_ context.Context, _ kad.Response[key.Key256, ma.Multiaddr], err error) {
 		require.Fail(t, "response handler shouldn't be called")
 	}
 
@@ -312,8 +312,8 @@ func TestSuccessfulRequest(t *testing.T) {
 
 	// set node 1 to server mode
 	requestHandler := func(ctx context.Context, id kad.NodeID[key.Key256],
-		req kad.MinKadMessage,
-	) (kad.MinKadMessage, error) {
+		req kad.Message,
+	) (kad.Message, error) {
 		// request handler returning the received message
 		return req, nil
 	}
@@ -322,7 +322,7 @@ func TestSuccessfulRequest(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	responseHandler := func(ctx context.Context,
-		resp kad.MinKadResponseMessage[key.Key256, ma.Multiaddr], err error,
+		resp kad.Response[key.Key256, ma.Multiaddr], err error,
 	) {
 		wg.Done()
 	}
@@ -379,7 +379,7 @@ func TestReqUnknownPeer(t *testing.T) {
 
 	req := FindPeerRequest(ids[1])
 	wg := sync.WaitGroup{}
-	responseHandler := func(_ context.Context, _ kad.MinKadResponseMessage[key.Key256, ma.Multiaddr], err error) {
+	responseHandler := func(_ context.Context, _ kad.Response[key.Key256, ma.Multiaddr], err error) {
 		wg.Done()
 		require.Equal(t, swarm.ErrNoGoodAddresses, err)
 	}
@@ -416,13 +416,13 @@ func TestReqTimeout(t *testing.T) {
 	wg := sync.WaitGroup{}
 
 	err := endpoints[1].AddRequestHandler(protoID, &Message{}, func(ctx context.Context,
-		id kad.NodeID[key.Key256], req kad.MinKadMessage,
-	) (kad.MinKadMessage, error) {
+		id kad.NodeID[key.Key256], req kad.Message,
+	) (kad.Message, error) {
 		return req, nil
 	})
 	require.NoError(t, err)
 
-	responseHandler := func(_ context.Context, _ kad.MinKadResponseMessage[key.Key256, ma.Multiaddr], err error) {
+	responseHandler := func(_ context.Context, _ kad.Response[key.Key256, ma.Multiaddr], err error) {
 		require.Error(t, err)
 		wg.Done()
 	}
@@ -461,15 +461,15 @@ func TestReqHandlerError(t *testing.T) {
 	wg := sync.WaitGroup{}
 
 	err := endpoints[1].AddRequestHandler(protoID, &Message{}, func(ctx context.Context,
-		id kad.NodeID[key.Key256], req kad.MinKadMessage,
-	) (kad.MinKadMessage, error) {
+		id kad.NodeID[key.Key256], req kad.Message,
+	) (kad.Message, error) {
 		// request handler returns error
 		return nil, errors.New("server error")
 	})
 	require.NoError(t, err)
 	// responseHandler is run after context is cancelled
 	responseHandler := func(ctx context.Context,
-		resp kad.MinKadResponseMessage[key.Key256, ma.Multiaddr], err error,
+		resp kad.Response[key.Key256, ma.Multiaddr], err error,
 	) {
 		wg.Done()
 		require.Error(t, err)
@@ -515,15 +515,15 @@ func TestReqHandlerReturnsWrongType(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	err := endpoints[1].AddRequestHandler(protoID, &Message{}, func(ctx context.Context,
-		id kad.NodeID[key.Key256], req kad.MinKadMessage,
-	) (kad.MinKadMessage, error) {
+		id kad.NodeID[key.Key256], req kad.Message,
+	) (kad.Message, error) {
 		// request handler returns error
 		return &sim.SimMessage[key.Key256, ma.Multiaddr]{}, nil
 	})
 	require.NoError(t, err)
 	// responseHandler is run after context is cancelled
 	responseHandler := func(ctx context.Context,
-		resp kad.MinKadResponseMessage[key.Key256, ma.Multiaddr], err error,
+		resp kad.Response[key.Key256, ma.Multiaddr], err error,
 	) {
 		wg.Done()
 		require.Error(t, err)

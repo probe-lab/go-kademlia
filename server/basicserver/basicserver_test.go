@@ -69,7 +69,7 @@ func TestSimMessageHandling(t *testing.T) {
 	msg, err := s0.HandleRequest(ctx, requester.ID(), req0)
 	require.NoError(t, err)
 
-	resp, ok := msg.(kad.MinKadResponseMessage[key.Key256, net.IP])
+	resp, ok := msg.(kad.Response[key.Key256, net.IP])
 	require.True(t, ok)
 	require.Len(t, resp.CloserNodes(), numberOfCloserPeersToSend)
 	// closer peers should be ordered by distance to 0000 0000
@@ -85,7 +85,7 @@ func TestSimMessageHandling(t *testing.T) {
 	req1 := sim.NewRequest[key.Key256, net.IP](kadtest.Key256WithLeadingBytes([]byte{0b11111111}))
 	msg, err = s0.HandleRequest(ctx, requester.ID(), req1)
 	require.NoError(t, err)
-	resp, ok = msg.(kad.MinKadResponseMessage[key.Key256, net.IP])
+	resp, ok = msg.(kad.Response[key.Key256, net.IP])
 	require.True(t, ok)
 	require.Len(t, resp.CloserNodes(), numberOfCloserPeersToSend)
 	// closer peers should be ordered by distance to 1111 1111
@@ -104,7 +104,7 @@ func TestSimMessageHandling(t *testing.T) {
 	req2 := sim.NewRequest[key.Key256, net.IP](kadtest.Key256WithLeadingBytes([]byte{0b01100000}))
 	msg, err = s1.HandleRequest(ctx, requester.ID(), req2)
 	require.NoError(t, err)
-	resp, ok = msg.(kad.MinKadResponseMessage[key.Key256, net.IP])
+	resp, ok = msg.(kad.Response[key.Key256, net.IP])
 	require.True(t, ok)
 	require.Len(t, resp.CloserNodes(), numberOfCloserPeersToSend)
 	// closer peers should be ordered by distance to 0110 0000
@@ -202,7 +202,7 @@ func TestSimRequestNoNetworkAddress(t *testing.T) {
 	req := sim.NewRequest[key.Key256, net.IP](requester.Key())
 	msg, err := s.HandleFindNodeRequest(ctx, requester, req)
 	require.NoError(t, err)
-	resp, ok := msg.(kad.MinKadResponseMessage[key.Key256, net.IP])
+	resp, ok := msg.(kad.Response[key.Key256, net.IP])
 	require.True(t, ok)
 	fmt.Println(resp.CloserNodes())
 	require.Len(t, resp.CloserNodes(), 0)
@@ -219,8 +219,8 @@ func (e *invalidEndpoint[K, A]) MaybeAddToPeerstore(context.Context, kad.NodeInf
 }
 
 func (e *invalidEndpoint[K, A]) SendRequestHandleResponse(context.Context,
-	address.ProtocolID, kad.NodeID[K], kad.MinKadMessage,
-	kad.MinKadMessage, time.Duration, endpoint.ResponseHandlerFn[K, A],
+	address.ProtocolID, kad.NodeID[K], kad.Message,
+	kad.Message, time.Duration, endpoint.ResponseHandlerFn[K, A],
 ) error {
 	return nil
 }

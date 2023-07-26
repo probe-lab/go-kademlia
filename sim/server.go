@@ -34,8 +34,8 @@ func NewServer[K kad.Key[K], A kad.Address[A]](rt kad.RoutingTable[K], endpoint 
 }
 
 func (s *Server[K, A]) HandleRequest(ctx context.Context, rpeer kad.NodeID[K],
-	msg kad.MinKadMessage,
-) (kad.MinKadMessage, error) {
+	msg kad.Message,
+) (kad.Message, error) {
 	switch msg := msg.(type) {
 	case *SimMessage[K, A]:
 		return s.HandleFindNodeRequest(ctx, rpeer, msg)
@@ -45,8 +45,8 @@ func (s *Server[K, A]) HandleRequest(ctx context.Context, rpeer kad.NodeID[K],
 }
 
 func (s *Server[K, A]) HandleFindNodeRequest(ctx context.Context,
-	rpeer kad.NodeID[K], msg kad.MinKadMessage,
-) (kad.MinKadMessage, error) {
+	rpeer kad.NodeID[K], msg kad.Message,
+) (kad.Message, error) {
 	var target K
 
 	switch msg := msg.(type) {
@@ -67,7 +67,7 @@ func (s *Server[K, A]) HandleFindNodeRequest(ctx context.Context,
 		attribute.Int("count", len(nodes)),
 	))
 
-	var resp kad.MinKadMessage
+	var resp kad.Message
 	switch msg.(type) {
 	case *SimMessage[K, A]:
 		peerAddrs := make([]kad.NodeInfo[K, A], len(nodes))

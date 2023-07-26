@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	_ kad.MinKadRequestMessage[key.Key8, net.IP]  = (*SimMessage[key.Key8, net.IP])(nil)
-	_ kad.MinKadResponseMessage[key.Key8, net.IP] = (*SimMessage[key.Key8, net.IP])(nil)
+	_ kad.Request[key.Key8, net.IP]  = (*SimMessage[key.Key8, net.IP])(nil)
+	_ kad.Response[key.Key8, net.IP] = (*SimMessage[key.Key8, net.IP])(nil)
 )
 
 func TestRequest(t *testing.T) {
