@@ -56,9 +56,7 @@ func createEndpoints(t *testing.T, ctx context.Context, nPeers int) (
 		na, err := endpoints[i].NetworkAddress(ids[i])
 		require.NoError(t, err)
 		for _, a := range na.Addresses() {
-			ma, ok := a.(ma.Multiaddr)
-			require.True(t, ok)
-			require.Contains(t, host.Addrs(), ma)
+			require.Contains(t, host.Addrs(), a)
 		}
 	}
 	return endpoints, addrinfos, ids, scheds
@@ -372,9 +370,7 @@ func TestReqUnknownPeer(t *testing.T) {
 	na, err := endpoints[0].NetworkAddress(ids[1])
 	require.NoError(t, err)
 	for _, addr := range na.Addresses() {
-		a, ok := addr.(ma.Multiaddr)
-		require.True(t, ok)
-		require.Contains(t, addrs[1].Addrs, a)
+		require.Contains(t, addrs[1].Addrs, addr)
 	}
 
 	req := FindPeerRequest(ids[1])

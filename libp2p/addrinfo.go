@@ -39,8 +39,6 @@ func (ai AddrInfo) ID() kad.NodeID[key.Key256] {
 
 func (ai AddrInfo) Addresses() []multiaddr.Multiaddr {
 	addrs := make([]multiaddr.Multiaddr, len(ai.Addrs))
-	for i, a := range ai.Addrs {
-		addrs[i] = a
-	}
+	copy(addrs, ai.Addrs)
 	return addrs
 }

@@ -102,8 +102,6 @@ func (a *Info[K, A]) ID() kad.NodeID[K] {
 
 func (a *Info[K, A]) Addresses() []A {
 	addresses := make([]A, len(a.addrs))
-	for i, addr := range a.addrs {
-		addresses[i] = addr
-	}
+	copy(addresses, a.addrs)
 	return addresses
 }
