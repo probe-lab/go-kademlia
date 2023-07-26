@@ -12,42 +12,41 @@ import (
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
-	message "github.com/plprobelab/go-kademlia/network/message"
-	"github.com/plprobelab/go-kademlia/routing"
 	"github.com/plprobelab/go-kademlia/util"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
-// note that the returned []address.NodeID are expected to be of the same type
-// as the type returned by the routing table's NearestPeers method. the
-// address.NodeID returned by resp.CloserNodes() is not necessarily of the same
-// type as the one returned by the routing table's NearestPeers method. so
-// address.NodeID s may need to be converted in this function.
-type HandleResultFn[K kad.Key[K]] func(context.Context, address.NodeID[K],
-	message.MinKadResponseMessage[K]) (bool, []address.NodeID[K])
+// note that the returned []kad.NodeID are expected to be of the same type
+// as the type returned by the routing table's NearestNodes method. the
+// kad.NodeID returned by resp.CloserNodes() is not necessarily of the same
+// type as the one returned by the routing table's NearestNodes method. so
+// kad.NodeID s may need to be converted in this function.
+type HandleResultFn[K kad.Key[K], A kad.Address[A]] func(context.Context, kad.NodeID[K],
+	kad.Response[K, A]) (bool, []kad.NodeID[K])
 
 type NotifyFailureFn func(context.Context)
 
-type SimpleQuery[K kad.Key[K]] struct {
+type SimpleQuery[K kad.Key[K], A kad.Address[A]] struct {
 	ctx          context.Context
+	self         kad.NodeID[K]
 	done         bool
 	protoID      address.ProtocolID
-	req          message.MinKadRequestMessage[K]
+	req          kad.Request[K, A]
 	concurrency  int
 	peerstoreTTL time.Duration
 	timeout      time.Duration
 
-	msgEndpoint endpoint.Endpoint[K]
-	rt          routing.Table[K]
+	msgEndpoint endpoint.Endpoint[K, A]
+	rt          kad.RoutingTable[K]
 	sched       scheduler.Scheduler
 
 	inflightRequests int // requests that are either in flight or scheduled
-	peerlist         *peerList[K]
+	peerlist         *PeerList[K, A]
 
 	// response handling
-	handleResultFn HandleResultFn[K]
+	handleResultFn HandleResultFn[K, A]
 	// failure callback
 	notifyFailureFn NotifyFailureFn
 }
@@ -59,27 +58,22 @@ type SimpleQuery[K kad.Key[K]] struct {
 // reader, and the parameters to these events are determined by the query's
 // parameters. The query keeps track of the closest known peers to the target
 // key, and the peers that have been queried so far.
-func NewSimpleQuery[K kad.Key[K]](ctx context.Context, req message.MinKadRequestMessage[K],
-	opts ...Option[K],
-) (*SimpleQuery[K], error) {
+func NewSimpleQuery[K kad.Key[K], A kad.Address[A]](ctx context.Context, self kad.NodeID[K], req kad.Request[K, A],
+	opts ...Option[K, A],
+) (*SimpleQuery[K, A], error) {
 	ctx, span := util.StartSpan(ctx, "SimpleQuery.NewSimpleQuery",
 		trace.WithAttributes(attribute.String("Target", key.HexString(req.Target()))))
 	defer span.End()
 
 	// apply options
-	var cfg Config[K]
-	if err := cfg.Apply(append([]Option[K]{DefaultConfig[K]}, opts...)...); err != nil {
+	var cfg Config[K, A]
+	if err := cfg.Apply(append([]Option[K, A]{DefaultConfig[K, A]}, opts...)...); err != nil {
 		span.RecordError(err)
 		return nil, err
 	}
 
 	// get the closest peers to the target from the routing table
-	closestPeers, err := cfg.RoutingTable.NearestPeers(ctx, req.Target(),
-		cfg.NumberUsefulCloserPeers)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
+	closestPeers := cfg.RoutingTable.NearestNodes(req.Target(), cfg.NumberUsefulCloserPeers)
 	if len(closestPeers) == 0 {
 		err := errors.New("no peers in routing table")
 		span.RecordError(err)
@@ -91,9 +85,10 @@ func NewSimpleQuery[K kad.Key[K]](ctx context.Context, req message.MinKadRequest
 	// add the closest peers to peerlist
 	pl.addToPeerlist(closestPeers)
 
-	q := &SimpleQuery[K]{
+	q := &SimpleQuery[K, A]{
 		ctx:             ctx,
 		req:             req,
+		self:            self,
 		protoID:         cfg.ProtocolID,
 		concurrency:     cfg.Concurrency,
 		timeout:         cfg.RequestTimeout,
@@ -113,7 +108,7 @@ func NewSimpleQuery[K kad.Key[K]](ctx context.Context, req message.MinKadRequest
 }
 
 // checkIfDone cheks if the query is done, and return an error if it is done.
-func (q *SimpleQuery[K]) checkIfDone() error {
+func (q *SimpleQuery[K, A]) checkIfDone() error {
 	if q.done {
 		// query is done, don't send any more requests
 		return errors.New("query done")
@@ -128,7 +123,7 @@ func (q *SimpleQuery[K]) checkIfDone() error {
 // enqueueNewRequests adds the maximal number of requests to the scheduler's
 // event queue. The maximal number of conccurent requests is limited by the
 // concurrency factor and by the number of queued peers in the peerlist.
-func (q *SimpleQuery[K]) enqueueNewRequests(ctx context.Context) {
+func (q *SimpleQuery[K, A]) enqueueNewRequests(ctx context.Context) {
 	ctx, span := util.StartSpan(ctx, "SimpleQuery.enqueueNewRequests")
 	defer span.End()
 
@@ -162,7 +157,7 @@ func (q *SimpleQuery[K]) enqueueNewRequests(ctx context.Context) {
 }
 
 // newRequest sends a request to the closest peer that hasn't been queried yet.
-func (q *SimpleQuery[K]) newRequest(ctx context.Context) {
+func (q *SimpleQuery[K, A]) newRequest(ctx context.Context) {
 	ctx, span := util.StartSpan(ctx, "SimpleQuery.newRequest")
 	defer span.End()
 
@@ -186,7 +181,7 @@ func (q *SimpleQuery[K]) newRequest(ctx context.Context) {
 
 	// this function will be queued when a response is received, an error
 	// occures or the request times out (with appropriate parameters)
-	handleResp := func(ctx context.Context, resp message.MinKadResponseMessage[K],
+	handleResp := func(ctx context.Context, resp kad.Response[K, A],
 		err error,
 	) {
 		if err != nil {
@@ -206,8 +201,8 @@ func (q *SimpleQuery[K]) newRequest(ctx context.Context) {
 }
 
 // handleResponse handles a response to a past query request
-func (q *SimpleQuery[K]) handleResponse(ctx context.Context, id address.NodeID[K],
-	resp message.MinKadResponseMessage[K],
+func (q *SimpleQuery[K, A]) handleResponse(ctx context.Context, id kad.NodeID[K],
+	resp kad.Response[K, A],
 ) {
 	ctx, span := util.StartSpan(ctx, "SimpleQuery.handleResponse",
 		trace.WithAttributes(attribute.String("Target", key.HexString(q.req.Target())),
@@ -233,7 +228,7 @@ func (q *SimpleQuery[K]) handleResponse(ctx context.Context, id address.NodeID[K
 		// consider that remote peer is behaving correctly if it returns
 		// at least 1 peer. We add it to our routing table only if it behaves
 		// as expected (we don't want to add unresponsive nodes to the rt)
-		q.rt.AddPeer(ctx, id)
+		q.rt.AddNode(id)
 	}
 
 	q.inflightRequests--
@@ -255,7 +250,7 @@ func (q *SimpleQuery[K]) handleResponse(ctx context.Context, id address.NodeID[K
 	// remove all occurreneces of q.self from usefulNodeIDs
 	writeIndex := 0
 	for _, id := range usefulNodeIDs {
-		if !key.Equal(q.rt.Self(), id.Key()) {
+		if !key.Equal(q.self.Key(), id.Key()) {
 			// id is valid and isn't self
 			usefulNodeIDs[writeIndex] = id
 			writeIndex++
@@ -274,7 +269,7 @@ func (q *SimpleQuery[K]) handleResponse(ctx context.Context, id address.NodeID[K
 
 // requestError handle an error that occured while sending a request or
 // receiving a response.
-func (q *SimpleQuery[K]) requestError(ctx context.Context, id address.NodeID[K], err error) {
+func (q *SimpleQuery[K, A]) requestError(ctx context.Context, id kad.NodeID[K], err error) {
 	ctx, span := util.StartSpan(ctx, "SimpleQuery.requestError",
 		trace.WithAttributes(attribute.String("PeerID", id.String()),
 			attribute.String("Error", err.Error())))
@@ -287,7 +282,7 @@ func (q *SimpleQuery[K]) requestError(ctx context.Context, id address.NodeID[K],
 		// remove peer from routing table unless context was cancelled. We don't
 		// want to keep peers that timed out or peers that returned nil/invalid
 		// responses.
-		q.rt.RemoveKey(ctx, id.Key())
+		q.rt.RemoveKey(id.Key())
 	}
 
 	if err := q.checkIfDone(); err != nil {

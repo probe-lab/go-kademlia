@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 
+	"github.com/plprobelab/go-kademlia/internal/kadtest"
+	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/network/address/kadaddr"
-	"github.com/plprobelab/go-kademlia/network/address/kadid"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
 )
 
@@ -16,7 +16,7 @@ func main() {
 
 	nodes, mr := setupSimulation(ctx)
 
-	kad := NewKademliaHandler(nodes[0], mr)
+	kad := NewKademliaHandler[key.Key256, net.IP](nodes[0], mr)
 
 	ih := NewIpfsDht(kad)
 	ih.Start(ctx)
@@ -30,17 +30,17 @@ func main() {
 		fmt.Printf("FindNode failed with error: %v\n", err)
 		return
 	}
-	fmt.Printf("FindNode found address for: %s\n", addr.NodeID().String())
+	fmt.Printf("FindNode found address for: %s\n", addr.ID().String())
 }
 
-func setupSimulation(ctx context.Context) ([]*FakeNode[key.Key256], *MessageRouter[key.Key256]) {
+func setupSimulation(ctx context.Context) ([]*FakeNode[key.Key256, net.IP], *MessageRouter[key.Key256, net.IP]) {
 	// create node identifiers
 	nodeCount := 4
-	ids := make([]*kadid.KadID[key.Key256], nodeCount)
-	ids[0] = kadid.NewKadID(key.ZeroKey256())
-	ids[1] = kadid.NewKadID(key.NewKey256(append(make([]byte, 31), 0x01)))
-	ids[2] = kadid.NewKadID(key.NewKey256(append(make([]byte, 31), 0x02)))
-	ids[3] = kadid.NewKadID(key.NewKey256(append(make([]byte, 31), 0x03)))
+	ids := make([]*kadtest.ID[key.Key256], nodeCount)
+	ids[0] = kadtest.NewID(key.ZeroKey256())
+	ids[1] = kadtest.NewID(key.NewKey256(append(make([]byte, 31), 0x01)))
+	ids[2] = kadtest.NewID(key.NewKey256(append(make([]byte, 31), 0x02)))
+	ids[3] = kadtest.NewID(key.NewKey256(append(make([]byte, 31), 0x03)))
 
 	// Kademlia trie:
 	//     ^
@@ -48,17 +48,17 @@ func setupSimulation(ctx context.Context) ([]*FakeNode[key.Key256], *MessageRout
 	//   ^   ^
 	//  A B C D
 
-	addrs := make([]address.NodeAddr[key.Key256], nodeCount)
+	addrs := make([]kad.NodeInfo[key.Key256, net.IP], nodeCount)
 	for i := 0; i < nodeCount; i++ {
-		addrs[i] = kadaddr.NewKadAddr(ids[i], []string{})
+		addrs[i] = kadtest.NewInfo(ids[i], []net.IP{})
 	}
 
-	nodes := make([]*FakeNode[key.Key256], nodeCount)
+	nodes := make([]*FakeNode[key.Key256, net.IP], nodeCount)
 	for i := 0; i < nodeCount; i++ {
-		nodes[i] = &FakeNode[key.Key256]{
+		nodes[i] = &FakeNode[key.Key256, net.IP]{
 			addr:      addrs[i],
 			rt:        simplert.New(ids[i].Key(), 2),
-			peerstore: make(map[address.NodeID[key.Key256]]address.NodeAddr[key.Key256]),
+			peerstore: make(map[kad.NodeID[key.Key256]]kad.NodeInfo[key.Key256, net.IP]),
 		}
 	}
 
@@ -77,12 +77,12 @@ func setupSimulation(ctx context.Context) ([]*FakeNode[key.Key256], *MessageRout
 }
 
 // connectNodes adds nodes to each other's peerstores and routing tables
-func connectNodes(ctx context.Context, a, b *FakeNode[key.Key256]) {
+func connectNodes(ctx context.Context, a, b *FakeNode[key.Key256, net.IP]) {
 	// add b to a's peerstore and routing table
-	a.AddNodeAddr(ctx, b.Addr())
+	a.AddNodeAddr(b.Addr())
 
 	// add a to b's peerstore and routing table
-	b.AddNodeAddr(ctx, a.Addr())
+	b.AddNodeAddr(a.Addr())
 }
 
 func traceReturnState(loc string, st State) {

@@ -1,4 +1,4 @@
-package libp2pendpoint
+package libp2p
 
 import (
 	"context"
@@ -6,6 +6,12 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/plprobelab/go-kademlia/sim"
+
+	"github.com/plprobelab/go-kademlia/kad"
+
+	"github.com/plprobelab/go-kademlia/internal/kadtest"
 
 	"github.com/benbjohnson/clock"
 	"github.com/libp2p/go-libp2p"
@@ -18,13 +24,7 @@ import (
 	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
-	"github.com/plprobelab/go-kademlia/network/address/peerid"
-	stringid "github.com/plprobelab/go-kademlia/network/address/stringid"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
-	"github.com/plprobelab/go-kademlia/network/message"
-	"github.com/plprobelab/go-kademlia/network/message/ipfsv1"
-	"github.com/plprobelab/go-kademlia/sim"
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,21 +34,21 @@ var (
 )
 
 func createEndpoints(t *testing.T, ctx context.Context, nPeers int) (
-	[]*Libp2pEndpoint, []*addrinfo.AddrInfo, []*peerid.PeerID,
+	[]*Libp2pEndpoint, []*AddrInfo, []*PeerID,
 	[]scheduler.AwareScheduler,
 ) {
 	clk := clock.New()
 
 	scheds := make([]scheduler.AwareScheduler, nPeers)
-	ids := make([]*peerid.PeerID, nPeers)
-	addrinfos := make([]*addrinfo.AddrInfo, nPeers)
+	ids := make([]*PeerID, nPeers)
+	addrinfos := make([]*AddrInfo, nPeers)
 	endpoints := make([]*Libp2pEndpoint, nPeers)
 	for i := 0; i < nPeers; i++ {
 		scheds[i] = simplescheduler.NewSimpleScheduler(clk)
 		host, err := libp2p.New()
 		require.NoError(t, err)
-		ids[i] = peerid.NewPeerID(host.ID())
-		addrinfos[i] = addrinfo.NewAddrInfo(peer.AddrInfo{
+		ids[i] = NewPeerID(host.ID())
+		addrinfos[i] = NewAddrInfo(peer.AddrInfo{
 			ID:    ids[i].ID,
 			Addrs: host.Addrs(),
 		})
@@ -56,16 +56,14 @@ func createEndpoints(t *testing.T, ctx context.Context, nPeers int) (
 		na, err := endpoints[i].NetworkAddress(ids[i])
 		require.NoError(t, err)
 		for _, a := range na.Addresses() {
-			ma, ok := a.(ma.Multiaddr)
-			require.True(t, ok)
-			require.Contains(t, host.Addrs(), ma)
+			require.Contains(t, host.Addrs(), a)
 		}
 	}
 	return endpoints, addrinfos, ids, scheds
 }
 
 func connectEndpoints(t *testing.T, ctx context.Context, endpoints []*Libp2pEndpoint,
-	addrInfos []*addrinfo.AddrInfo,
+	addrInfos []*AddrInfo,
 ) {
 	require.Len(t, endpoints, len(addrInfos))
 	for i, ep := range endpoints {
@@ -85,11 +83,11 @@ func TestConnections(t *testing.T) {
 	// create endpoints
 	endpoints, addrs, ids, _ := createEndpoints(t, ctx, 4)
 
-	invalidID := stringid.NewStringID("invalid")
+	invalidID := kadtest.NewInfo[key.Key256, ma.Multiaddr](kadtest.NewID(kadtest.NewStringID("invalid").Key()), nil)
 
 	// test that the endpoint's kademlia key is as expected
 	for i, ep := range endpoints {
-		require.Equal(t, ids[i].Key(), ep.KadKey())
+		require.Equal(t, ids[i].Key(), ep.Key())
 	}
 
 	// add peer 1 to peer 0's peerstore
@@ -114,17 +112,17 @@ func TestConnections(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, network.NotConnected, connectedness)
 	// invalid peerid -> error
-	connectedness, err = endpoints[1].Connectedness(invalidID)
+	connectedness, err = endpoints[1].Connectedness(invalidID.ID())
 	require.Equal(t, endpoint.ErrInvalidPeer, err)
 	require.Equal(t, network.NotConnected, connectedness)
 	// verify peerinfo for invalid peerid
-	peerinfo, err := endpoints[1].PeerInfo(invalidID)
+	peerinfo, err := endpoints[1].PeerInfo(invalidID.ID())
 	require.Equal(t, endpoint.ErrInvalidPeer, err)
 	require.Len(t, peerinfo.Addrs, 0)
 	// verify network address for valid peerid
 	netAddr, err := endpoints[0].NetworkAddress(ids[1])
 	require.NoError(t, err)
-	ai, ok := netAddr.(*addrinfo.AddrInfo)
+	ai, ok := netAddr.(*AddrInfo)
 	require.True(t, ok)
 	require.Equal(t, ids[1].ID, ai.PeerID().ID)
 	require.Len(t, ai.Addrs, len(addrs[1].Addrs))
@@ -132,7 +130,7 @@ func TestConnections(t *testing.T) {
 		require.Contains(t, addrs[1].Addrs, addr)
 	}
 	// verify network address for invalid peerid
-	netAddr, err = endpoints[0].NetworkAddress(invalidID)
+	netAddr, err = endpoints[0].NetworkAddress(invalidID.ID())
 	require.Equal(t, endpoint.ErrInvalidPeer, err)
 	require.Nil(t, netAddr)
 	// dial from 0 to 1
@@ -154,7 +152,7 @@ func TestConnections(t *testing.T) {
 	require.Len(t, peerinfo.Addrs, 0)
 
 	// dial from 1 to invalid peerid
-	err = endpoints[1].DialPeer(ctx, invalidID)
+	err = endpoints[1].DialPeer(ctx, invalidID.ID())
 	require.Error(t, err)
 	require.Equal(t, endpoint.ErrInvalidPeer, err)
 	// dial again from 0 to 1, no is already connected
@@ -234,7 +232,7 @@ func TestAsyncDial(t *testing.T) {
 	}
 
 	// test asyc dial with invalid peerid
-	err = endpoints[0].AsyncDialAndReport(ctx, stringid.NewStringID("invalid"), nil)
+	err = endpoints[0].AsyncDialAndReport(ctx, kadtest.NewStringID("invalid"), nil)
 	require.Equal(t, endpoint.ErrInvalidPeer, err)
 	// nothing to run for both schedulers
 	for _, s := range scheds {
@@ -247,19 +245,19 @@ func TestRequestHandler(t *testing.T) {
 	endpoints, _, _, _ := createEndpoints(t, ctx, 1)
 
 	// set node 1 to server mode
-	requestHandler := func(ctx context.Context, id address.NodeID[key.Key256],
-		req message.MinKadMessage,
-	) (message.MinKadMessage, error) {
+	requestHandler := func(ctx context.Context, id kad.NodeID[key.Key256],
+		req kad.Message,
+	) (kad.Message, error) {
 		// request handler returning the received message
 		return req, nil
 	}
-	err := endpoints[0].AddRequestHandler(protoID, &ipfsv1.Message{}, requestHandler)
+	err := endpoints[0].AddRequestHandler(protoID, &Message{}, requestHandler)
 	require.NoError(t, err)
-	err = endpoints[0].AddRequestHandler(protoID, &ipfsv1.Message{}, nil)
+	err = endpoints[0].AddRequestHandler(protoID, &Message{}, nil)
 	require.Equal(t, endpoint.ErrNilRequestHandler, err)
 
 	// invalid message format for handler
-	err = endpoints[0].AddRequestHandler("/fail/1.0.0", &sim.Message[key.Key256]{}, requestHandler)
+	err = endpoints[0].AddRequestHandler("/fail/1.0.0", &sim.Message[key.Key256, ma.Multiaddr]{}, requestHandler)
 	require.Equal(t, ErrRequireProtoKadMessage, err)
 
 	// remove request handler
@@ -272,35 +270,35 @@ func TestReqFailFast(t *testing.T) {
 	endpoints, addrs, ids, _ := createEndpoints(t, ctx, 3)
 	connectEndpoints(t, ctx, endpoints[:2], addrs[:2])
 
-	req := ipfsv1.FindPeerRequest(ids[1])
+	req := FindPeerRequest(ids[1])
 	// invalid response format (not protobuf)
 	err := endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], req,
-		&sim.Message[key.Key256]{}, time.Second, nil)
+		&sim.Message[key.Key256, ma.Multiaddr]{}, time.Second, nil)
 	require.Equal(t, ErrRequireProtoKadResponse, err)
 
 	// invalid request format (not protobuf)
 	err = endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1],
-		&sim.Message[key.Key256]{}, &ipfsv1.Message{}, time.Second, nil)
+		&sim.Message[key.Key256, ma.Multiaddr]{}, &Message{}, time.Second, nil)
 	require.Equal(t, ErrRequireProtoKadMessage, err)
 
 	// invalid recipient (not a peerid)
 	err = endpoints[0].SendRequestHandleResponse(ctx, protoID,
-		stringid.NewStringID("invalid"), req, &ipfsv1.Message{}, time.Second, nil)
+		kadtest.NewStringID("invalid"), req, &Message{}, time.Second, nil)
 	require.Equal(t, ErrRequirePeerID, err)
 
 	// nil response handler
 	err = endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], req,
-		&ipfsv1.Message{}, time.Second, nil)
+		&Message{}, time.Second, nil)
 	require.Equal(t, endpoint.ErrNilResponseHandler, err)
 
 	// non nil response handler that should not be called
-	responseHandler := func(_ context.Context, _ message.MinKadResponseMessage[key.Key256], err error) {
+	responseHandler := func(_ context.Context, _ kad.Response[key.Key256, ma.Multiaddr], err error) {
 		require.Fail(t, "response handler shouldn't be called")
 	}
 
 	// peer 0 isn't connected to peer 2, so it should fail fast
 	err = endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[2], req,
-		&ipfsv1.Message{}, time.Second, responseHandler)
+		&Message{}, time.Second, responseHandler)
 	require.Equal(t, endpoint.ErrUnknownPeer, err)
 }
 
@@ -311,25 +309,25 @@ func TestSuccessfulRequest(t *testing.T) {
 	connectEndpoints(t, ctx, endpoints, addrs)
 
 	// set node 1 to server mode
-	requestHandler := func(ctx context.Context, id address.NodeID[key.Key256],
-		req message.MinKadMessage,
-	) (message.MinKadMessage, error) {
+	requestHandler := func(ctx context.Context, id kad.NodeID[key.Key256],
+		req kad.Message,
+	) (kad.Message, error) {
 		// request handler returning the received message
 		return req, nil
 	}
-	err := endpoints[1].AddRequestHandler(protoID, &ipfsv1.Message{}, requestHandler)
+	err := endpoints[1].AddRequestHandler(protoID, &Message{}, requestHandler)
 	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
 	responseHandler := func(ctx context.Context,
-		resp message.MinKadResponseMessage[key.Key256], err error,
+		resp kad.Response[key.Key256, ma.Multiaddr], err error,
 	) {
 		wg.Done()
 	}
-	req := ipfsv1.FindPeerRequest(ids[1])
+	req := FindPeerRequest(ids[1])
 	wg.Add(1)
 	endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], req,
-		&ipfsv1.Message{}, time.Second, responseHandler)
+		&Message{}, time.Second, responseHandler)
 	wg.Add(2)
 	go func() {
 		// run server 1
@@ -360,8 +358,8 @@ func TestReqUnknownPeer(t *testing.T) {
 	// create endpoints
 	endpoints, addrs, ids, scheds := createEndpoints(t, ctx, 2)
 	// replace address of peer 1 with an invalid address
-	addrs[1] = addrinfo.NewAddrInfo(peer.AddrInfo{
-		ID:    addrs[1].ID,
+	addrs[1] = NewAddrInfo(peer.AddrInfo{
+		ID:    addrs[1].PeerID().ID,
 		Addrs: []ma.Multiaddr{ma.StringCast("/ip4/1.2.3.4")},
 	})
 	// "connect" the endpoints. 0 will store an invalid address for 1, so it
@@ -372,14 +370,12 @@ func TestReqUnknownPeer(t *testing.T) {
 	na, err := endpoints[0].NetworkAddress(ids[1])
 	require.NoError(t, err)
 	for _, addr := range na.Addresses() {
-		a, ok := addr.(ma.Multiaddr)
-		require.True(t, ok)
-		require.Contains(t, addrs[1].Addrs, a)
+		require.Contains(t, addrs[1].Addrs, addr)
 	}
 
-	req := ipfsv1.FindPeerRequest(ids[1])
+	req := FindPeerRequest(ids[1])
 	wg := sync.WaitGroup{}
-	responseHandler := func(_ context.Context, _ message.MinKadResponseMessage[key.Key256], err error) {
+	responseHandler := func(_ context.Context, _ kad.Response[key.Key256, ma.Multiaddr], err error) {
 		wg.Done()
 		require.Equal(t, swarm.ErrNoGoodAddresses, err)
 	}
@@ -387,7 +383,7 @@ func TestReqUnknownPeer(t *testing.T) {
 	// unknown valid peerid (address not stored in peerstore)
 	wg.Add(1)
 	err = endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], req,
-		&ipfsv1.Message{}, time.Second, responseHandler)
+		&Message{}, time.Second, responseHandler)
 	require.NoError(t, err)
 	wg.Add(1)
 	go func() {
@@ -411,24 +407,24 @@ func TestReqTimeout(t *testing.T) {
 	endpoints, addrs, ids, scheds := createEndpoints(t, ctx, 2)
 	connectEndpoints(t, ctx, endpoints, addrs)
 
-	req := ipfsv1.FindPeerRequest(ids[1])
+	req := FindPeerRequest(ids[1])
 
 	wg := sync.WaitGroup{}
 
-	err := endpoints[1].AddRequestHandler(protoID, &ipfsv1.Message{}, func(ctx context.Context,
-		id address.NodeID[key.Key256], req message.MinKadMessage,
-	) (message.MinKadMessage, error) {
+	err := endpoints[1].AddRequestHandler(protoID, &Message{}, func(ctx context.Context,
+		id kad.NodeID[key.Key256], req kad.Message,
+	) (kad.Message, error) {
 		return req, nil
 	})
 	require.NoError(t, err)
 
-	responseHandler := func(_ context.Context, _ message.MinKadResponseMessage[key.Key256], err error) {
+	responseHandler := func(_ context.Context, _ kad.Response[key.Key256, ma.Multiaddr], err error) {
 		require.Error(t, err)
 		wg.Done()
 	}
 	// timeout after 100 ms, will fail immediately
 	err = endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], req,
-		&ipfsv1.Message{}, 100*time.Millisecond, responseHandler)
+		&Message{}, 100*time.Millisecond, responseHandler)
 	require.NoError(t, err)
 	wg.Add(2)
 	go func() {
@@ -456,20 +452,20 @@ func TestReqHandlerError(t *testing.T) {
 	endpoints, addrs, ids, scheds := createEndpoints(t, ctx, 2)
 	connectEndpoints(t, ctx, endpoints, addrs)
 
-	req := ipfsv1.FindPeerRequest(ids[1])
+	req := FindPeerRequest(ids[1])
 
 	wg := sync.WaitGroup{}
 
-	err := endpoints[1].AddRequestHandler(protoID, &ipfsv1.Message{}, func(ctx context.Context,
-		id address.NodeID[key.Key256], req message.MinKadMessage,
-	) (message.MinKadMessage, error) {
+	err := endpoints[1].AddRequestHandler(protoID, &Message{}, func(ctx context.Context,
+		id kad.NodeID[key.Key256], req kad.Message,
+	) (kad.Message, error) {
 		// request handler returns error
 		return nil, errors.New("server error")
 	})
 	require.NoError(t, err)
 	// responseHandler is run after context is cancelled
 	responseHandler := func(ctx context.Context,
-		resp message.MinKadResponseMessage[key.Key256], err error,
+		resp kad.Response[key.Key256, ma.Multiaddr], err error,
 	) {
 		wg.Done()
 		require.Error(t, err)
@@ -477,7 +473,7 @@ func TestReqHandlerError(t *testing.T) {
 	noResponseCtx, cancel := context.WithCancel(ctx)
 	wg.Add(1)
 	err = endpoints[0].SendRequestHandleResponse(noResponseCtx, protoID, ids[1], req,
-		&ipfsv1.Message{}, 0, responseHandler)
+		&Message{}, 0, responseHandler)
 	require.NoError(t, err)
 	wg.Add(2)
 	go func() {
@@ -511,19 +507,19 @@ func TestReqHandlerReturnsWrongType(t *testing.T) {
 	endpoints, addrs, ids, scheds := createEndpoints(t, ctx, 2)
 	connectEndpoints(t, ctx, endpoints, addrs)
 
-	req := ipfsv1.FindPeerRequest(ids[1])
+	req := FindPeerRequest(ids[1])
 
 	wg := sync.WaitGroup{}
-	err := endpoints[1].AddRequestHandler(protoID, &ipfsv1.Message{}, func(ctx context.Context,
-		id address.NodeID[key.Key256], req message.MinKadMessage,
-	) (message.MinKadMessage, error) {
+	err := endpoints[1].AddRequestHandler(protoID, &Message{}, func(ctx context.Context,
+		id kad.NodeID[key.Key256], req kad.Message,
+	) (kad.Message, error) {
 		// request handler returns error
-		return &sim.Message[key.Key256]{}, nil
+		return &sim.Message[key.Key256, ma.Multiaddr]{}, nil
 	})
 	require.NoError(t, err)
 	// responseHandler is run after context is cancelled
 	responseHandler := func(ctx context.Context,
-		resp message.MinKadResponseMessage[key.Key256], err error,
+		resp kad.Response[key.Key256, ma.Multiaddr], err error,
 	) {
 		wg.Done()
 		require.Error(t, err)
@@ -531,7 +527,7 @@ func TestReqHandlerReturnsWrongType(t *testing.T) {
 	noResponseCtx, cancel := context.WithCancel(ctx)
 	wg.Add(1)
 	err = endpoints[0].SendRequestHandleResponse(noResponseCtx, protoID, ids[1], req,
-		&ipfsv1.Message{}, 0, responseHandler)
+		&Message{}, 0, responseHandler)
 	require.NoError(t, err)
 	wg.Add(2)
 	go func() {

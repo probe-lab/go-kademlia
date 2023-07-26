@@ -11,13 +11,10 @@ import (
 
 	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
 	tutil "github.com/plprobelab/go-kademlia/examples/util"
+	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/libp2p"
 	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/network/address/addrinfo"
-	"github.com/plprobelab/go-kademlia/network/address/peerid"
-	"github.com/plprobelab/go-kademlia/network/endpoint/libp2pendpoint"
-	"github.com/plprobelab/go-kademlia/network/message"
-	"github.com/plprobelab/go-kademlia/network/message/ipfsv1"
 	"github.com/plprobelab/go-kademlia/query/simplequery"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
 	"github.com/plprobelab/go-kademlia/util"
@@ -38,7 +35,7 @@ func FindPeer(ctx context.Context) {
 		panic(err)
 	}
 
-	pid := peerid.NewPeerID(h.ID())
+	pid := libp2p.NewPeerID(h.ID())
 	// get the peer's kademlia key (derived from its peer.ID)
 	kadid := pid.Key()
 
@@ -47,14 +44,14 @@ func FindPeer(ctx context.Context) {
 	// create a scheduler using real time
 	sched := simplescheduler.NewSimpleScheduler(clk)
 	// create a message endpoint is used to communicate with other peers
-	msgEndpoint := libp2pendpoint.NewLibp2pEndpoint(ctx, h, sched)
+	msgEndpoint := libp2p.NewLibp2pEndpoint(ctx, h, sched)
 
 	// friend is the first peer we know in the IPFS DHT network (bootstrap node)
 	friend, err := peer.Decode("12D3KooWGjgvfDkpuVAoNhd7PRRvMTEG4ZgzHBFURqDe1mqEzAMS")
 	if err != nil {
 		panic(err)
 	}
-	friendID := peerid.NewPeerID(friend)
+	friendID := libp2p.NewPeerID(friend)
 
 	// multiaddress of friend
 	a, err := multiaddr.NewMultiaddr("/ip4/45.32.75.236/udp/4001/quic")
@@ -73,31 +70,31 @@ func FindPeer(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	targetID := peerid.NewPeerID(target)
+	targetID := libp2p.NewPeerID(target)
 
 	// create a find peer request message
-	req := ipfsv1.FindPeerRequest(targetID)
+	req := libp2p.FindPeerRequest(targetID)
 	// add friend to routing table
-	success, err := rt.AddPeer(ctx, friendID)
-	if err != nil || !success {
+	success := rt.AddNode(friendID)
+	if !success {
 		panic("failed to add friend to rt")
 	}
 
 	// endCond is used to terminate the simulation once the query is done
 	endCond := false
-	handleResultsFn := func(ctx context.Context, id address.NodeID[key.Key256],
-		resp message.MinKadResponseMessage[key.Key256],
-	) (bool, []address.NodeID[key.Key256]) {
+	handleResultsFn := func(ctx context.Context, id kad.NodeID[key.Key256],
+		resp kad.Response[key.Key256, multiaddr.Multiaddr],
+	) (bool, []kad.NodeID[key.Key256]) {
 		// parse response to ipfs dht message
-		msg, ok := resp.(*ipfsv1.Message)
+		msg, ok := resp.(*libp2p.Message)
 		if !ok {
 			fmt.Println("invalid response!")
 			return false, nil
 		}
-		var targetAddrs *addrinfo.AddrInfo
-		peers := make([]address.NodeID[key.Key256], 0, len(msg.CloserPeers))
+		var targetAddrs *libp2p.AddrInfo
+		peers := make([]kad.NodeID[key.Key256], 0, len(msg.CloserPeers))
 		for _, p := range msg.CloserPeers {
-			addrInfo, err := ipfsv1.PBPeerToPeerInfo(p)
+			addrInfo, err := libp2p.PBPeerToPeerInfo(p)
 			if err != nil {
 				fmt.Println("invalid peer info format")
 				continue
@@ -124,16 +121,16 @@ func FindPeer(ctx context.Context) {
 	// handler function.
 	// The query will be executed only once actions are run on the scheduler.
 	// For now, it is only scheduled to be run.
-	queryOpts := []simplequery.Option[key.Key256]{
-		simplequery.WithProtocolID[key.Key256](protocolID),
-		simplequery.WithConcurrency[key.Key256](1),
-		simplequery.WithRequestTimeout[key.Key256](2 * time.Second),
-		simplequery.WithHandleResultsFunc(handleResultsFn),
-		simplequery.WithRoutingTable[key.Key256](rt),
-		simplequery.WithEndpoint[key.Key256](msgEndpoint),
-		simplequery.WithScheduler[key.Key256](sched),
+	queryOpts := []simplequery.Option[key.Key256, multiaddr.Multiaddr]{
+		simplequery.WithProtocolID[key.Key256, multiaddr.Multiaddr](protocolID),
+		simplequery.WithConcurrency[key.Key256, multiaddr.Multiaddr](1),
+		simplequery.WithRequestTimeout[key.Key256, multiaddr.Multiaddr](2 * time.Second),
+		simplequery.WithHandleResultsFunc[key.Key256, multiaddr.Multiaddr](handleResultsFn),
+		simplequery.WithRoutingTable[key.Key256, multiaddr.Multiaddr](rt),
+		simplequery.WithEndpoint[key.Key256, multiaddr.Multiaddr](msgEndpoint),
+		simplequery.WithScheduler[key.Key256, multiaddr.Multiaddr](sched),
 	}
-	_, err = simplequery.NewSimpleQuery[key.Key256](ctx, req, queryOpts...)
+	_, err = simplequery.NewSimpleQuery[key.Key256, multiaddr.Multiaddr](ctx, pid.NodeID(), req, queryOpts...)
 	if err != nil {
 		panic(err)
 	}

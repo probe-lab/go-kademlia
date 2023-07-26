@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/plprobelab/go-kademlia/key"
+
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key/trie"
-	"github.com/plprobelab/go-kademlia/network/address"
 )
 
 // TrieRT is a routing table backed by a XOR Trie which offers good scalablity and performance
@@ -15,15 +16,17 @@ type TrieRT[K kad.Key[K]] struct {
 	self      K
 	keyFilter KeyFilterFunc[K]
 
-	keys *trie.Trie[K, address.NodeID[K]]
+	keys *trie.Trie[K, kad.NodeID[K]]
 }
+
+var _ kad.RoutingTable[key.Key256] = (*TrieRT[key.Key256])(nil)
 
 // New creates a new TrieRT using the supplied key as the local node's Kademlia key.
 // If cfg is nil, the default config is used.
 func New[K kad.Key[K]](self K, cfg *Config[K]) (*TrieRT[K], error) {
 	rt := &TrieRT[K]{
 		self: self,
-		keys: &trie.Trie[K, address.NodeID[K]]{},
+		keys: &trie.Trie[K, kad.NodeID[K]]{},
 	}
 	if err := rt.apply(cfg); err != nil {
 		return nil, fmt.Errorf("apply config: %w", err)
@@ -46,11 +49,11 @@ func (rt *TrieRT[K]) Self() K {
 	return rt.self
 }
 
-// AddPeer tries to add a peer to the routing table.
-func (rt *TrieRT[K]) AddPeer(ctx context.Context, node address.NodeID[K]) (bool, error) {
+// AddNode tries to add a peer to the routing table.
+func (rt *TrieRT[K]) AddNode(node kad.NodeID[K]) bool {
 	kk := node.Key()
 	if rt.keyFilter != nil && !rt.keyFilter(rt, kk) {
-		return false, nil
+		return false
 	}
 
 	return rt.keys.Add(kk, node)
@@ -58,31 +61,31 @@ func (rt *TrieRT[K]) AddPeer(ctx context.Context, node address.NodeID[K]) (bool,
 
 // RemoveKey tries to remove a peer identified by its Kademlia key from the
 // routing table. It returns true if the key was found to be present in the table and was removed.
-func (rt *TrieRT[K]) RemoveKey(ctx context.Context, kk K) (bool, error) {
+func (rt *TrieRT[K]) RemoveKey(kk K) bool {
 	return rt.keys.Remove(kk)
 }
 
-// NearestPeers returns the n closest peers to a given key.
-func (rt *TrieRT[K]) NearestPeers(ctx context.Context, kk K, n int) ([]address.NodeID[K], error) {
+// NearestNodes returns the n closest peers to a given key.
+func (rt *TrieRT[K]) NearestNodes(kk K, n int) []kad.NodeID[K] {
 	closestEntries := closestAtDepth(kk, rt.keys, 0, n)
 	if len(closestEntries) == 0 {
-		return []address.NodeID[K]{}, nil
+		return []kad.NodeID[K]{}
 	}
 
-	nodes := make([]address.NodeID[K], 0, len(closestEntries))
+	nodes := make([]kad.NodeID[K], 0, len(closestEntries))
 	for _, c := range closestEntries {
 		nodes = append(nodes, c.data)
 	}
 
-	return nodes, nil
+	return nodes
 }
 
 type entry[K kad.Key[K]] struct {
 	key  K
-	data address.NodeID[K]
+	data kad.NodeID[K]
 }
 
-func closestAtDepth[K kad.Key[K]](kk K, t *trie.Trie[K, address.NodeID[K]], depth int, n int) []entry[K] {
+func closestAtDepth[K kad.Key[K]](kk K, t *trie.Trie[K, kad.NodeID[K]], depth int, n int) []entry[K] {
 	if t.IsLeaf() {
 		if t.HasKey() {
 			// We've found a leaf
@@ -109,7 +112,7 @@ func closestAtDepth[K kad.Key[K]](kk K, t *trie.Trie[K, address.NodeID[K]], dept
 	return append(found, closestAtDepth(kk, t.Branch(1-dir), depth+1, n-len(found))...)
 }
 
-func (rt *TrieRT[K]) Find(ctx context.Context, kk K) (address.NodeID[K], error) {
+func (rt *TrieRT[K]) Find(ctx context.Context, kk K) (kad.NodeID[K], error) {
 	found, node := trie.Find(rt.keys, kk)
 	if found {
 		return node, nil
@@ -137,7 +140,7 @@ func (rt *TrieRT[K]) CplSize(cpl int) int {
 	return n
 }
 
-func countCpl[K kad.Key[K]](t *trie.Trie[K, address.NodeID[K]], kk K, cpl int, depth int) (int, error) {
+func countCpl[K kad.Key[K]](t *trie.Trie[K, kad.NodeID[K]], kk K, cpl int, depth int) (int, error) {
 	// special cases for very small tables where keys may be placed higher in the trie due to low population
 	if t.IsLeaf() {
 		if !t.HasKey() {

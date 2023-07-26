@@ -1,26 +1,26 @@
 package sim
 
 import (
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/plprobelab/go-kademlia/internal/kadtest"
+	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/network/address"
-	si "github.com/plprobelab/go-kademlia/network/address/stringid"
-	"github.com/plprobelab/go-kademlia/network/message"
 )
 
 var (
-	_ message.MinKadRequestMessage[key.Key8]  = (*Message[key.Key8])(nil)
-	_ message.MinKadResponseMessage[key.Key8] = (*Message[key.Key8])(nil)
+	_ kad.Request[key.Key8, net.IP]  = (*Message[key.Key8, net.IP])(nil)
+	_ kad.Response[key.Key8, net.IP] = (*Message[key.Key8, net.IP])(nil)
 )
 
 func TestRequest(t *testing.T) {
-	target := si.StringID("target")
-	msg := NewRequest(target.Key())
+	target := kadtest.StringID("target")
+	msg := NewRequest[key.Key256, net.IP](target.Key())
 
-	require.Equal(t, &Message[key.Key256]{}, msg.EmptyResponse())
+	require.Equal(t, &Message[key.Key256, net.IP]{}, msg.EmptyResponse())
 
 	b := key.Equal(msg.Target(), target.Key())
 	require.True(t, b)
@@ -28,7 +28,10 @@ func TestRequest(t *testing.T) {
 }
 
 func TestResponse(t *testing.T) {
-	closerPeers := []address.NodeAddr[key.Key256]{si.StringID("peer1"), si.StringID("peer2")}
+	closerPeers := []kad.NodeInfo[key.Key256, net.IP]{
+		kadtest.NewInfo[key.Key256, net.IP](kadtest.NewID(kadtest.StringID("peer1").Key()), nil),
+		kadtest.NewInfo[key.Key256, net.IP](kadtest.NewID(kadtest.StringID("peer2").Key()), nil),
+	}
 	msg := NewResponse(closerPeers)
 
 	// require.Nil(t, msg.Target())
