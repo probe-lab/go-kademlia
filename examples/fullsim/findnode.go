@@ -103,7 +103,7 @@ func findNode(ctx context.Context) {
 	handleResFn := func(_ context.Context, id kad.NodeID[key.Key8],
 		msg kad.Response[key.Key8, net.IP],
 	) (bool, []kad.NodeID[key.Key8]) {
-		resp := msg.(*sim.SimMessage[key.Key8, net.IP])
+		resp := msg.(*sim.Message[key.Key8, net.IP])
 		fmt.Println("got a response from", id, "with", resp.CloserNodes())
 
 		newIds := make([]kad.NodeID[key.Key8], len(resp.CloserNodes()))
@@ -122,7 +122,7 @@ func findNode(ctx context.Context) {
 
 	// create a query on A (using A's scheduler, endpoint and routing table),
 	// D's Kademlia Key as target, the defined protocol ID, using req as the
-	// request message, an empty SimMessage (resp) as the response message, a
+	// request message, an empty Message (resp) as the response message, a
 	// concurrency of 1, a timeout of 1 second, and handleResFn as the response
 	// handler. The query doesn't run yet, it is added to A's event queue
 	// through A's scheduler.

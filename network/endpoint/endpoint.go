@@ -46,8 +46,8 @@ type Endpoint[K kad.Key[K], A kad.Address[A]] interface {
 		kad.Message, kad.Message, time.Duration,
 		ResponseHandlerFn[K, A]) error
 
-	// KadKey returns the KadKey of the local node.
-	KadKey() K
+	// Key returns the Key of the local node.
+	Key() K
 	// NetworkAddress returns the network address of the given peer (if known).
 	NetworkAddress(kad.NodeID[K]) (kad.NodeInfo[K, A], error)
 }
@@ -72,11 +72,3 @@ type NetworkedEndpoint[K kad.Key[K], A kad.Address[A]] interface {
 
 // StreamID is a unique identifier for a stream.
 type StreamID uint64
-
-// SimEndpoint is a simulated endpoint that doesn't operate on real network
-type SimEndpoint[K kad.Key[K], A kad.Address[A]] interface {
-	ServerEndpoint[K, A]
-	// HandleMessage handles a message from the given peer.
-	HandleMessage(context.Context, kad.NodeID[K], address.ProtocolID,
-		StreamID, kad.Message)
-}

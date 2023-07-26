@@ -21,7 +21,7 @@ import (
 
 var (
 	_ endpoint.NetworkedEndpoint[key.Key8, net.IP] = (*Endpoint[key.Key8, net.IP])(nil)
-	_ endpoint.SimEndpoint[key.Key8, net.IP]       = (*Endpoint[key.Key8, net.IP])(nil)
+	_ SimEndpoint[key.Key8, net.IP]                = (*Endpoint[key.Key8, net.IP])(nil)
 	_ endpoint.Endpoint[key.Key8, net.IP]          = (*Endpoint[key.Key8, net.IP])(nil)
 )
 
@@ -43,7 +43,7 @@ func TestEndpoint(t *testing.T) {
 
 	fakeEndpoint := NewEndpoint[key.Key256, net.IP](selfID.NodeID(), sched, router)
 
-	b := key.Equal(selfID.Key(), fakeEndpoint.KadKey())
+	b := key.Equal(selfID.Key(), fakeEndpoint.Key())
 	require.True(t, b)
 
 	node0 := kadtest.NewInfo[key.Key256, net.IP](kadtest.NewID(kadtest.StringID("node0").Key()), nil)
@@ -63,7 +63,7 @@ func TestEndpoint(t *testing.T) {
 	require.Equal(t, endpoint.ErrUnknownPeer, err)
 
 	req := NewRequest[key.Key256, net.IP](selfID.Key())
-	resp := &SimMessage[key.Key256, net.IP]{}
+	resp := &Message[key.Key256, net.IP]{}
 
 	var runCheck bool
 	respHandler := func(ctx context.Context, msg kad.Response[key.Key256, net.IP], err error) {

@@ -145,13 +145,13 @@ func TestInvalidSimRequests(t *testing.T) {
 
 	requester := kadtest.NewID(key.Key8(0b00000001)) // 0000 0001
 
-	// invalid message format (not a SimMessage)
+	// invalid message format (not a Message)
 	req0 := struct{}{}
 	_, err := s.HandleFindNodeRequest(ctx, requester, req0)
 	require.Error(t, err)
 
 	// empty request
-	req1 := &SimMessage[key.Key8, net.IP]{}
+	req1 := &Message[key.Key8, net.IP]{}
 	s.HandleFindNodeRequest(ctx, requester, req1)
 
 	// request with invalid key (not matching the expected length)

@@ -18,6 +18,14 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// SimEndpoint is a simulated endpoint that doesn't operate on real network
+type SimEndpoint[K kad.Key[K], A kad.Address[A]] interface {
+	endpoint.ServerEndpoint[K, A]
+	// HandleMessage handles a message from the given peer.
+	HandleMessage(context.Context, kad.NodeID[K], address.ProtocolID,
+		endpoint.StreamID, kad.Message)
+}
+
 // Endpoint is a single threaded endpoint implementation simulating a network.
 // It simulates a network and handles message exchanges between multiple peers in a simulation.
 type Endpoint[K kad.Key[K], A kad.Address[A]] struct {
@@ -33,7 +41,7 @@ type Endpoint[K kad.Key[K], A kad.Address[A]] struct {
 	router *Router[K, A]
 }
 
-var _ endpoint.SimEndpoint[key.Key256, net.IP] = (*Endpoint[key.Key256, net.IP])(nil)
+var _ SimEndpoint[key.Key256, net.IP] = (*Endpoint[key.Key256, net.IP])(nil)
 
 func NewEndpoint[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], sched scheduler.Scheduler, router *Router[K, A]) *Endpoint[K, A] {
 	e := &Endpoint[K, A]{
@@ -168,7 +176,7 @@ func (e *Endpoint[K, A]) NetworkAddress(id kad.NodeID[K]) (kad.NodeInfo[K, A], e
 	return nil, endpoint.ErrUnknownPeer
 }
 
-func (e *Endpoint[K, A]) KadKey() K {
+func (e *Endpoint[K, A]) Key() K {
 	return e.self.Key()
 }
 

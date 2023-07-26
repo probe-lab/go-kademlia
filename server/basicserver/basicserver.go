@@ -47,7 +47,7 @@ func (s *BasicServer[A]) HandleRequest(ctx context.Context, rpeer kad.NodeID[key
 	msg kad.Message,
 ) (kad.Message, error) {
 	switch msg := msg.(type) {
-	case *sim.SimMessage[key.Key256, A]:
+	case *sim.Message[key.Key256, A]:
 		return s.HandleFindNodeRequest(ctx, rpeer, msg)
 	case *libp2p.Message:
 		switch msg.GetType() {
@@ -67,7 +67,7 @@ func (s *BasicServer[A]) HandleFindNodeRequest(ctx context.Context,
 	var target key.Key256
 
 	switch msg := msg.(type) {
-	case *sim.SimMessage[key.Key256, A]:
+	case *sim.Message[key.Key256, A]:
 		target = msg.Target()
 	case *libp2p.Message:
 		p := peer.ID("")
@@ -95,7 +95,7 @@ func (s *BasicServer[A]) HandleFindNodeRequest(ctx context.Context,
 
 	var resp kad.Message
 	switch msg.(type) {
-	case *sim.SimMessage[key.Key256, A]:
+	case *sim.Message[key.Key256, A]:
 		peerAddrs := make([]kad.NodeInfo[key.Key256, A], len(peers))
 		var index int
 		for _, p := range peers {

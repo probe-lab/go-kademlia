@@ -89,7 +89,7 @@ func TestConnections(t *testing.T) {
 
 	// test that the endpoint's kademlia key is as expected
 	for i, ep := range endpoints {
-		require.Equal(t, ids[i].Key(), ep.KadKey())
+		require.Equal(t, ids[i].Key(), ep.Key())
 	}
 
 	// add peer 1 to peer 0's peerstore
@@ -259,7 +259,7 @@ func TestRequestHandler(t *testing.T) {
 	require.Equal(t, endpoint.ErrNilRequestHandler, err)
 
 	// invalid message format for handler
-	err = endpoints[0].AddRequestHandler("/fail/1.0.0", &sim.SimMessage[key.Key256, ma.Multiaddr]{}, requestHandler)
+	err = endpoints[0].AddRequestHandler("/fail/1.0.0", &sim.Message[key.Key256, ma.Multiaddr]{}, requestHandler)
 	require.Equal(t, ErrRequireProtoKadMessage, err)
 
 	// remove request handler
@@ -275,12 +275,12 @@ func TestReqFailFast(t *testing.T) {
 	req := FindPeerRequest(ids[1])
 	// invalid response format (not protobuf)
 	err := endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], req,
-		&sim.SimMessage[key.Key256, ma.Multiaddr]{}, time.Second, nil)
+		&sim.Message[key.Key256, ma.Multiaddr]{}, time.Second, nil)
 	require.Equal(t, ErrRequireProtoKadResponse, err)
 
 	// invalid request format (not protobuf)
 	err = endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1],
-		&sim.SimMessage[key.Key256, ma.Multiaddr]{}, &Message{}, time.Second, nil)
+		&sim.Message[key.Key256, ma.Multiaddr]{}, &Message{}, time.Second, nil)
 	require.Equal(t, ErrRequireProtoKadMessage, err)
 
 	// invalid recipient (not a peerid)
@@ -518,7 +518,7 @@ func TestReqHandlerReturnsWrongType(t *testing.T) {
 		id kad.NodeID[key.Key256], req kad.Message,
 	) (kad.Message, error) {
 		// request handler returns error
-		return &sim.SimMessage[key.Key256, ma.Multiaddr]{}, nil
+		return &sim.Message[key.Key256, ma.Multiaddr]{}, nil
 	})
 	require.NoError(t, err)
 	// responseHandler is run after context is cancelled

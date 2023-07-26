@@ -20,7 +20,6 @@ import (
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
 	"github.com/plprobelab/go-kademlia/server"
 	"github.com/plprobelab/go-kademlia/sim"
@@ -198,14 +197,14 @@ func TestInvalidQueryOptions(t *testing.T) {
 func simulationSetup(t *testing.T, ctx context.Context, n, bucketSize int,
 	clk clock.Clock, protoID address.ProtocolID, peerstoreTTL time.Duration,
 	defaultQueryOpts []Option[key.Key8, net.IP]) (
-	[]kad.NodeInfo[key.Key8, net.IP], []scheduler.AwareScheduler, []endpoint.SimEndpoint[key.Key8, net.IP],
+	[]kad.NodeInfo[key.Key8, net.IP], []scheduler.AwareScheduler, []sim.SimEndpoint[key.Key8, net.IP],
 	[]kad.RoutingTable[key.Key8], []server.Server[key.Key8], [][]Option[key.Key8, net.IP],
 ) {
 	router := sim.NewRouter[key.Key8, net.IP]()
 
 	ids := make([]kad.NodeInfo[key.Key8, net.IP], n)
 	scheds := make([]scheduler.AwareScheduler, n)
-	fendpoints := make([]endpoint.SimEndpoint[key.Key8, net.IP], n)
+	fendpoints := make([]sim.SimEndpoint[key.Key8, net.IP], n)
 	rts := make([]kad.RoutingTable[key.Key8], n)
 	servers := make([]server.Server[key.Key8], n)
 
@@ -219,7 +218,7 @@ func simulationSetup(t *testing.T, ctx context.Context, n, bucketSize int,
 		cfg := sim.DefaultServerConfig()
 		cfg.NumberUsefulCloserPeers = bucketSize
 		servers[i] = sim.NewServer[key.Key8, net.IP](rts[i], fendpoints[i], cfg)
-		fendpoints[i].AddRequestHandler(protoID, &sim.SimMessage[key.Key8, net.IP]{}, servers[i].HandleRequest)
+		fendpoints[i].AddRequestHandler(protoID, &sim.Message[key.Key8, net.IP]{}, servers[i].HandleRequest)
 	}
 
 	// peer ids (KadIDs) are i*8 for i in [0, 32), the keyspace is 1 byte [0, 255]
@@ -588,7 +587,7 @@ func TestUnresponsivePeer(t *testing.T) {
 	) (kad.Message, error) {
 		return nil, errors.New("")
 	}
-	fendpoint1.AddRequestHandler(protoID, &sim.SimMessage[key.Key8, net.IP]{}, serverRequestHandler)
+	fendpoint1.AddRequestHandler(protoID, &sim.Message[key.Key8, net.IP]{}, serverRequestHandler)
 
 	req := sim.NewRequest[key.Key8, net.IP](key.Key8(0xff))
 

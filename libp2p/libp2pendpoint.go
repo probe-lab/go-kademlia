@@ -278,7 +278,7 @@ func (e *Libp2pEndpoint) PeerInfo(id kad.NodeID[key.Key256]) (peer.AddrInfo, err
 	return e.host.Peerstore().PeerInfo(p.ID), nil
 }
 
-func (e *Libp2pEndpoint) KadKey() key.Key256 {
+func (e *Libp2pEndpoint) Key() key.Key256 {
 	return PeerID{ID: e.host.ID()}.Key()
 }
 

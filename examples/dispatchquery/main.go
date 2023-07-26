@@ -5,13 +5,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/plprobelab/go-kademlia/server/basicserver"
-
-	"github.com/plprobelab/go-kademlia/kad"
-
-	"github.com/plprobelab/go-kademlia/libp2p"
-
 	"github.com/benbjohnson/clock"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/multiformats/go-multibase"
 	"go.opentelemetry.io/otel"
@@ -24,13 +19,14 @@ import (
 	ss "github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
 	"github.com/plprobelab/go-kademlia/events/simulator"
 	"github.com/plprobelab/go-kademlia/events/simulator/litesimulator"
+	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/libp2p"
 	sq "github.com/plprobelab/go-kademlia/query/simplequery"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
+	"github.com/plprobelab/go-kademlia/server/basicserver"
 	"github.com/plprobelab/go-kademlia/sim"
 	"github.com/plprobelab/go-kademlia/util"
-
-	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 const (

@@ -12,19 +12,19 @@ import (
 
 type Router[K kad.Key[K], A kad.Address[A]] struct {
 	currStream endpoint.StreamID
-	peers      map[string]endpoint.SimEndpoint[K, A]
+	peers      map[string]SimEndpoint[K, A]
 	scheds     map[string]scheduler.Scheduler
 }
 
 func NewRouter[K kad.Key[K], A kad.Address[A]]() *Router[K, A] {
 	return &Router[K, A]{
 		currStream: 1,
-		peers:      make(map[string]endpoint.SimEndpoint[K, A]),
+		peers:      make(map[string]SimEndpoint[K, A]),
 		scheds:     make(map[string]scheduler.Scheduler),
 	}
 }
 
-func (r *Router[K, A]) AddPeer(id kad.NodeID[K], peer endpoint.SimEndpoint[K, A], sched scheduler.Scheduler) {
+func (r *Router[K, A]) AddPeer(id kad.NodeID[K], peer SimEndpoint[K, A], sched scheduler.Scheduler) {
 	r.peers[id.String()] = peer
 	r.scheds[id.String()] = sched
 }

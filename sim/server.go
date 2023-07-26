@@ -37,7 +37,7 @@ func (s *Server[K, A]) HandleRequest(ctx context.Context, rpeer kad.NodeID[K],
 	msg kad.Message,
 ) (kad.Message, error) {
 	switch msg := msg.(type) {
-	case *SimMessage[K, A]:
+	case *Message[K, A]:
 		return s.HandleFindNodeRequest(ctx, rpeer, msg)
 	default:
 		return nil, ErrUnknownMessageFormat
@@ -50,7 +50,7 @@ func (s *Server[K, A]) HandleFindNodeRequest(ctx context.Context,
 	var target K
 
 	switch msg := msg.(type) {
-	case *SimMessage[K, A]:
+	case *Message[K, A]:
 		target = msg.Target()
 	default:
 		// invalid request, don't reply
@@ -69,7 +69,7 @@ func (s *Server[K, A]) HandleFindNodeRequest(ctx context.Context,
 
 	var resp kad.Message
 	switch msg.(type) {
-	case *SimMessage[K, A]:
+	case *Message[K, A]:
 		peerAddrs := make([]kad.NodeInfo[K, A], len(nodes))
 		var index int
 		for _, p := range nodes {

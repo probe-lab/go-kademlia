@@ -12,15 +12,15 @@ import (
 )
 
 var (
-	_ kad.Request[key.Key8, net.IP]  = (*SimMessage[key.Key8, net.IP])(nil)
-	_ kad.Response[key.Key8, net.IP] = (*SimMessage[key.Key8, net.IP])(nil)
+	_ kad.Request[key.Key8, net.IP]  = (*Message[key.Key8, net.IP])(nil)
+	_ kad.Response[key.Key8, net.IP] = (*Message[key.Key8, net.IP])(nil)
 )
 
 func TestRequest(t *testing.T) {
 	target := kadtest.StringID("target")
 	msg := NewRequest[key.Key256, net.IP](target.Key())
 
-	require.Equal(t, &SimMessage[key.Key256, net.IP]{}, msg.EmptyResponse())
+	require.Equal(t, &Message[key.Key256, net.IP]{}, msg.EmptyResponse())
 
 	b := key.Equal(msg.Target(), target.Key())
 	require.True(t, b)
