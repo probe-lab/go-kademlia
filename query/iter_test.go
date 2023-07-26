@@ -513,10 +513,9 @@ func TestClosestNodesIterFinishesWhenNumResultsReached(t *testing.T) {
 	})
 
 	// iterator attempts to contact third node
-	state = iter.Advance(ctx, nil)
 	require.IsType(t, &StateNodeIterWaitingContact[key.Key8]{}, state)
 	st = state.(*StateNodeIterWaitingContact[key.Key8])
-	require.Equal(t, d, st.NodeID)
+	require.Equal(t, c, st.NodeID)
 
 	// notify iterator that second node was contacted successfully
 	state = iter.Advance(ctx, &EventNodeIterNodeContacted[key.Key8]{

@@ -143,23 +143,23 @@ func NewClosestNodesIter[K kad.Key[K]](target K, knownClosestNodes []kad.NodeID[
 	return iter
 }
 
-func (pi *ClosestNodesIter[K]) Advance(ctx context.Context, ev NodeIterEvent) (rstate NodeIterState) {
+func (iter *ClosestNodesIter[K]) Advance(ctx context.Context, ev NodeIterEvent) (rstate NodeIterState) {
 	ctx, span := util.StartSpan(ctx, "ClosestNodesIter.Advance")
 	defer span.End()
-	if pi.finished {
+	if iter.finished {
 		return &StateNodeIterFinished{
-			Successes: pi.successes,
+			Successes: iter.successes,
 		}
 	}
 
 	switch tev := ev.(type) {
 	case *EventNodeIterCancel:
-		pi.finished = true
-		return &StateNodeIterFinished{Successes: pi.successes}
+		iter.finished = true
+		return &StateNodeIterFinished{Successes: iter.successes}
 	case *EventNodeIterNodeContacted[K]:
-		pi.onNodeContacted(ctx, tev.NodeID, tev.CloserNodes)
+		iter.onNodeContacted(ctx, tev.NodeID, tev.CloserNodes)
 	case *EventNodeIterNodeNotContacted[K]:
-		pi.onNodeNotContacted(ctx, tev.NodeID)
+		iter.onNodeNotContacted(ctx, tev.NodeID)
 	case nil:
 		// TEMPORARY: no event to process
 	default:
@@ -167,27 +167,27 @@ func (pi *ClosestNodesIter[K]) Advance(ctx context.Context, ev NodeIterEvent) (r
 	}
 
 	// reset the success count to allow recalculation during loop through closest nodes
-	pi.successes = 0
+	iter.successes = 0
 
 	// progressing is set to true if any node is still awaiting contact
 	progressing := false
 
 	// TODO: if stalled then we should contact all remaining nodes that have not already been queried
 	atCapacity := func() bool {
-		return pi.inFlight >= pi.cfg.Concurrency
+		return iter.inFlight >= iter.cfg.Concurrency
 	}
 
 	// get all the nodes in order of distance from the target
 	// TODO: turn this into a walk or iterator on trie.Trie
-	entries := trie.Closest(pi.nodes, pi.target, pi.nodes.Size())
+	entries := trie.Closest(iter.nodes, iter.target, iter.nodes.Size())
 	for _, e := range entries {
 		ni := e.Data
 		switch st := ni.State.(type) {
 		case *NodeStateWaiting:
-			if pi.cfg.Clock.Now().After(st.Deadline) {
+			if iter.cfg.Clock.Now().After(st.Deadline) {
 				// mark node as unresponsive
 				ni.State = &NodeStateUnresponsive{}
-				pi.inFlight--
+				iter.inFlight--
 			} else if atCapacity() {
 				return &StateNodeIterWaitingAtCapacity{}
 			} else {
@@ -195,22 +195,22 @@ func (pi *ClosestNodesIter[K]) Advance(ctx context.Context, ev NodeIterEvent) (r
 				progressing = true
 			}
 		case *NodeStateSucceeded:
-			pi.successes++
+			iter.successes++
 			// The iterator has attempted to contact all nodes closer than this one.
 			// If the iterator is not progressing then it doesn't expect any more nodes to be added to the list.
 			// If it has contacted at least NumResults nodes successfully then the iteration is done.
-			if !progressing && pi.successes >= pi.cfg.NumResults {
-				pi.finished = true
+			if !progressing && iter.successes >= iter.cfg.NumResults {
+				iter.finished = true
 				return &StateNodeIterFinished{
-					Successes: pi.successes,
+					Successes: iter.successes,
 				}
 			}
 
 		case *NodeStateNotContacted:
 			if !atCapacity() {
-				deadline := pi.cfg.Clock.Now().Add(pi.cfg.NodeTimeout)
+				deadline := iter.cfg.Clock.Now().Add(iter.cfg.NodeTimeout)
 				ni.State = &NodeStateWaiting{Deadline: deadline}
-				pi.inFlight++
+				iter.inFlight++
 
 				// TODO: send find nodes to node
 				return &StateNodeIterWaitingContact[K]{
@@ -228,29 +228,29 @@ func (pi *ClosestNodesIter[K]) Advance(ctx context.Context, ev NodeIterEvent) (r
 		}
 	}
 
-	if pi.inFlight > 0 {
+	if iter.inFlight > 0 {
 		// The iterator is still waiting for results and not at capacity
 		return &StateNodeIterWaitingWithCapacity{}
 	}
 
 	// The iterator is finished because all available nodes have been contacted
 	// and the iterator is not waiting for any more results.
-	pi.finished = true
+	iter.finished = true
 	return &StateNodeIterFinished{
-		Successes: pi.successes,
+		Successes: iter.successes,
 	}
 }
 
 // onNodeContacted processes the result of a successful attempt to contact a node.
-func (pi *ClosestNodesIter[K]) onNodeContacted(ctx context.Context, node kad.NodeID[K], closerNodes []kad.NodeID[K]) {
-	found, ni := trie.Find(pi.nodes, node.Key())
+func (iter *ClosestNodesIter[K]) onNodeContacted(ctx context.Context, node kad.NodeID[K], closerNodes []kad.NodeID[K]) {
+	found, ni := trie.Find(iter.nodes, node.Key())
 	if !found {
 		// got a rogue message
 		return
 	}
 	switch st := ni.State.(type) {
 	case *NodeStateWaiting:
-		pi.inFlight--
+		iter.inFlight--
 	case *NodeStateUnresponsive:
 
 	case *NodeStateNotContacted:
@@ -268,8 +268,8 @@ func (pi *ClosestNodesIter[K]) onNodeContacted(ctx context.Context, node kad.Nod
 
 	// add closer nodes to list
 	for _, n := range closerNodes {
-		pi.nodes.Add(n.Key(), &NodeInfo[K]{
-			Distance: pi.target.Xor(n.Key()),
+		iter.nodes.Add(n.Key(), &NodeInfo[K]{
+			Distance: iter.target.Xor(n.Key()),
 			NodeID:   n,
 			State:    &NodeStateNotContacted{},
 		})
@@ -278,15 +278,15 @@ func (pi *ClosestNodesIter[K]) onNodeContacted(ctx context.Context, node kad.Nod
 }
 
 // onNodeNotContacted processes the result of a failed attempt to contact a node.
-func (pi *ClosestNodesIter[K]) onNodeNotContacted(ctx context.Context, node kad.NodeID[K]) {
-	found, ni := trie.Find(pi.nodes, node.Key())
+func (iter *ClosestNodesIter[K]) onNodeNotContacted(ctx context.Context, node kad.NodeID[K]) {
+	found, ni := trie.Find(iter.nodes, node.Key())
 	if !found {
 		// got a rogue message
 		return
 	}
 	switch st := ni.State.(type) {
 	case *NodeStateWaiting:
-		pi.inFlight--
+		iter.inFlight--
 	case *NodeStateUnresponsive:
 		// update node state to failed
 		break
@@ -305,24 +305,3 @@ func (pi *ClosestNodesIter[K]) onNodeNotContacted(ctx context.Context, node kad.
 
 	ni.State = &NodeStateFailed{}
 }
-
-// States for ClosestNodesIter
-
-type ClosestNodesIterState interface {
-	closestNodesIterState()
-}
-
-// StateClosestNodesIterFinished indicates the ClosestPeersIter has finished
-type StateClosestNodesIterFinished struct{}
-
-// StateClosestNodesIterStalled indicates the ClosestPeersIter has not made progress
-// (this will be when "concurrency" consecutive successful requests have been made)
-type StateClosestNodesIterStalled struct{}
-
-// StateClosestNodesIterIterating indicates the ClosestPeersIter is still making progress
-type StateClosestNodesIterIterating struct{}
-
-// closestNodesIterState() ensures that only ClosestNodesIter states can be assigned to a ClosestNodesIterState.
-func (*StateClosestNodesIterFinished) closestNodesIterState()  {}
-func (*StateClosestNodesIterStalled) closestNodesIterState()   {}
-func (*StateClosestNodesIterIterating) closestNodesIterState() {}
