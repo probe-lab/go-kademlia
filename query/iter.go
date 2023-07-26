@@ -108,7 +108,7 @@ type ClosestNodesIter[K kad.Key[K]] struct {
 	cfg ClosestNodesIterConfig
 
 	// nodelist holds the nodes discovered so far, ordered by increasing distance from the target.
-	nodes *trie.Trie[K, *NodeInfo[K]]
+	nodes *trie.Trie[K, *nodeInfo[K]]
 
 	// inFlight is number of requests in flight, will be <= concurrency
 	inFlight int
@@ -129,14 +129,14 @@ func NewClosestNodesIter[K kad.Key[K]](target K, knownClosestNodes []kad.NodeID[
 	iter := &ClosestNodesIter[K]{
 		target: target,
 		cfg:    *cfg,
-		nodes:  trie.New[K, *NodeInfo[K]](),
+		nodes:  trie.New[K, *nodeInfo[K]](),
 	}
 
 	for _, node := range knownClosestNodes {
-		iter.nodes.Add(node.Key(), &NodeInfo[K]{
+		iter.nodes.Add(node.Key(), &nodeInfo[K]{
 			Distance: target.Xor(node.Key()),
 			NodeID:   node,
-			State:    &NodeStateNotContacted{},
+			State:    &stateNodeNotContacted{},
 		})
 	}
 
@@ -183,10 +183,10 @@ func (iter *ClosestNodesIter[K]) Advance(ctx context.Context, ev NodeIterEvent) 
 	for _, e := range entries {
 		ni := e.Data
 		switch st := ni.State.(type) {
-		case *NodeStateWaiting:
+		case *stateNodeWaiting:
 			if iter.cfg.Clock.Now().After(st.Deadline) {
 				// mark node as unresponsive
-				ni.State = &NodeStateUnresponsive{}
+				ni.State = &stateNodeUnresponsive{}
 				iter.inFlight--
 			} else if atCapacity() {
 				return &StateNodeIterWaitingAtCapacity{}
@@ -194,7 +194,7 @@ func (iter *ClosestNodesIter[K]) Advance(ctx context.Context, ev NodeIterEvent) 
 				// The iterator is still waiting for a result from a node so can't be considered done
 				progressing = true
 			}
-		case *NodeStateSucceeded:
+		case *stateNodeSucceeded:
 			iter.successes++
 			// The iterator has attempted to contact all nodes closer than this one.
 			// If the iterator is not progressing then it doesn't expect any more nodes to be added to the list.
@@ -206,10 +206,10 @@ func (iter *ClosestNodesIter[K]) Advance(ctx context.Context, ev NodeIterEvent) 
 				}
 			}
 
-		case *NodeStateNotContacted:
+		case *stateNodeNotContacted:
 			if !atCapacity() {
 				deadline := iter.cfg.Clock.Now().Add(iter.cfg.NodeTimeout)
-				ni.State = &NodeStateWaiting{Deadline: deadline}
+				ni.State = &stateNodeWaiting{Deadline: deadline}
 				iter.inFlight++
 
 				// TODO: send find nodes to node
@@ -219,9 +219,9 @@ func (iter *ClosestNodesIter[K]) Advance(ctx context.Context, ev NodeIterEvent) 
 
 			}
 			return &StateNodeIterWaitingAtCapacity{}
-		case *NodeStateUnresponsive:
+		case *stateNodeUnresponsive:
 			// ignore
-		case *NodeStateFailed:
+		case *stateNodeFailed:
 			// ignore
 		default:
 			panic(fmt.Sprintf("unexpected state: %T", ni.State))
@@ -249,17 +249,17 @@ func (iter *ClosestNodesIter[K]) onNodeContacted(ctx context.Context, node kad.N
 		return
 	}
 	switch st := ni.State.(type) {
-	case *NodeStateWaiting:
+	case *stateNodeWaiting:
 		iter.inFlight--
-	case *NodeStateUnresponsive:
+	case *stateNodeUnresponsive:
 
-	case *NodeStateNotContacted:
+	case *stateNodeNotContacted:
 		// ignore duplicate or late response
 		return
-	case *NodeStateFailed:
+	case *stateNodeFailed:
 		// ignore duplicate or late response
 		return
-	case *NodeStateSucceeded:
+	case *stateNodeSucceeded:
 		// ignore duplicate or late response
 		return
 	default:
@@ -268,13 +268,13 @@ func (iter *ClosestNodesIter[K]) onNodeContacted(ctx context.Context, node kad.N
 
 	// add closer nodes to list
 	for _, n := range closerNodes {
-		iter.nodes.Add(n.Key(), &NodeInfo[K]{
+		iter.nodes.Add(n.Key(), &nodeInfo[K]{
 			Distance: iter.target.Xor(n.Key()),
 			NodeID:   n,
-			State:    &NodeStateNotContacted{},
+			State:    &stateNodeNotContacted{},
 		})
 	}
-	ni.State = &NodeStateSucceeded{}
+	ni.State = &stateNodeSucceeded{}
 }
 
 // onNodeNotContacted processes the result of a failed attempt to contact a node.
@@ -285,23 +285,23 @@ func (iter *ClosestNodesIter[K]) onNodeNotContacted(ctx context.Context, node ka
 		return
 	}
 	switch st := ni.State.(type) {
-	case *NodeStateWaiting:
+	case *stateNodeWaiting:
 		iter.inFlight--
-	case *NodeStateUnresponsive:
+	case *stateNodeUnresponsive:
 		// update node state to failed
 		break
-	case *NodeStateNotContacted:
+	case *stateNodeNotContacted:
 		// update node state to failed
 		break
-	case *NodeStateFailed:
+	case *stateNodeFailed:
 		// ignore duplicate or late response
 		return
-	case *NodeStateSucceeded:
+	case *stateNodeSucceeded:
 		// ignore duplicate or late response
 		return
 	default:
 		panic(fmt.Sprintf("unexpected state: %T", st))
 	}
 
-	ni.State = &NodeStateFailed{}
+	ni.State = &stateNodeFailed{}
 }
