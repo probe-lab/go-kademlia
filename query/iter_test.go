@@ -83,9 +83,6 @@ func TestClosestNodesIterNoClosest(t *testing.T) {
 func TestClosestNodesIterContactsMultiple(t *testing.T) {
 	ctx := context.Background()
 
-	cfg := DefaultClosestNodesIterConfig()
-	cfg.Concurrency = 3 // one less than the number of initial nodes
-
 	target := key.Key8(0b00000001)
 	a := kadtest.NewID(key.Key8(0b00000100)) // 4
 	b := kadtest.NewID(key.Key8(0b00001000)) // 8
@@ -99,6 +96,9 @@ func TestClosestNodesIterContactsMultiple(t *testing.T) {
 
 	// knownNodes are in "random" order
 	knownNodes := []kad.NodeID[key.Key8]{b, c, a, d}
+
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Concurrency = len(knownNodes) - 1 // one less than the number of initial nodes
 
 	iter := NewClosestNodesIter(target, knownNodes, cfg)
 
