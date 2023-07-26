@@ -49,7 +49,7 @@ func (rt *TrieRT[K]) Self() K {
 	return rt.self
 }
 
-// AddNode tries to add a peer to the routing table.
+// AddNode tries to add a node to the routing table.
 func (rt *TrieRT[K]) AddNode(node kad.NodeID[K]) bool {
 	kk := node.Key()
 	if rt.keyFilter != nil && !rt.keyFilter(rt, kk) {
@@ -59,57 +59,25 @@ func (rt *TrieRT[K]) AddNode(node kad.NodeID[K]) bool {
 	return rt.keys.Add(kk, node)
 }
 
-// RemoveKey tries to remove a peer identified by its Kademlia key from the
+// RemoveKey tries to remove a node identified by its Kademlia key from the
 // routing table. It returns true if the key was found to be present in the table and was removed.
 func (rt *TrieRT[K]) RemoveKey(kk K) bool {
 	return rt.keys.Remove(kk)
 }
 
-// NearestNodes returns the n closest peers to a given key.
-func (rt *TrieRT[K]) NearestNodes(kk K, n int) []kad.NodeID[K] {
-	closestEntries := closestAtDepth(kk, rt.keys, 0, n)
+// NearestNodes returns the n closest nodes to a given key.
+func (rt *TrieRT[K]) NearestNodes(target K, n int) []kad.NodeID[K] {
+	closestEntries := trie.Closest(rt.keys, target, n)
 	if len(closestEntries) == 0 {
 		return []kad.NodeID[K]{}
 	}
 
 	nodes := make([]kad.NodeID[K], 0, len(closestEntries))
 	for _, c := range closestEntries {
-		nodes = append(nodes, c.data)
+		nodes = append(nodes, c.Data)
 	}
 
 	return nodes
-}
-
-type entry[K kad.Key[K]] struct {
-	key  K
-	data kad.NodeID[K]
-}
-
-func closestAtDepth[K kad.Key[K]](kk K, t *trie.Trie[K, kad.NodeID[K]], depth int, n int) []entry[K] {
-	if t.IsLeaf() {
-		if t.HasKey() {
-			// We've found a leaf
-			return []entry[K]{
-				{key: *t.Key(), data: t.Data()},
-			}
-		}
-		// We've found an empty node?
-		return nil
-	}
-
-	if depth > kk.BitLen() {
-		return nil
-	}
-
-	// Find the closest direction.
-	dir := int(kk.Bit(depth))
-	// Add peers from the closest direction first
-	found := closestAtDepth(kk, t.Branch(dir), depth+1, n)
-	if len(found) == n {
-		return found
-	}
-	// Didn't find enough peers in the closest direction, try the other direction.
-	return append(found, closestAtDepth(kk, t.Branch(1-dir), depth+1, n-len(found))...)
 }
 
 func (rt *TrieRT[K]) Find(ctx context.Context, kk K) (kad.NodeID[K], error) {

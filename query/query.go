@@ -37,7 +37,7 @@ func (q *Query[K, A]) Advance(ctx context.Context, ev QueryEvent) QueryState {
 
 	switch tev := ev.(type) {
 	case *QueryEventCancel:
-		nev = &NodeIterEventCancel{}
+		nev = &EventNodeIterCancel{}
 	case *QueryEventMessageResponse[K, A]:
 		q.stats.Success++
 
@@ -46,7 +46,7 @@ func (q *Query[K, A]) Advance(ctx context.Context, ev QueryEvent) QueryState {
 			nodes[i] = a.ID()
 		}
 
-		nev = &NodeIterEventNodeContacted[K]{
+		nev = &EventNodeIterNodeContacted[K]{
 			NodeID:      tev.NodeID,
 			CloserNodes: nodes,
 		}
@@ -59,17 +59,16 @@ func (q *Query[K, A]) Advance(ctx context.Context, ev QueryEvent) QueryState {
 	state := q.iter.Advance(ctx, nev)
 	switch st := state.(type) {
 
-	case *NodeIterStateFinished[K]:
+	case *StateNodeIterFinished[K]:
 		if q.stats.End.IsZero() {
 			q.stats.End = q.clk.Now()
 		}
 		return &QueryStateFinished[K]{
 			QueryID: q.id,
 			Stats:   q.stats,
-			Nodes:   st.Nodes,
 		}
 
-	case *NodeIterStateWaitingContact[K]:
+	case *StateNodeIterWaitingContact[K]:
 		q.stats.Requests++
 		return &QueryStateWaitingMessage[K, A]{
 			QueryID:    q.id,
@@ -79,17 +78,17 @@ func (q *Query[K, A]) Advance(ctx context.Context, ev QueryEvent) QueryState {
 			Message:    q.msg,
 		}
 
-	case *NodeIterStateWaiting:
+	case *StateNodeIterWaiting:
 		return &QueryStateWaiting{
 			QueryID: q.id,
 			Stats:   q.stats,
 		}
-	case *NodeIterStateWaitingAtCapacity:
+	case *StateNodeIterWaitingAtCapacity:
 		return &QueryStateWaitingAtCapacity{
 			QueryID: q.id,
 			Stats:   q.stats,
 		}
-	case *NodeIterStateWaitingWithCapacity:
+	case *StateNodeIterWaitingWithCapacity:
 		return &QueryStateWaitingWithCapacity{
 			QueryID: q.id,
 			Stats:   q.stats,
@@ -115,7 +114,6 @@ type QueryState interface {
 type QueryStateFinished[K kad.Key[K]] struct {
 	QueryID QueryID
 	Stats   QueryStats
-	Nodes   []kad.NodeID[K]
 }
 
 // QueryStateWaitingMessage indicates that the Query is waiting to send a message to a node.

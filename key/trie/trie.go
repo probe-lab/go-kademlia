@@ -260,25 +260,66 @@ func Find[K kad.Key[K], D any](tr *Trie[K, D], kk K) (bool, D) {
 // Locate looks for the position of a key in the trie.
 // It reports whether the key was found along with the depth of the leaf reached along the path
 // of the key, regardless of whether the key was found in that leaf.
-func Locate[K kad.Key[K], D any](tr *Trie[K, D], kk K) (bool, int) {
-	f, depth := findFromDepth(tr, 0, kk)
+func Locate[K kad.Key[K], D any](tr *Trie[K, D], target K) (bool, int) {
+	f, depth := findFromDepth(tr, 0, target)
 	if f == nil {
 		return false, depth
 	}
 	return true, depth
 }
 
-func findFromDepth[K kad.Key[K], D any](tr *Trie[K, D], depth int, kk K) (*Trie[K, D], int) {
+func findFromDepth[K kad.Key[K], D any](tr *Trie[K, D], depth int, target K) (*Trie[K, D], int) {
 	switch {
 	case tr.IsEmptyLeaf():
 		return nil, depth
 	case tr.IsNonEmptyLeaf():
-		eq := key.Equal(*tr.key, kk)
+		eq := key.Equal(*tr.key, target)
 		if !eq {
 			return nil, depth
 		}
 		return tr, depth
 	default:
-		return findFromDepth(tr.branch[kk.Bit(depth)], depth+1, kk)
+		return findFromDepth(tr.branch[target.Bit(depth)], depth+1, target)
 	}
+}
+
+func Closest[K kad.Key[K], D any](tr *Trie[K, D], target K, n int) []Entry[K, D] {
+	closestEntries := closestAtDepth(tr, target, n, 0)
+	if len(closestEntries) == 0 {
+		return []Entry[K, D]{}
+	}
+	return closestEntries
+}
+
+type Entry[K kad.Key[K], D any] struct {
+	Key  K
+	Data D
+}
+
+func closestAtDepth[K kad.Key[K], D any](t *Trie[K, D], target K, n int, depth int) []Entry[K, D] {
+	if t.IsLeaf() {
+		if t.HasKey() {
+			// We've found a leaf
+			return []Entry[K, D]{
+				{Key: *t.Key(), Data: t.Data()},
+			}
+		}
+		// We've found an empty node?
+		return nil
+	}
+
+	if depth > target.BitLen() {
+		// should not be possible
+		return nil
+	}
+
+	// Find the closest direction.
+	dir := int(target.Bit(depth))
+	// Add peers from the closest direction first
+	found := closestAtDepth(t.Branch(dir), target, n, depth+1)
+	if len(found) == n {
+		return found
+	}
+	// Didn't find enough peers in the closest direction, try the other direction.
+	return append(found, closestAtDepth(t.Branch(1-dir), target, n-len(found), depth+1)...)
 }

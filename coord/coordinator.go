@@ -17,6 +17,8 @@ import (
 )
 
 // A Coordinator coordinates the state machines that comprise a Kademlia DHT
+// Currently this is only queries but will expand to include other state machines such as routing table refresh,
+// and reproviding.
 type Coordinator[K kad.Key[K], A kad.Address[A]] struct {
 	clk clock.Clock
 

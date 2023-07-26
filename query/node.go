@@ -4,48 +4,12 @@ import (
 	"time"
 
 	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
 )
 
 type NodeInfo[K kad.Key[K]] struct {
 	Distance K
 	State    NodeState
 	NodeID   kad.NodeID[K]
-}
-
-// NodeList is a list of node infos ordered by distance. Manage using heap operations.
-type NodeList[K kad.Key[K]] []*NodeInfo[K]
-
-func (pl NodeList[K]) Len() int { return len(pl) }
-
-func (pl NodeList[K]) Less(i, j int) bool {
-	return pl[i].Distance.Compare(pl[j].Distance) < 0
-}
-
-func (pl NodeList[K]) Swap(i, j int) {
-	pl[i], pl[j] = pl[j], pl[i]
-}
-
-func (pl *NodeList[K]) Push(x any) {
-	*pl = append(*pl, x.(*NodeInfo[K]))
-}
-
-func (pq *NodeList[K]) Pop() any {
-	old := *pq
-	n := len(old)
-	pi := old[n-1]
-	*pq = old[0 : n-1]
-	return pi
-}
-
-func (pq *NodeList[K]) Exists(id kad.NodeID[K]) bool {
-	// slow and naieve for now
-	for _, p := range *pq {
-		if key.Equal(p.NodeID.Key(), id.Key()) {
-			return true
-		}
-	}
-	return false
 }
 
 type NodeState interface {

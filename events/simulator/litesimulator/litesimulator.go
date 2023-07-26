@@ -25,6 +25,10 @@ func NewLiteSimulator(clk *clock.Mock) *LiteSimulator {
 	}
 }
 
+func (s *LiteSimulator) Clock() *clock.Mock {
+	return s.clk
+}
+
 func (s *LiteSimulator) AddPeer(sched scheduler.AwareScheduler) {
 	s.schedulers = append(s.schedulers, sched)
 }

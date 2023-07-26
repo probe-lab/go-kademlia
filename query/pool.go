@@ -136,8 +136,10 @@ func (qp *QueryPool[K, A]) advanceQuery(ctx context.Context, qry *Query[K, A], q
 // addQuery adds a query to the pool, returning the new query id
 func (qp *QueryPool[K, A]) addQuery(ctx context.Context, queryID QueryID, target K, protocolID address.ProtocolID, msg kad.Request[K, A], knownClosestPeers []kad.NodeID[K]) error {
 	// TODO: return an error if queryID already in use
+	iterCfg := DefaultClosestNodesIterConfig()
+	iterCfg.Clock = qp.clk
 
-	iter := NewClosestNodesIter(target, knownClosestPeers, qp.replication, qp.concurrency, qp.timeout, qp.clk)
+	iter := NewClosestNodesIter(target, knownClosestPeers, iterCfg)
 	qp.queries[queryID] = &Query[K, A]{
 		id:         queryID,
 		clk:        qp.clk,
