@@ -3,7 +3,9 @@ package query
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/benbjohnson/clock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
@@ -80,7 +82,7 @@ func TestClosestNodesIterNoClosest(t *testing.T) {
 	require.IsType(t, &StateNodeIterFinished[key.Key8]{}, state)
 }
 
-func TestClosestNodesIterContactsMultiple(t *testing.T) {
+func TestClosestNodesIterWaitsAtCapacity(t *testing.T) {
 	ctx := context.Background()
 
 	target := key.Key8(0b00000001)
@@ -123,4 +125,78 @@ func TestClosestNodesIterContactsMultiple(t *testing.T) {
 	// the iter should be at capacity
 	state = iter.Advance(ctx, nil)
 	require.IsType(t, &StateNodeIterWaitingAtCapacity{}, state)
+}
+
+func TestClosestNodesIterTimedOutNodeMakesCapacity(t *testing.T) {
+	ctx := context.Background()
+
+	target := key.Key8(0b00000001)
+	a := kadtest.NewID(key.Key8(0b00000100)) // 4
+	b := kadtest.NewID(key.Key8(0b00001000)) // 8
+	c := kadtest.NewID(key.Key8(0b00010000)) // 16
+	d := kadtest.NewID(key.Key8(0b00100000)) // 32
+
+	// ensure the order of the known nodes
+	require.True(t, target.Xor(a.Key()).Compare(target.Xor(b.Key())) == -1)
+	require.True(t, target.Xor(b.Key()).Compare(target.Xor(c.Key())) == -1)
+	require.True(t, target.Xor(c.Key()).Compare(target.Xor(d.Key())) == -1)
+
+	// knownNodes are in "random" order
+	knownNodes := []kad.NodeID[key.Key8]{b, c, a, d}
+
+	clk := clock.NewMock()
+
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Clock = clk
+	cfg.NodeTimeout = 3 * time.Minute
+	cfg.Concurrency = len(knownNodes) - 1 // one less than the number of initial nodes
+
+	iter := NewClosestNodesIter(target, knownNodes, cfg)
+
+	// first thing the new iterator should do is contact the nearest node
+	state := iter.Advance(ctx, nil)
+	require.IsType(t, &StateNodeIterWaitingContact[key.Key8]{}, state)
+	st := state.(*StateNodeIterWaitingContact[key.Key8])
+	require.Equal(t, a, st.NodeID)
+
+	// advance time by one minute
+	clk.Add(time.Minute)
+
+	// while the iter has capacity the iter should contact the next nearest node
+	state = iter.Advance(ctx, nil)
+	require.IsType(t, &StateNodeIterWaitingContact[key.Key8]{}, state)
+	st = state.(*StateNodeIterWaitingContact[key.Key8])
+	require.Equal(t, b, st.NodeID)
+
+	// advance time by one minute
+	clk.Add(time.Minute)
+
+	// while the iter has capacity the iter should contact the second nearest node
+	state = iter.Advance(ctx, nil)
+	require.IsType(t, &StateNodeIterWaitingContact[key.Key8]{}, state)
+	st = state.(*StateNodeIterWaitingContact[key.Key8])
+	require.Equal(t, c, st.NodeID)
+
+	// advance time by one minute
+	clk.Add(time.Minute)
+
+	// the iter should be at capacity
+	state = iter.Advance(ctx, nil)
+	require.IsType(t, &StateNodeIterWaitingAtCapacity{}, state)
+
+	// advance time by another minute, now at 4 minutes, first node connection attempt should now time out
+	clk.Add(time.Minute)
+
+	// the first node request should have timed out, making capacity for the last node to attempt connection
+	state = iter.Advance(ctx, nil)
+	require.IsType(t, &StateNodeIterWaitingContact[key.Key8]{}, state)
+	st = state.(*StateNodeIterWaitingContact[key.Key8])
+	require.Equal(t, d, st.NodeID)
+
+	// advance time by another minute, now at 5 minutes, second node connection attempt should now time out
+	clk.Add(time.Minute)
+
+	// advancing now makes more capacity
+	state = iter.Advance(ctx, nil)
+	require.IsType(t, &StateNodeIterWaitingWithCapacity{}, state)
 }

@@ -117,8 +117,7 @@ func NewClosestNodesIter[K kad.Key[K]](target K, knownClosestNodes []kad.NodeID[
 		nodes:  trie.New[K, *NodeInfo[K]](),
 	}
 
-	for i, node := range knownClosestNodes {
-		fmt.Printf("xx %d: node=%v distance:%v\n", i, node, target.Xor(node.Key()))
+	for _, node := range knownClosestNodes {
 		iter.nodes.Add(node.Key(), &NodeInfo[K]{
 			Distance: target.Xor(node.Key()),
 			NodeID:   node,
@@ -152,7 +151,9 @@ func (pi *ClosestNodesIter[K]) Advance(ctx context.Context, ev NodeIterEvent) (r
 	progressing := false
 
 	// TODO: if stalled then we should contact all remaining nodes that have not already been queried
-	atCapacity := pi.inFlight >= pi.cfg.Concurrency
+	atCapacity := func() bool {
+		return pi.inFlight >= pi.cfg.Concurrency
+	}
 
 	// get all the nodes in order of distance from the target
 	// TODO: turn this into a walk or iterator on trie.Trie
@@ -165,7 +166,7 @@ func (pi *ClosestNodesIter[K]) Advance(ctx context.Context, ev NodeIterEvent) (r
 				// mark node as unresponsive
 				ni.State = &NodeStateUnresponsive{}
 				pi.inFlight--
-			} else if atCapacity {
+			} else if atCapacity() {
 				return &StateNodeIterWaitingAtCapacity{}
 			} else {
 				// The iterator is still waiting for a result from a node so can't be considered done
@@ -179,8 +180,8 @@ func (pi *ClosestNodesIter[K]) Advance(ctx context.Context, ev NodeIterEvent) (r
 			}
 
 		case *NodeStateNotContacted:
-			if !atCapacity {
-				deadline := time.Now().Add(pi.cfg.NodeTimeout)
+			if !atCapacity() {
+				deadline := pi.cfg.Clock.Now().Add(pi.cfg.NodeTimeout)
 				ni.State = &NodeStateWaiting{Deadline: deadline}
 				pi.inFlight++
 
