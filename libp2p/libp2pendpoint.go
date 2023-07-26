@@ -43,8 +43,8 @@ type Libp2pEndpoint struct {
 }
 
 var (
-	_ endpoint.NetworkedEndpoint[key.Key256] = (*Libp2pEndpoint)(nil)
-	_ endpoint.ServerEndpoint[key.Key256]    = (*Libp2pEndpoint)(nil)
+	_ endpoint.NetworkedEndpoint[key.Key256, multiaddr.Multiaddr] = (*Libp2pEndpoint)(nil)
+	_ endpoint.ServerEndpoint[key.Key256, multiaddr.Multiaddr]    = (*Libp2pEndpoint)(nil)
 )
 
 func NewLibp2pEndpoint(ctx context.Context, host host.Host,
@@ -153,11 +153,11 @@ func (e *Libp2pEndpoint) MaybeAddToPeerstore(ctx context.Context,
 	return nil
 }
 
-func (e *Libp2pEndpoint) SendMessage(ctx context.Context, protoID address.ProtocolID, id address.NodeID[key.Key256], req message.MinKadRequestMessage[key.Key256]) (message.MinKadResponseMessage[key.Key256], error) {
-	respCh := make(chan message.MinKadResponseMessage[key.Key256], 1)
+func (e *Libp2pEndpoint) SendMessage(ctx context.Context, protoID address.ProtocolID, id kad.NodeID[key.Key256], req kad.Request[key.Key256, multiaddr.Multiaddr]) (kad.Response[key.Key256, multiaddr.Multiaddr], error) {
+	respCh := make(chan kad.Response[key.Key256, multiaddr.Multiaddr], 1)
 	errCh := make(chan error, 1)
 
-	handleResp := func(ctx context.Context, resp message.MinKadResponseMessage[key.Key256], err error) {
+	handleResp := func(ctx context.Context, resp kad.Response[key.Key256, multiaddr.Multiaddr], err error) {
 		if err != nil {
 			errCh <- err
 			return
@@ -165,7 +165,7 @@ func (e *Libp2pEndpoint) SendMessage(ctx context.Context, protoID address.Protoc
 		respCh <- resp
 	}
 
-	err := e.SendRequestHandleResponse(ctx, protoID, id, req, req.EmptyResponse(), time.Second, handleResp)
+	err := e.SendRequestHandleResponse(ctx, protoID, id, req, req.EmptyResponse(), 0, handleResp)
 	if err != nil {
 		return nil, fmt.Errorf("send request: %w", err)
 	}
@@ -292,12 +292,25 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 	return nil
 }
 
-func (e *Libp2pEndpoint) Connectedness(id kad.NodeID[key.Key256]) (network.Connectedness, error) {
+func (e *Libp2pEndpoint) Connectedness(id kad.NodeID[key.Key256]) (endpoint.Connectedness, error) {
 	p, err := getPeerID(id)
 	if err != nil {
-		return network.NotConnected, err
+		return endpoint.NotConnected, err
 	}
-	return e.host.Network().Connectedness(p.ID), nil
+
+	c := e.host.Network().Connectedness(p.ID)
+	switch c {
+	case network.NotConnected:
+		return endpoint.NotConnected, nil
+	case network.Connected:
+		return endpoint.Connected, nil
+	case network.CanConnect:
+		return endpoint.CanConnect, nil
+	case network.CannotConnect:
+		return endpoint.CannotConnect, nil
+	default:
+		panic(fmt.Sprintf("unexpected libp2p connectedness value: %v", c))
+	}
 }
 
 func (e *Libp2pEndpoint) PeerInfo(id kad.NodeID[key.Key256]) (peer.AddrInfo, error) {

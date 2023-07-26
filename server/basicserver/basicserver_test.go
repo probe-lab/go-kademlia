@@ -225,6 +225,10 @@ func (e *invalidEndpoint[K, A]) SendRequestHandleResponse(context.Context,
 	return nil
 }
 
+func (e *invalidEndpoint[K, A]) SendMessage(context.Context, address.ProtocolID, kad.NodeID[K], kad.Request[K, A]) (kad.Response[K, A], error) {
+	return nil, nil
+}
+
 func (e *invalidEndpoint[K, A]) Key() K {
 	var v K
 	return v
