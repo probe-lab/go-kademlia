@@ -59,7 +59,7 @@ func (q *Query[K, A]) Advance(ctx context.Context, ev QueryEvent) QueryState {
 	state := q.iter.Advance(ctx, nev)
 	switch st := state.(type) {
 
-	case *StateNodeIterFinished[K]:
+	case *StateNodeIterFinished:
 		if q.stats.End.IsZero() {
 			q.stats.End = q.clk.Now()
 		}

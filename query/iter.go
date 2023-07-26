@@ -26,7 +26,9 @@ type NodeIterState interface {
 }
 
 // StateNodeIterFinished indicates that the NodeIter has finished.
-type StateNodeIterFinished[K kad.Key[K]] struct{}
+type StateNodeIterFinished struct {
+	Successes int // the number of nodes successfully contacted
+}
 
 // StateNodeIterWaitingContact indicates that the NodeIter is waiting to to make contact with a node.
 type StateNodeIterWaitingContact[K kad.Key[K]] struct {
@@ -43,7 +45,7 @@ type StateNodeIterWaitingAtCapacity struct{}
 type StateNodeIterWaitingWithCapacity struct{}
 
 // nodeIterState() ensures that only NodeIter states can be assigned to a NodeIterState.
-func (*StateNodeIterFinished[K]) nodeIterState()         {}
+func (*StateNodeIterFinished) nodeIterState()            {}
 func (*StateNodeIterWaitingContact[K]) nodeIterState()   {}
 func (*StateNodeIterWaiting) nodeIterState()             {}
 func (*StateNodeIterWaitingAtCapacity) nodeIterState()   {}
@@ -55,16 +57,26 @@ type NodeIterEvent interface {
 	nodeIterEvent()
 }
 
+// EventNodeIterNodeNotContacted is the event that signals a NodeIter to stop processing work.
+// After this event is received the NodeIter must return StateNodeIterFinished for all subsequent
+// calls to Advance.
 type EventNodeIterCancel struct{}
 
+// EventNodeIterNodeNotContacted is the event that signals a NodeIter that a node was successfully contacted.
 type EventNodeIterNodeContacted[K kad.Key[K]] struct {
 	NodeID      kad.NodeID[K]
 	CloserNodes []kad.NodeID[K]
 }
 
+// EventNodeIterNodeNotContacted is the event that signals a NodeIter that a node could not be contacted.
+type EventNodeIterNodeNotContacted[K kad.Key[K]] struct {
+	NodeID kad.NodeID[K]
+}
+
 // nodeIterEvent() ensures that only NodeIter events can be assigned to a NodeIterEvent.
-func (*EventNodeIterCancel) nodeIterEvent()           {}
-func (*EventNodeIterNodeContacted[K]) nodeIterEvent() {}
+func (*EventNodeIterCancel) nodeIterEvent()              {}
+func (*EventNodeIterNodeContacted[K]) nodeIterEvent()    {}
+func (*EventNodeIterNodeNotContacted[K]) nodeIterEvent() {}
 
 var _ NodeIter[key.Key8] = (*ClosestNodesIter[key.Key8])(nil)
 
@@ -103,6 +115,9 @@ type ClosestNodesIter[K kad.Key[K]] struct {
 
 	// finished indicates that that the iterator has completed its work or has been stopped.
 	finished bool
+
+	// successes counts how many nodes have been successfully contacted
+	successes int
 }
 
 // NewClosestNodesIter returns a new ClosestNodesIter
@@ -132,22 +147,29 @@ func (pi *ClosestNodesIter[K]) Advance(ctx context.Context, ev NodeIterEvent) (r
 	ctx, span := util.StartSpan(ctx, "ClosestNodesIter.Advance")
 	defer span.End()
 	if pi.finished {
-		return &StateNodeIterFinished[K]{}
+		return &StateNodeIterFinished{
+			Successes: pi.successes,
+		}
 	}
 
 	switch tev := ev.(type) {
 	case *EventNodeIterCancel:
 		pi.finished = true
-		return &StateNodeIterFinished[K]{}
+		return &StateNodeIterFinished{Successes: pi.successes}
 	case *EventNodeIterNodeContacted[K]:
-		pi.onMessageSuccess(ctx, tev.NodeID, tev.CloserNodes)
+		pi.onNodeContacted(ctx, tev.NodeID, tev.CloserNodes)
+	case *EventNodeIterNodeNotContacted[K]:
+		pi.onNodeNotContacted(ctx, tev.NodeID)
 	case nil:
 		// TEMPORARY: no event to process
 	default:
 		panic(fmt.Sprintf("unexpected event: %T", tev))
 	}
 
-	successes := 0
+	// reset the success count to allow recalculation during loop through closest nodes
+	pi.successes = 0
+
+	// progressing is set to true if any node is still awaiting contact
 	progressing := false
 
 	// TODO: if stalled then we should contact all remaining nodes that have not already been queried
@@ -173,10 +195,15 @@ func (pi *ClosestNodesIter[K]) Advance(ctx context.Context, ev NodeIterEvent) (r
 				progressing = true
 			}
 		case *NodeStateSucceeded:
-			successes++
-			if !progressing && successes >= pi.cfg.NumResults {
+			pi.successes++
+			// The iterator has attempted to contact all nodes closer than this one.
+			// If the iterator is not progressing then it doesn't expect any more nodes to be added to the list.
+			// If it has contacted at least NumResults nodes successfully then the iteration is done.
+			if !progressing && pi.successes >= pi.cfg.NumResults {
 				pi.finished = true
-				return &StateNodeIterFinished[K]{}
+				return &StateNodeIterFinished{
+					Successes: pi.successes,
+				}
 			}
 
 		case *NodeStateNotContacted:
@@ -209,14 +236,16 @@ func (pi *ClosestNodesIter[K]) Advance(ctx context.Context, ev NodeIterEvent) (r
 	// The iterator is finished because all available nodes have been contacted
 	// and the iterator is not waiting for any more results.
 	pi.finished = true
-	return &StateNodeIterFinished[K]{}
+	return &StateNodeIterFinished{
+		Successes: pi.successes,
+	}
 }
 
-// Callback for delivering the result of a successful request to a node.
-func (pi *ClosestNodesIter[K]) onMessageSuccess(ctx context.Context, node kad.NodeID[K], closerNodes []kad.NodeID[K]) {
+// onNodeContacted processes the result of a successful attempt to contact a node.
+func (pi *ClosestNodesIter[K]) onNodeContacted(ctx context.Context, node kad.NodeID[K], closerNodes []kad.NodeID[K]) {
 	found, ni := trie.Find(pi.nodes, node.Key())
 	if !found {
-		// got a rogue messahe
+		// got a rogue message
 		return
 	}
 	switch st := ni.State.(type) {
@@ -246,6 +275,35 @@ func (pi *ClosestNodesIter[K]) onMessageSuccess(ctx context.Context, node kad.No
 		})
 	}
 	ni.State = &NodeStateSucceeded{}
+}
+
+// onNodeNotContacted processes the result of a failed attempt to contact a node.
+func (pi *ClosestNodesIter[K]) onNodeNotContacted(ctx context.Context, node kad.NodeID[K]) {
+	found, ni := trie.Find(pi.nodes, node.Key())
+	if !found {
+		// got a rogue message
+		return
+	}
+	switch st := ni.State.(type) {
+	case *NodeStateWaiting:
+		pi.inFlight--
+	case *NodeStateUnresponsive:
+		// update node state to failed
+		break
+	case *NodeStateNotContacted:
+		// update node state to failed
+		break
+	case *NodeStateFailed:
+		// ignore duplicate or late response
+		return
+	case *NodeStateSucceeded:
+		// ignore duplicate or late response
+		return
+	default:
+		panic(fmt.Sprintf("unexpected state: %T", st))
+	}
+
+	ni.State = &NodeStateFailed{}
 }
 
 // States for ClosestNodesIter
