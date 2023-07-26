@@ -10,7 +10,6 @@ import (
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
-	"github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/util"
 )
 
@@ -35,10 +34,10 @@ func NewServer[K kad.Key[K], A kad.Address[A]](rt kad.RoutingTable[K], endpoint 
 }
 
 func (s *Server[K, A]) HandleRequest(ctx context.Context, rpeer kad.NodeID[K],
-	msg message.MinKadMessage,
-) (message.MinKadMessage, error) {
+	msg kad.MinKadMessage,
+) (kad.MinKadMessage, error) {
 	switch msg := msg.(type) {
-	case *Message[K, A]:
+	case *SimMessage[K, A]:
 		return s.HandleFindNodeRequest(ctx, rpeer, msg)
 	default:
 		return nil, ErrUnknownMessageFormat
@@ -46,12 +45,12 @@ func (s *Server[K, A]) HandleRequest(ctx context.Context, rpeer kad.NodeID[K],
 }
 
 func (s *Server[K, A]) HandleFindNodeRequest(ctx context.Context,
-	rpeer kad.NodeID[K], msg message.MinKadMessage,
-) (message.MinKadMessage, error) {
+	rpeer kad.NodeID[K], msg kad.MinKadMessage,
+) (kad.MinKadMessage, error) {
 	var target K
 
 	switch msg := msg.(type) {
-	case *Message[K, A]:
+	case *SimMessage[K, A]:
 		target = msg.Target()
 	default:
 		// invalid request, don't reply
@@ -68,9 +67,9 @@ func (s *Server[K, A]) HandleFindNodeRequest(ctx context.Context,
 		attribute.Int("count", len(nodes)),
 	))
 
-	var resp message.MinKadMessage
+	var resp kad.MinKadMessage
 	switch msg.(type) {
-	case *Message[K, A]:
+	case *SimMessage[K, A]:
 		peerAddrs := make([]kad.NodeInfo[K, A], len(nodes))
 		var index int
 		for _, p := range nodes {

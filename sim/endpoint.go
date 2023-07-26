@@ -6,20 +6,16 @@ import (
 	"net"
 	"time"
 
-	"github.com/plprobelab/go-kademlia/key"
-
-	"github.com/libp2p/go-libp2p/core/network"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
-
 	ba "github.com/plprobelab/go-kademlia/events/action/basicaction"
 	"github.com/plprobelab/go-kademlia/events/planner"
 	"github.com/plprobelab/go-kademlia/events/scheduler"
 	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
-	"github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/util"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Endpoint is a single threaded endpoint implementation simulating a network.
@@ -29,7 +25,7 @@ type Endpoint[K kad.Key[K], A kad.Address[A]] struct {
 	sched scheduler.Scheduler // client
 
 	peerstore      map[string]kad.NodeInfo[K, A]
-	connStatus     map[string]network.Connectedness
+	connStatus     map[string]endpoint.Connectedness
 	serverProtos   map[address.ProtocolID]endpoint.RequestHandlerFn[K]    // server
 	streamFollowup map[endpoint.StreamID]endpoint.ResponseHandlerFn[K, A] // client
 	streamTimeout  map[endpoint.StreamID]planner.PlannedAction            // client
@@ -46,7 +42,7 @@ func NewEndpoint[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], sched sched
 		serverProtos: make(map[address.ProtocolID]endpoint.RequestHandlerFn[K]),
 
 		peerstore:  make(map[string]kad.NodeInfo[K, A]),
-		connStatus: make(map[string]network.Connectedness),
+		connStatus: make(map[string]endpoint.Connectedness),
 
 		streamFollowup: make(map[endpoint.StreamID]endpoint.ResponseHandlerFn[K, A]),
 		streamTimeout:  make(map[endpoint.StreamID]planner.PlannedAction),
@@ -69,10 +65,10 @@ func (e *Endpoint[K, A]) DialPeer(ctx context.Context, id kad.NodeID[K]) error {
 
 	if ok {
 		switch status {
-		case network.Connected:
+		case endpoint.Connected:
 			return nil
-		case network.CanConnect:
-			e.connStatus[id.String()] = network.Connected
+		case endpoint.CanConnect:
+			e.connStatus[id.String()] = endpoint.Connected
 			return nil
 		}
 	}
@@ -94,14 +90,14 @@ func (e *Endpoint[K, A]) MaybeAddToPeerstore(ctx context.Context, id kad.NodeInf
 		e.peerstore[strNodeID] = id
 	}
 	if _, ok := e.connStatus[strNodeID]; !ok {
-		e.connStatus[strNodeID] = network.CanConnect
+		e.connStatus[strNodeID] = endpoint.CanConnect
 	}
 	return nil
 }
 
 func (e *Endpoint[K, A]) SendRequestHandleResponse(ctx context.Context,
-	protoID address.ProtocolID, id kad.NodeID[K], req message.MinKadMessage,
-	resp message.MinKadMessage, timeout time.Duration,
+	protoID address.ProtocolID, id kad.NodeID[K], req kad.MinKadMessage,
+	resp kad.MinKadMessage, timeout time.Duration,
 	handleResp endpoint.ResponseHandlerFn[K, A],
 ) error {
 	ctx, span := util.StartSpan(ctx, "SendRequestHandleResponse",
@@ -154,9 +150,9 @@ func (e *Endpoint[K, A]) SendRequestHandleResponse(ctx context.Context,
 }
 
 // Peerstore functions
-func (e *Endpoint[K, A]) Connectedness(id kad.NodeID[K]) (network.Connectedness, error) {
+func (e *Endpoint[K, A]) Connectedness(id kad.NodeID[K]) (endpoint.Connectedness, error) {
 	if s, ok := e.connStatus[id.String()]; !ok {
-		return network.NotConnected, nil
+		return endpoint.NotConnected, nil
 	} else {
 		return s, nil
 	}
@@ -177,7 +173,7 @@ func (e *Endpoint[K, A]) KadKey() K {
 }
 
 func (e *Endpoint[K, A]) HandleMessage(ctx context.Context, id kad.NodeID[K],
-	protoID address.ProtocolID, sid endpoint.StreamID, msg message.MinKadMessage,
+	protoID address.ProtocolID, sid endpoint.StreamID, msg kad.MinKadMessage,
 ) {
 	_, span := util.StartSpan(ctx, "HandleMessage",
 		trace.WithAttributes(attribute.Stringer("id", id),
@@ -195,12 +191,12 @@ func (e *Endpoint[K, A]) HandleMessage(ctx context.Context, id kad.NodeID[K],
 		delete(e.streamFollowup, sid)
 		delete(e.streamTimeout, sid)
 
-		resp, ok := msg.(message.MinKadResponseMessage[K, A])
+		resp, ok := msg.(kad.MinKadResponseMessage[K, A])
 		var err error
 		if ok {
 			for _, p := range resp.CloserNodes() {
 				e.peerstore[p.ID().String()] = p
-				e.connStatus[p.ID().String()] = network.CanConnect
+				e.connStatus[p.ID().String()] = endpoint.CanConnect
 			}
 		} else {
 			err = ErrInvalidResponseType
@@ -225,7 +221,7 @@ func (e *Endpoint[K, A]) HandleMessage(ctx context.Context, id kad.NodeID[K],
 }
 
 func (e *Endpoint[K, A]) AddRequestHandler(protoID address.ProtocolID,
-	req message.MinKadMessage, reqHandler endpoint.RequestHandlerFn[K],
+	req kad.MinKadMessage, reqHandler endpoint.RequestHandlerFn[K],
 ) error {
 	if reqHandler == nil {
 		return endpoint.ErrNilRequestHandler

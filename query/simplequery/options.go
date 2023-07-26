@@ -9,7 +9,6 @@ import (
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
-	"github.com/plprobelab/go-kademlia/network/message"
 )
 
 // Config is a structure containing all the options that can be used when
@@ -79,7 +78,7 @@ func DefaultConfig[K kad.Key[K], A kad.Address[A]](cfg *Config[K, A]) error {
 	cfg.PeerstoreTTL = 30 * time.Minute
 
 	cfg.HandleResultsFunc = func(ctx context.Context, id kad.NodeID[K],
-		resp message.MinKadResponseMessage[K, A],
+		resp kad.MinKadResponseMessage[K, A],
 	) (bool, []kad.NodeID[K]) {
 		ids := make([]kad.NodeID[K], len(resp.CloserNodes()))
 		for i, n := range resp.CloserNodes() {

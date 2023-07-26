@@ -13,13 +13,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/sim"
 )
 
 var (
-	_ message.ProtoKadRequestMessage[key.Key256, multiaddr.Multiaddr]  = (*Message)(nil)
-	_ message.ProtoKadResponseMessage[key.Key256, multiaddr.Multiaddr] = (*Message)(nil)
+	_ kad.ProtoKadRequestMessage[key.Key256, multiaddr.Multiaddr]  = (*Message)(nil)
+	_ kad.ProtoKadResponseMessage[key.Key256, multiaddr.Multiaddr] = (*Message)(nil)
 )
 
 var testPeerstoreTTL = 10 * time.Minute

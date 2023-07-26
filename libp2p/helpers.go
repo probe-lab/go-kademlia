@@ -9,7 +9,6 @@ import (
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
-	"github.com/plprobelab/go-kademlia/network/message"
 )
 
 var ErrNoValidAddresses = errors.New("no valid addresses")
@@ -37,7 +36,7 @@ func (msg *Message) Target() key.Key256 {
 	return PeerID{ID: p}.Key()
 }
 
-func (msg *Message) EmptyResponse() message.MinKadResponseMessage[key.Key256, multiaddr.Multiaddr] {
+func (msg *Message) EmptyResponse() kad.MinKadResponseMessage[key.Key256, multiaddr.Multiaddr] {
 	return &Message{}
 }
 

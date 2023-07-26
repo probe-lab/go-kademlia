@@ -23,7 +23,6 @@ import (
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
-	"github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/util"
 )
 
@@ -152,8 +151,8 @@ func (e *Libp2pEndpoint) MaybeAddToPeerstore(ctx context.Context,
 }
 
 func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
-	protoID address.ProtocolID, n kad.NodeID[key.Key256], req message.MinKadMessage,
-	resp message.MinKadMessage, timeout time.Duration,
+	protoID address.ProtocolID, n kad.NodeID[key.Key256], req kad.MinKadMessage,
+	resp kad.MinKadMessage, timeout time.Duration,
 	responseHandlerFn endpoint.ResponseHandlerFn[key.Key256, multiaddr.Multiaddr],
 ) error {
 	_, span := util.StartSpan(ctx,
@@ -162,13 +161,13 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 		))
 	defer span.End()
 
-	protoResp, ok := resp.(message.ProtoKadResponseMessage[key.Key256, multiaddr.Multiaddr])
+	protoResp, ok := resp.(kad.ProtoKadResponseMessage[key.Key256, multiaddr.Multiaddr])
 	if !ok {
 		span.RecordError(ErrRequireProtoKadResponse)
 		return ErrRequireProtoKadResponse
 	}
 
-	protoReq, ok := req.(message.ProtoKadMessage)
+	protoReq, ok := req.(kad.ProtoKadMessage)
 	if !ok {
 		span.RecordError(ErrRequireProtoKadMessage)
 		return ErrRequireProtoKadMessage
@@ -292,9 +291,9 @@ func (e *Libp2pEndpoint) NetworkAddress(n kad.NodeID[key.Key256]) (kad.NodeInfo[
 }
 
 func (e *Libp2pEndpoint) AddRequestHandler(protoID address.ProtocolID,
-	req message.MinKadMessage, reqHandler endpoint.RequestHandlerFn[key.Key256],
+	req kad.MinKadMessage, reqHandler endpoint.RequestHandlerFn[key.Key256],
 ) error {
-	protoReq, ok := req.(message.ProtoKadMessage)
+	protoReq, ok := req.(kad.ProtoKadMessage)
 	if !ok {
 		return ErrRequireProtoKadMessage
 	}
@@ -336,7 +335,7 @@ func (e *Libp2pEndpoint) AddRequestHandler(protoID address.ProtocolID,
 					return
 				}
 
-				protoResp, ok := resp.(message.ProtoKadMessage)
+				protoResp, ok := resp.(kad.ProtoKadMessage)
 				if !ok {
 					err = errors.New("Libp2pEndpoint requires ProtoKadMessage")
 					span.RecordError(err)

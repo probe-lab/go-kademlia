@@ -7,10 +7,11 @@
 package libp2p
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -454,15 +455,18 @@ func file_message_proto_rawDescGZIP() []byte {
 	return file_message_proto_rawDescData
 }
 
-var file_message_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_message_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
-var file_message_proto_goTypes = []interface{}{
-	(Message_MessageType)(0),    // 0: dht.pb.Message.MessageType
-	(Message_ConnectionType)(0), // 1: dht.pb.Message.ConnectionType
-	(*Record)(nil),              // 2: dht.pb.Record
-	(*Message)(nil),             // 3: dht.pb.Message
-	(*Message_Peer)(nil),        // 4: dht.pb.Message.Peer
-}
+var (
+	file_message_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+	file_message_proto_msgTypes  = make([]protoimpl.MessageInfo, 3)
+	file_message_proto_goTypes   = []interface{}{
+		(Message_MessageType)(0),    // 0: dht.pb.Message.MessageType
+		(Message_ConnectionType)(0), // 1: dht.pb.Message.ConnectionType
+		(*Record)(nil),              // 2: dht.pb.Record
+		(*Message)(nil),             // 3: dht.pb.Message
+		(*Message_Peer)(nil),        // 4: dht.pb.Message.Peer
+	}
+)
+
 var file_message_proto_depIdxs = []int32{
 	0, // 0: dht.pb.Message.type:type_name -> dht.pb.Message.MessageType
 	2, // 1: dht.pb.Message.record:type_name -> dht.pb.Record

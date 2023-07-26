@@ -4,20 +4,17 @@ import (
 	"context"
 	"time"
 
-	"github.com/multiformats/go-multiaddr"
-
-	"github.com/plprobelab/go-kademlia/kad"
-
-	"github.com/plprobelab/go-kademlia/libp2p"
-
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/network/endpoint"
-	"github.com/plprobelab/go-kademlia/network/message"
-	"github.com/plprobelab/go-kademlia/sim"
-	"github.com/plprobelab/go-kademlia/util"
+	"github.com/multiformats/go-multiaddr"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/libp2p"
+	"github.com/plprobelab/go-kademlia/network/endpoint"
+	"github.com/plprobelab/go-kademlia/sim"
+	"github.com/plprobelab/go-kademlia/util"
 )
 
 type BasicServer[A kad.Address[A]] struct {
@@ -47,10 +44,10 @@ func NewBasicServer[A kad.Address[A]](rt kad.RoutingTable[key.Key256], endpoint 
 }
 
 func (s *BasicServer[A]) HandleRequest(ctx context.Context, rpeer kad.NodeID[key.Key256],
-	msg message.MinKadMessage,
-) (message.MinKadMessage, error) {
+	msg kad.MinKadMessage,
+) (kad.MinKadMessage, error) {
 	switch msg := msg.(type) {
-	case *sim.Message[key.Key256, A]:
+	case *sim.SimMessage[key.Key256, A]:
 		return s.HandleFindNodeRequest(ctx, rpeer, msg)
 	case *libp2p.Message:
 		switch msg.GetType() {
@@ -65,12 +62,12 @@ func (s *BasicServer[A]) HandleRequest(ctx context.Context, rpeer kad.NodeID[key
 }
 
 func (s *BasicServer[A]) HandleFindNodeRequest(ctx context.Context,
-	rpeer kad.NodeID[key.Key256], msg message.MinKadMessage,
-) (message.MinKadMessage, error) {
+	rpeer kad.NodeID[key.Key256], msg kad.MinKadMessage,
+) (kad.MinKadMessage, error) {
 	var target key.Key256
 
 	switch msg := msg.(type) {
-	case *sim.Message[key.Key256, A]:
+	case *sim.SimMessage[key.Key256, A]:
 		target = msg.Target()
 	case *libp2p.Message:
 		p := peer.ID("")
@@ -96,9 +93,9 @@ func (s *BasicServer[A]) HandleFindNodeRequest(ctx context.Context,
 		attribute.Int("count", len(peers)),
 	))
 
-	var resp message.MinKadMessage
+	var resp kad.MinKadMessage
 	switch msg.(type) {
-	case *sim.Message[key.Key256, A]:
+	case *sim.SimMessage[key.Key256, A]:
 		peerAddrs := make([]kad.NodeInfo[key.Key256, A], len(peers))
 		var index int
 		for _, p := range peers {

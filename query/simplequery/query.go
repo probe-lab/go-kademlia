@@ -12,7 +12,6 @@ import (
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
-	message "github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/util"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -25,7 +24,7 @@ import (
 // type as the one returned by the routing table's NearestNodes method. so
 // kad.NodeID s may need to be converted in this function.
 type HandleResultFn[K kad.Key[K], A kad.Address[A]] func(context.Context, kad.NodeID[K],
-	message.MinKadResponseMessage[K, A]) (bool, []kad.NodeID[K])
+	kad.MinKadResponseMessage[K, A]) (bool, []kad.NodeID[K])
 
 type NotifyFailureFn func(context.Context)
 
@@ -34,7 +33,7 @@ type SimpleQuery[K kad.Key[K], A kad.Address[A]] struct {
 	self         kad.NodeID[K]
 	done         bool
 	protoID      address.ProtocolID
-	req          message.MinKadRequestMessage[K, A]
+	req          kad.MinKadRequestMessage[K, A]
 	concurrency  int
 	peerstoreTTL time.Duration
 	timeout      time.Duration
@@ -44,7 +43,7 @@ type SimpleQuery[K kad.Key[K], A kad.Address[A]] struct {
 	sched       scheduler.Scheduler
 
 	inflightRequests int // requests that are either in flight or scheduled
-	peerlist         *peerList[K, A]
+	peerlist         *PeerList[K, A]
 
 	// response handling
 	handleResultFn HandleResultFn[K, A]
@@ -59,7 +58,7 @@ type SimpleQuery[K kad.Key[K], A kad.Address[A]] struct {
 // reader, and the parameters to these events are determined by the query's
 // parameters. The query keeps track of the closest known peers to the target
 // key, and the peers that have been queried so far.
-func NewSimpleQuery[K kad.Key[K], A kad.Address[A]](ctx context.Context, self kad.NodeID[K], req message.MinKadRequestMessage[K, A],
+func NewSimpleQuery[K kad.Key[K], A kad.Address[A]](ctx context.Context, self kad.NodeID[K], req kad.MinKadRequestMessage[K, A],
 	opts ...Option[K, A],
 ) (*SimpleQuery[K, A], error) {
 	ctx, span := util.StartSpan(ctx, "SimpleQuery.NewSimpleQuery",
@@ -182,7 +181,7 @@ func (q *SimpleQuery[K, A]) newRequest(ctx context.Context) {
 
 	// this function will be queued when a response is received, an error
 	// occures or the request times out (with appropriate parameters)
-	handleResp := func(ctx context.Context, resp message.MinKadResponseMessage[K, A],
+	handleResp := func(ctx context.Context, resp kad.MinKadResponseMessage[K, A],
 		err error,
 	) {
 		if err != nil {
@@ -203,7 +202,7 @@ func (q *SimpleQuery[K, A]) newRequest(ctx context.Context) {
 
 // handleResponse handles a response to a past query request
 func (q *SimpleQuery[K, A]) handleResponse(ctx context.Context, id kad.NodeID[K],
-	resp message.MinKadResponseMessage[K, A],
+	resp kad.MinKadResponseMessage[K, A],
 ) {
 	ctx, span := util.StartSpan(ctx, "SimpleQuery.handleResponse",
 		trace.WithAttributes(attribute.String("Target", key.HexString(q.req.Target())),

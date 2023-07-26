@@ -8,10 +8,10 @@ import (
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 )
 
-type nodeStatus uint8
+type NodeStatus uint8
 
 const (
-	queued nodeStatus = iota
+	queued NodeStatus = iota
 	waiting
 	queried
 	unreachable
@@ -19,7 +19,7 @@ const (
 
 type nodeInfo[K kad.Key[K], A kad.Address[A]] struct {
 	distance          K
-	status            nodeStatus
+	status            NodeStatus
 	id                kad.NodeID[K]
 	addrs             []A
 	tryAgainOnFailure bool
@@ -27,7 +27,7 @@ type nodeInfo[K kad.Key[K], A kad.Address[A]] struct {
 	next *nodeInfo[K, A]
 }
 
-type peerList[K kad.Key[K], A kad.Address[A]] struct {
+type PeerList[K kad.Key[K], A kad.Address[A]] struct {
 	target   K
 	endpoint endpoint.NetworkedEndpoint[K, A]
 
@@ -37,12 +37,12 @@ type peerList[K kad.Key[K], A kad.Address[A]] struct {
 	queuedCount int
 }
 
-func newPeerList[K kad.Key[K], A kad.Address[A]](target K, ep endpoint.Endpoint[K, A]) *peerList[K, A] {
+func newPeerList[K kad.Key[K], A kad.Address[A]](target K, ep endpoint.Endpoint[K, A]) *PeerList[K, A] {
 	nep, ok := ep.(endpoint.NetworkedEndpoint[K, A])
 	if !ok {
 		nep = nil
 	}
-	return &peerList[K, A]{
+	return &PeerList[K, A]{
 		target:   target,
 		endpoint: nep,
 	}
@@ -50,7 +50,7 @@ func newPeerList[K kad.Key[K], A kad.Address[A]](target K, ep endpoint.Endpoint[
 
 // normally peers should already be ordered with distance to target, but we
 // sort them just in case
-func (pl *peerList[K, A]) addToPeerlist(ids []kad.NodeID[K]) {
+func (pl *PeerList[K, A]) addToPeerlist(ids []kad.NodeID[K]) {
 	// linked list of new peers sorted by distance to target
 	newHead := sliceToPeerInfos[K, A](pl.target, ids)
 	if newHead == nil {
@@ -213,7 +213,7 @@ func addrInfoToPeerInfo[K kad.Key[K], A kad.Address[A]](target K, id kad.NodeID[
 	}
 }
 
-func (pl *peerList[K, A]) enqueueUnreachablePeer(pi *nodeInfo[K, A]) {
+func (pl *PeerList[K, A]) enqueueUnreachablePeer(pi *nodeInfo[K, A]) {
 	if pi != nil {
 		// curr is the id we are looking for
 		if pi.status != queued {
@@ -232,7 +232,7 @@ func (pl *peerList[K, A]) enqueueUnreachablePeer(pi *nodeInfo[K, A]) {
 // setPeerWaiting sets the status of a "queued" peer to "waiting". it records
 // the addresses associated with id in the peerstore at the time of the request
 // to curr.addrs.
-func (pl *peerList[K, A]) popClosestQueued() kad.NodeID[K] {
+func (pl *PeerList[K, A]) popClosestQueued() kad.NodeID[K] {
 	if pl.closestQueued == nil {
 		return nil
 	}
@@ -259,7 +259,7 @@ func (pl *peerList[K, A]) popClosestQueued() kad.NodeID[K] {
 	return pi.id
 }
 
-func (pl *peerList[K, A]) queriedPeer(id kad.NodeID[K]) {
+func (pl *PeerList[K, A]) queriedPeer(id kad.NodeID[K]) {
 	curr := pl.closest
 	for curr != nil && curr.id.String() != id.String() {
 		curr = curr.next
@@ -273,7 +273,7 @@ func (pl *peerList[K, A]) queriedPeer(id kad.NodeID[K]) {
 }
 
 // unreachablePeer sets the status of a "waiting" peer to "unreachable".
-func (pl *peerList[K, A]) unreachablePeer(id kad.NodeID[K]) {
+func (pl *PeerList[K, A]) unreachablePeer(id kad.NodeID[K]) {
 	curr := pl.closest
 	for curr != nil && curr.id.String() != id.String() {
 		curr = curr.next

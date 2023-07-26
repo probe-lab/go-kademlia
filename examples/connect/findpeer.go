@@ -15,7 +15,6 @@ import (
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/libp2p"
 	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/query/simplequery"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
 	"github.com/plprobelab/go-kademlia/util"
@@ -84,7 +83,7 @@ func FindPeer(ctx context.Context) {
 	// endCond is used to terminate the simulation once the query is done
 	endCond := false
 	handleResultsFn := func(ctx context.Context, id kad.NodeID[key.Key256],
-		resp message.MinKadResponseMessage[key.Key256, multiaddr.Multiaddr],
+		resp kad.MinKadResponseMessage[key.Key256, multiaddr.Multiaddr],
 	) (bool, []kad.NodeID[key.Key256]) {
 		// parse response to ipfs dht message
 		msg, ok := resp.(*libp2p.Message)

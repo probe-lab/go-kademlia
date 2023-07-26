@@ -11,12 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
-	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/network/message"
-	"github.com/plprobelab/go-kademlia/routing/simplert"
-
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
 	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/routing/simplert"
 )
 
 // remotePeers with bucket assignments wrt to self
@@ -66,7 +64,7 @@ func TestMessageHandling(t *testing.T) {
 	msg, err := s0.HandleRequest(ctx, requester.ID(), req0)
 	require.NoError(t, err)
 
-	resp, ok := msg.(message.MinKadResponseMessage[key.Key8, net.IP])
+	resp, ok := msg.(kad.MinKadResponseMessage[key.Key8, net.IP])
 	require.True(t, ok)
 	require.Len(t, resp.CloserNodes(), numberOfCloserPeersToSend)
 	// closer peers should be ordered by distance to 0000 0000
@@ -82,7 +80,7 @@ func TestMessageHandling(t *testing.T) {
 	req1 := NewRequest[key.Key8, net.IP](key.Key8(0b11111111))
 	msg, err = s0.HandleRequest(ctx, requester.ID(), req1)
 	require.NoError(t, err)
-	resp, ok = msg.(message.MinKadResponseMessage[key.Key8, net.IP])
+	resp, ok = msg.(kad.MinKadResponseMessage[key.Key8, net.IP])
 	require.True(t, ok)
 	require.Len(t, resp.CloserNodes(), numberOfCloserPeersToSend)
 	// closer peers should be ordered by distance to 1111 1111
@@ -104,7 +102,7 @@ func TestMessageHandling(t *testing.T) {
 	req2 := NewRequest[key.Key8, net.IP](key.Key8(0b01100000))
 	msg, err = s1.HandleRequest(ctx, requester.ID(), req2)
 	require.NoError(t, err)
-	resp, ok = msg.(message.MinKadResponseMessage[key.Key8, net.IP])
+	resp, ok = msg.(kad.MinKadResponseMessage[key.Key8, net.IP])
 	require.True(t, ok)
 	require.Len(t, resp.CloserNodes(), numberOfCloserPeersToSend)
 	// closer peers should be ordered by distance to 0110 0000
@@ -153,7 +151,7 @@ func TestInvalidSimRequests(t *testing.T) {
 	require.Error(t, err)
 
 	// empty request
-	req1 := &Message[key.Key8, net.IP]{}
+	req1 := &SimMessage[key.Key8, net.IP]{}
 	s.HandleFindNodeRequest(ctx, requester, req1)
 
 	// request with invalid key (not matching the expected length)
@@ -189,7 +187,7 @@ func TestRequestNoNetworkAddress(t *testing.T) {
 	req := NewRequest[key.Key8, net.IP](requester.Key())
 	msg, err := s.HandleFindNodeRequest(ctx, requester, req)
 	require.NoError(t, err)
-	resp, ok := msg.(message.MinKadResponseMessage[key.Key8, net.IP])
+	resp, ok := msg.(kad.MinKadResponseMessage[key.Key8, net.IP])
 	require.True(t, ok)
 	fmt.Println(resp.CloserNodes())
 	require.Len(t, resp.CloserNodes(), 0)

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/network/message"
 )
 
 type FakeNode[K kad.Key[K], A kad.Address[A]] struct {
@@ -41,7 +40,7 @@ func (f *FakeNode[K, A]) Closest(kk K, n int) []kad.NodeID[K] {
 	return f.rt.NearestNodes(kk, n)
 }
 
-func (f *FakeNode[K, A]) HandleMessage(ctx context.Context, msg message.MinKadRequestMessage[K, A]) (message.MinKadResponseMessage[K, A], error) {
+func (f *FakeNode[K, A]) HandleMessage(ctx context.Context, msg kad.MinKadRequestMessage[K, A]) (kad.MinKadResponseMessage[K, A], error) {
 	switch tmsg := msg.(type) {
 	case *FindNodeRequest[K, A]:
 		closer := f.Closest(tmsg.NodeID.Key(), 2)
@@ -78,7 +77,7 @@ func NewMessageRouter[K kad.Key[K], A kad.Address[A]](nodes []*FakeNode[K, A]) *
 
 var ErrNoKnownAddress = errors.New("no known address")
 
-func (r *MessageRouter[K, A]) SendMessage(ctx context.Context, addr kad.NodeInfo[K, A], msg message.MinKadRequestMessage[K, A]) (message.MinKadResponseMessage[K, A], error) {
+func (r *MessageRouter[K, A]) SendMessage(ctx context.Context, addr kad.NodeInfo[K, A], msg kad.MinKadRequestMessage[K, A]) (kad.MinKadResponseMessage[K, A], error) {
 	n, ok := r.nodes[addr.ID()]
 	if !ok {
 		return nil, ErrNoKnownAddress
@@ -98,7 +97,7 @@ func (r FindNodeRequest[K, A]) Target() K {
 	return r.NodeID.Key()
 }
 
-func (FindNodeRequest[K, A]) EmptyResponse() message.MinKadResponseMessage[K, A] {
+func (FindNodeRequest[K, A]) EmptyResponse() kad.MinKadResponseMessage[K, A] {
 	return &FindNodeResponse[K, A]{}
 }
 

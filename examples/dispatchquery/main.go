@@ -5,6 +5,8 @@ import (
 	"log"
 	"time"
 
+	"github.com/plprobelab/go-kademlia/server/basicserver"
+
 	"github.com/plprobelab/go-kademlia/kad"
 
 	"github.com/plprobelab/go-kademlia/libp2p"
@@ -23,10 +25,8 @@ import (
 	"github.com/plprobelab/go-kademlia/events/simulator"
 	"github.com/plprobelab/go-kademlia/events/simulator/litesimulator"
 	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/network/message"
 	sq "github.com/plprobelab/go-kademlia/query/simplequery"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
-	"github.com/plprobelab/go-kademlia/server/basicserver"
 	"github.com/plprobelab/go-kademlia/sim"
 	"github.com/plprobelab/go-kademlia/util"
 
@@ -127,7 +127,7 @@ func queryTest(ctx context.Context) {
 
 	// dummy parameters
 	handleResp := func(ctx context.Context, _ kad.NodeID[key.Key256],
-		resp message.MinKadResponseMessage[key.Key256, multiaddr.Multiaddr],
+		resp kad.MinKadResponseMessage[key.Key256, multiaddr.Multiaddr],
 	) (bool, []kad.NodeID[key.Key256]) {
 		peerids := make([]kad.NodeID[key.Key256], len(resp.CloserNodes()))
 		for i, p := range resp.CloserNodes() {

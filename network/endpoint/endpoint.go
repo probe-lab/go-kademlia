@@ -4,19 +4,36 @@ import (
 	"context"
 	"time"
 
-	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/network/message"
+)
+
+// Connectedness signals the capacity for a connection with a given node.
+// It is used to signal to services and other peers whether a node is reachable.
+type Connectedness int
+
+const (
+	// NotConnected means no connection to peer, and no extra information (default)
+	NotConnected Connectedness = iota
+
+	// Connected means has an open, live connection to peer
+	Connected
+
+	// CanConnect means recently connected to peer, terminated gracefully
+	CanConnect
+
+	// CannotConnect means recently attempted connecting but failed to connect.
+	// (should signal "made effort, failed")
+	CannotConnect
 )
 
 // RequestHandlerFn defines a function that handles a request from a remote peer
 type RequestHandlerFn[K kad.Key[K]] func(context.Context, kad.NodeID[K],
-	message.MinKadMessage) (message.MinKadMessage, error)
+	kad.MinKadMessage) (kad.MinKadMessage, error)
 
 // ResponseHandlerFn defines a function that deals with the response to a
 // request previously sent to a remote peer.
-type ResponseHandlerFn[K kad.Key[K], A kad.Address[A]] func(context.Context, message.MinKadResponseMessage[K, A], error)
+type ResponseHandlerFn[K kad.Key[K], A kad.Address[A]] func(context.Context, kad.MinKadResponseMessage[K, A], error)
 
 // Endpoint defines how Kademlia nodes interacts with each other.
 type Endpoint[K kad.Key[K], A kad.Address[A]] interface {
@@ -26,7 +43,7 @@ type Endpoint[K kad.Key[K], A kad.Address[A]] interface {
 	// SendRequestHandleResponse sends a request to the given peer and handles
 	// the response with the given handler.
 	SendRequestHandleResponse(context.Context, address.ProtocolID, kad.NodeID[K],
-		message.MinKadMessage, message.MinKadMessage, time.Duration,
+		kad.MinKadMessage, kad.MinKadMessage, time.Duration,
 		ResponseHandlerFn[K, A]) error
 
 	// KadKey returns the KadKey of the local node.
@@ -40,7 +57,7 @@ type Endpoint[K kad.Key[K], A kad.Address[A]] interface {
 type ServerEndpoint[K kad.Key[K], A kad.Address[A]] interface {
 	Endpoint[K, A]
 	// AddRequestHandler registers a handler for a given protocol ID.
-	AddRequestHandler(address.ProtocolID, message.MinKadMessage, RequestHandlerFn[K]) error
+	AddRequestHandler(address.ProtocolID, kad.MinKadMessage, RequestHandlerFn[K]) error
 	// RemoveRequestHandler removes a handler for a given protocol ID.
 	RemoveRequestHandler(address.ProtocolID)
 }
@@ -50,7 +67,7 @@ type ServerEndpoint[K kad.Key[K], A kad.Address[A]] interface {
 type NetworkedEndpoint[K kad.Key[K], A kad.Address[A]] interface {
 	Endpoint[K, A]
 	// Connectedness returns the connectedness of the given peer.
-	Connectedness(kad.NodeID[K]) (network.Connectedness, error)
+	Connectedness(kad.NodeID[K]) (Connectedness, error)
 }
 
 // StreamID is a unique identifier for a stream.
@@ -61,5 +78,5 @@ type SimEndpoint[K kad.Key[K], A kad.Address[A]] interface {
 	ServerEndpoint[K, A]
 	// HandleMessage handles a message from the given peer.
 	HandleMessage(context.Context, kad.NodeID[K], address.ProtocolID,
-		StreamID, message.MinKadMessage)
+		StreamID, kad.MinKadMessage)
 }

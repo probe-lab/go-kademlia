@@ -7,18 +7,17 @@ import (
 
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/network/message"
 )
 
 type IpfsDht struct {
 	kad          *KademliaHandler[key.Key256, net.IP]
-	queryWaiters map[QueryID]chan<- message.MinKadResponseMessage[key.Key256, net.IP]
+	queryWaiters map[QueryID]chan<- kad.MinKadResponseMessage[key.Key256, net.IP]
 }
 
-func NewIpfsDht(kad *KademliaHandler[key.Key256, net.IP]) *IpfsDht {
+func NewIpfsDht(kh *KademliaHandler[key.Key256, net.IP]) *IpfsDht {
 	return &IpfsDht{
-		kad:          kad,
-		queryWaiters: make(map[QueryID]chan<- message.MinKadResponseMessage[key.Key256, net.IP]),
+		kad:          kh,
+		queryWaiters: make(map[QueryID]chan<- kad.MinKadResponseMessage[key.Key256, net.IP]),
 	}
 }
 
@@ -53,7 +52,7 @@ func (d *IpfsDht) mainloop(ctx context.Context) {
 	}
 }
 
-func (d *IpfsDht) registerQueryWaiter(queryID QueryID, ch chan<- message.MinKadResponseMessage[key.Key256, net.IP]) {
+func (d *IpfsDht) registerQueryWaiter(queryID QueryID, ch chan<- kad.MinKadResponseMessage[key.Key256, net.IP]) {
 	// TODO: locking
 	d.queryWaiters[queryID] = ch
 }
@@ -71,7 +70,7 @@ func (d *IpfsDht) FindNode(ctx context.Context, node kad.NodeID[key.Key256]) (ka
 	}
 	trace("Query id is %d", queryID)
 
-	ch := make(chan message.MinKadResponseMessage[key.Key256, net.IP])
+	ch := make(chan kad.MinKadResponseMessage[key.Key256, net.IP])
 	d.registerQueryWaiter(queryID, ch)
 
 	// wait for query to finish

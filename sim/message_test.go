@@ -9,19 +9,18 @@ import (
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/network/message"
 )
 
 var (
-	_ message.MinKadRequestMessage[key.Key8, net.IP]  = (*Message[key.Key8, net.IP])(nil)
-	_ message.MinKadResponseMessage[key.Key8, net.IP] = (*Message[key.Key8, net.IP])(nil)
+	_ kad.MinKadRequestMessage[key.Key8, net.IP]  = (*SimMessage[key.Key8, net.IP])(nil)
+	_ kad.MinKadResponseMessage[key.Key8, net.IP] = (*SimMessage[key.Key8, net.IP])(nil)
 )
 
 func TestRequest(t *testing.T) {
 	target := kadtest.StringID("target")
 	msg := NewRequest[key.Key256, net.IP](target.Key())
 
-	require.Equal(t, &Message[key.Key256, net.IP]{}, msg.EmptyResponse())
+	require.Equal(t, &SimMessage[key.Key256, net.IP]{}, msg.EmptyResponse())
 
 	b := key.Equal(msg.Target(), target.Key())
 	require.True(t, b)

@@ -9,7 +9,6 @@ import (
 
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/network/message"
 )
 
 // var _ Task[QueryPoolState] = (*QueryPool)(nil)
@@ -93,7 +92,7 @@ func (p *QueryPool[K, A]) Advance(ctx context.Context) (rstate QueryPoolState) {
 }
 
 // AddQuery adds a query to the pool, returning the new query id
-func (qp *QueryPool[K, A]) AddQuery(ctx context.Context, target K, msg message.MinKadRequestMessage[K, A]) (QueryID, error) {
+func (qp *QueryPool[K, A]) AddQuery(ctx context.Context, target K, msg kad.MinKadRequestMessage[K, A]) (QueryID, error) {
 	trace("QueryPool.AddQuery")
 	knownClosestPeers := qp.self.Closest(target, qp.replication)
 	iter := NewClosestPeersIter(target, qp.mr, knownClosestPeers, qp.replication, qp.concurrency, qp.timeout)
@@ -118,7 +117,7 @@ func (qp *QueryPool[K, A]) StopQuery(ctx context.Context, queryID QueryID) error
 	return nil
 }
 
-func (qp *QueryPool[K, A]) onMessageSuccess(ctx context.Context, queryID QueryID, node kad.NodeID[K], resp message.MinKadResponseMessage[K, A]) {
+func (qp *QueryPool[K, A]) onMessageSuccess(ctx context.Context, queryID QueryID, node kad.NodeID[K], resp kad.MinKadResponseMessage[K, A]) {
 	// TODO: lock queries
 	query, ok := qp.queries[queryID]
 	if !ok {
@@ -142,7 +141,7 @@ func (q *QueryPool[K, A]) Cancel(context.Context) {
 type Query[K kad.Key[K], A kad.Address[A]] struct {
 	id    QueryID
 	iter  PeerIter[K, A]
-	msg   message.MinKadRequestMessage[K, A]
+	msg   kad.MinKadRequestMessage[K, A]
 	stats QueryStats
 }
 
@@ -166,7 +165,7 @@ func (q *Query[K, A]) Cancel(ctx context.Context) {
 	q.iter.Cancel(ctx)
 }
 
-func (q *Query[K, A]) onMessageSuccess(ctx context.Context, node kad.NodeID[K], resp message.MinKadResponseMessage[K, A]) {
+func (q *Query[K, A]) onMessageSuccess(ctx context.Context, node kad.NodeID[K], resp kad.MinKadResponseMessage[K, A]) {
 	q.iter.OnMessageSuccess(ctx, node, resp)
 }
 
@@ -198,7 +197,7 @@ type QueryPoolWaiting struct {
 type QueryPoolWaitingMessage[K kad.Key[K], A kad.Address[A]] struct {
 	QueryID QueryID
 	NodeID  kad.NodeID[K]
-	Message message.MinKadRequestMessage[K, A]
+	Message kad.MinKadRequestMessage[K, A]
 	Stats   QueryStats
 }
 
@@ -240,7 +239,7 @@ type PeerIterStateFinished struct{}
 // PeerIterStateWaitingMessage indicates that the PeerIter is waiting to send a message to a peer.
 type PeerIterStateWaitingMessage[K kad.Key[K], A kad.Address[A]] struct {
 	NodeID  kad.NodeID[K]
-	Message message.MinKadRequestMessage[K, A]
+	Message kad.MinKadRequestMessage[K, A]
 }
 
 // PeerIterStateWaiting indicates that the PeerIter is waiting for results from one or more peers.
@@ -262,7 +261,7 @@ func (*PeerIterStateWaitingWithCapacity) peerIterState()  {}
 // A PeerIter iterates peers according to some strategy.
 type PeerIter[K kad.Key[K], A kad.Address[A]] interface {
 	Task[PeerIterState]
-	OnMessageSuccess(context.Context, kad.NodeID[K], message.MinKadResponseMessage[K, A])
+	OnMessageSuccess(context.Context, kad.NodeID[K], kad.MinKadResponseMessage[K, A])
 }
 
 // var _ PeerIter = (*ClosestPeersIter)(nil)
@@ -419,7 +418,7 @@ func (pi *ClosestPeersIter[K, A]) setState(st ClosestPeersIterState) {
 }
 
 // Callback for delivering the result of a successful request to a node.
-func (pi *ClosestPeersIter[K, A]) OnMessageSuccess(ctx context.Context, node kad.NodeID[K], msg message.MinKadResponseMessage[K, A]) {
+func (pi *ClosestPeersIter[K, A]) OnMessageSuccess(ctx context.Context, node kad.NodeID[K], msg kad.MinKadResponseMessage[K, A]) {
 	pi.mu.Lock()
 	st := pi.state
 	pi.mu.Unlock()

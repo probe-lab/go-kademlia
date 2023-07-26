@@ -6,14 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/plprobelab/go-kademlia/kad"
-
-	"github.com/plprobelab/go-kademlia/internal/kadtest"
-	"github.com/plprobelab/go-kademlia/libp2p"
-
 	"github.com/benbjohnson/clock"
-	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/plprobelab/go-kademlia/internal/kadtest"
+	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/stretchr/testify/require"
 
 	"github.com/plprobelab/go-kademlia/events/scheduler"
@@ -21,7 +16,6 @@ import (
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
-	"github.com/plprobelab/go-kademlia/network/message"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
 )
 
@@ -56,23 +50,21 @@ func TestEndpoint(t *testing.T) {
 
 	connectedness, err := fakeEndpoint.Connectedness(node0)
 	require.NoError(t, err)
-	require.Equal(t, network.NotConnected, connectedness)
+	require.Equal(t, endpoint.NotConnected, connectedness)
 
 	na, err := fakeEndpoint.NetworkAddress(node0)
-	require.NoError(t, err)
-	require.Equal(t, na, node0)
+	require.Error(t, err)
+	require.Nil(t, na)
 
-	parsed, err := peer.Decode("1EooooPEER")
-	require.NoError(t, err)
-	pid := libp2p.NewPeerID(parsed)
+	pid := kadtest.NewStringID("some-id")
 	_, err = fakeEndpoint.NetworkAddress(pid)
 	require.Equal(t, endpoint.ErrUnknownPeer, err)
 
 	req := NewRequest[key.Key256, net.IP](selfID.Key())
-	resp := &Message[key.Key256, net.IP]{}
+	resp := &SimMessage[key.Key256, net.IP]{}
 
 	var runCheck bool
-	respHandler := func(ctx context.Context, msg message.MinKadResponseMessage[key.Key256, net.IP], err error) {
+	respHandler := func(ctx context.Context, msg kad.MinKadResponseMessage[key.Key256, net.IP], err error) {
 		require.Equal(t, endpoint.ErrUnknownPeer, err)
 		runCheck = true
 	}
@@ -86,7 +78,7 @@ func TestEndpoint(t *testing.T) {
 
 	connectedness, err = fakeEndpoint.Connectedness(node0)
 	require.NoError(t, err)
-	require.Equal(t, network.CanConnect, connectedness)
+	require.Equal(t, endpoint.CanConnect, connectedness)
 
 	na, err = fakeEndpoint.NetworkAddress(node0)
 	require.NoError(t, err)
@@ -110,7 +102,7 @@ func TestEndpoint(t *testing.T) {
 	fakeEndpoint0.RemoveRequestHandler("/test/0.0.1")
 
 	runCheck = false
-	respHandler = func(ctx context.Context, msg message.MinKadResponseMessage[key.Key256, net.IP], err error) {
+	respHandler = func(ctx context.Context, msg kad.MinKadResponseMessage[key.Key256, net.IP], err error) {
 		require.NoError(t, err)
 		runCheck = true
 	}
@@ -132,11 +124,11 @@ func TestEndpoint(t *testing.T) {
 	// test response to a sent request that is not a valid MinKadResponseMessage
 	var sid endpoint.StreamID = 1000
 	fakeEndpoint.streamFollowup[sid] = func(ctx context.Context,
-		msg message.MinKadResponseMessage[key.Key256, net.IP], err error,
+		msg kad.MinKadResponseMessage[key.Key256, net.IP], err error,
 	) {
 		require.Equal(t, ErrInvalidResponseType, err)
 	}
-	var msg message.MinKadMessage
+	var msg kad.MinKadMessage
 	fakeEndpoint.HandleMessage(ctx, node0, protoID, sid, msg)
 
 	require.True(t, sched.RunOne(ctx))
@@ -144,8 +136,8 @@ func TestEndpoint(t *testing.T) {
 
 	// test request whose handler returns an error
 	errHandler := func(ctx context.Context, id kad.NodeID[key.Key256],
-		req message.MinKadMessage,
-	) (message.MinKadMessage, error) {
+		req kad.MinKadMessage,
+	) (kad.MinKadMessage, error) {
 		return nil, endpoint.ErrUnknownPeer
 	}
 	errProtoID := address.ProtocolID("/err/0.0.1")
@@ -156,7 +148,7 @@ func TestEndpoint(t *testing.T) {
 
 	var followupRan bool
 	// test that HandleMessage adds the closer peers to the peerstore
-	followup := func(ctx context.Context, resp message.MinKadResponseMessage[key.Key256, net.IP],
+	followup := func(ctx context.Context, resp kad.MinKadResponseMessage[key.Key256, net.IP],
 		err error,
 	) {
 		require.NoError(t, err)
@@ -208,8 +200,8 @@ func TestRequestTimeout(t *testing.T) {
 	var timeoutExecuted bool
 	// fakeEndpoints[1]'s request handler will not respond
 	dropRequestHandler := func(ctx context.Context, id kad.NodeID[key.Key256],
-		req message.MinKadMessage,
-	) (message.MinKadMessage, error) {
+		req kad.MinKadMessage,
+	) (kad.MinKadMessage, error) {
 		return nil, endpoint.ErrUnknownPeer
 	}
 	fakeEndpoints[1].AddRequestHandler(protoID, nil, dropRequestHandler)
@@ -217,7 +209,7 @@ func TestRequestTimeout(t *testing.T) {
 	// will timeout (because fakeEndpoints[1] will not respond)
 	fakeEndpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1].ID(), nil, nil,
 		time.Second, func(ctx context.Context,
-			msg message.MinKadResponseMessage[key.Key256, net.IP], err error,
+			msg kad.MinKadResponseMessage[key.Key256, net.IP], err error,
 		) {
 			timeoutExecuted = true
 		})
@@ -253,8 +245,8 @@ func TestRequestTimeout(t *testing.T) {
 	// response coming back before timeout
 	var handlerHasResponded bool
 	dumbResponseHandler := func(ctx context.Context, id kad.NodeID[key.Key256],
-		req message.MinKadMessage,
-	) (message.MinKadMessage, error) {
+		req kad.MinKadMessage,
+	) (kad.MinKadMessage, error) {
 		clk.Sleep(100 * time.Millisecond)
 		return req, nil
 	}
@@ -264,7 +256,7 @@ func TestRequestTimeout(t *testing.T) {
 	fakeEndpoints[1].AddRequestHandler(protoID, nil, dumbResponseHandler)
 	fakeEndpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1].ID(), msg, nil,
 		time.Second, func(ctx context.Context,
-			msg message.MinKadResponseMessage[key.Key256, net.IP], err error,
+			msg kad.MinKadResponseMessage[key.Key256, net.IP], err error,
 		) {
 			require.NoError(t, err)
 		})

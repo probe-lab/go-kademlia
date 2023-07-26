@@ -8,7 +8,6 @@ import (
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
-	"github.com/plprobelab/go-kademlia/network/message"
 )
 
 type Router[K kad.Key[K], A kad.Address[A]] struct {
@@ -37,7 +36,7 @@ func (r *Router[K, A]) RemovePeer(id kad.NodeID[K]) {
 
 func (r *Router[K, A]) SendMessage(ctx context.Context, from, to kad.NodeID[K],
 	protoID address.ProtocolID, sid endpoint.StreamID,
-	msg message.MinKadMessage,
+	msg kad.MinKadMessage,
 ) (endpoint.StreamID, error) {
 	if _, ok := r.peers[to.String()]; !ok {
 		return 0, endpoint.ErrUnknownPeer
