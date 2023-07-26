@@ -53,9 +53,8 @@ func (qp *QueryPool[K, A]) Advance(ctx context.Context, ev QueryPoolEvent) Query
 	defer span.End()
 	switch tev := ev.(type) {
 	case *QueryPoolEventAdd[K, A]:
-		if err := qp.addQuery(ctx, tev.QueryID, tev.Target, tev.ProtocolID, tev.Message, tev.KnownClosestPeers); err != nil {
-			// TODO: return error as state
-		}
+		qp.addQuery(ctx, tev.QueryID, tev.Target, tev.ProtocolID, tev.Message, tev.KnownClosestPeers)
+		// TODO: return error as state
 	case *QueryPoolEventStop[K]:
 		if qry, ok := qp.queries[tev.QueryID]; ok {
 			state, terminal := qp.advanceQuery(ctx, qry, &QueryEventCancel{})

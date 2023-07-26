@@ -38,21 +38,21 @@ type Coordinator[K kad.Key[K], A kad.Address[A]] struct {
 
 const DefaultChanqueueCapacity = 1024
 
-type CoordinatorConfig struct {
+type Config struct {
 	// TODO: review if this is needed here
 	PeerstoreTTL time.Duration // duration for which a peer is kept in the peerstore
 
 	Clock clock.Clock // a clock that may replaced by a mock when testing
 }
 
-func DefaultCoordinatorConfig() *CoordinatorConfig {
-	return &CoordinatorConfig{
+func DefaultCoordinatorConfig() *Config {
+	return &Config{
 		Clock:        clock.New(), // use standard time
 		PeerstoreTTL: 10 * time.Minute,
 	}
 }
 
-func NewCoordinator[K kad.Key[K], A kad.Address[A]](ep endpoint.Endpoint[K, A], rt kad.RoutingTable[K], cfg *CoordinatorConfig) *Coordinator[K, A] {
+func NewCoordinator[K kad.Key[K], A kad.Address[A]](ep endpoint.Endpoint[K, A], rt kad.RoutingTable[K], cfg *Config) *Coordinator[K, A] {
 	if cfg == nil {
 		cfg = DefaultCoordinatorConfig()
 	}
@@ -191,8 +191,6 @@ func (k *Coordinator[K, A]) onMessageSuccess(ctx context.Context, queryID query.
 }
 
 func (k *Coordinator[K, A]) StartQuery(ctx context.Context, queryID query.QueryID, protocolID address.ProtocolID, msg kad.Request[K, A]) error {
-	ctx, span := util.StartSpan(ctx, "Coordinator.StartQuery")
-	defer span.End()
 	knownClosestPeers := k.rt.NearestNodes(msg.Target(), 20)
 
 	k.inboundEvents <- &addQueryEvent[K, A]{
@@ -207,8 +205,6 @@ func (k *Coordinator[K, A]) StartQuery(ctx context.Context, queryID query.QueryI
 }
 
 func (k *Coordinator[K, A]) StopQuery(ctx context.Context, queryID query.QueryID) error {
-	ctx, span := util.StartSpan(ctx, "Coordinator.StopQuery")
-	defer span.End()
 	k.inboundEvents <- &stopQueryEvent[K]{
 		QueryID: queryID,
 	}
