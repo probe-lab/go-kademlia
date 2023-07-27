@@ -8,6 +8,7 @@ import (
 	"github.com/benbjohnson/clock"
 
 	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/plprobelab/go-kademlia/kaderr"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/util"
 )
@@ -20,12 +21,38 @@ type QueryPool[K kad.Key[K], A kad.Address[A]] struct {
 	queries     map[QueryID]*Query[K, A]
 }
 
+// QueryPoolConfig specifies optional configuration for a QueryPool
 type QueryPoolConfig struct {
-	Concurrency int         // the 'α' parameter defined by Kademlia
+	Concurrency int         // the 'α' parameter defined by Kademlia, the maximum number of requests that may be in flight for each query
 	Replication int         // the 'k' parameter defined by Kademlia
 	Clock       clock.Clock // a clock that may replaced by a mock when testing
 }
 
+// Validate checks the configuration options and returns an error if any have invalid values.
+func (cfg *QueryPoolConfig) Validate() error {
+	if cfg.Clock == nil {
+		return &kaderr.ConfigurationError{
+			Component: "QueryPoolConfig",
+			Err:       fmt.Errorf("Clock must not be nil"),
+		}
+	}
+	if cfg.Concurrency < 1 {
+		return &kaderr.ConfigurationError{
+			Component: "QueryPoolConfig",
+			Err:       fmt.Errorf("Concurrency must be greater than zero"),
+		}
+	}
+	if cfg.Replication < 1 {
+		return &kaderr.ConfigurationError{
+			Component: "QueryPoolConfig",
+			Err:       fmt.Errorf("Replication must be greater than zero"),
+		}
+	}
+	return nil
+}
+
+// DefaultQueryPoolConfig returns the default configuration options for a QueryPool.
+// Options may be overridden before passing to NewQueryPool
 func DefaultQueryPoolConfig() *QueryPoolConfig {
 	return &QueryPoolConfig{
 		Clock:       clock.New(), // use standard time
@@ -34,17 +61,20 @@ func DefaultQueryPoolConfig() *QueryPoolConfig {
 	}
 }
 
-func NewQueryPool[K kad.Key[K], A kad.Address[A]](cfg *QueryPoolConfig) *QueryPool[K, A] {
+func NewQueryPool[K kad.Key[K], A kad.Address[A]](cfg *QueryPoolConfig) (*QueryPool[K, A], error) {
 	if cfg == nil {
 		cfg = DefaultQueryPoolConfig()
+	} else if err := cfg.Validate(); err != nil {
+		return nil, err
 	}
+
 	return &QueryPool[K, A]{
 		timeout:     time.Minute,
 		clk:         cfg.Clock,
 		concurrency: cfg.Concurrency,
 		replication: cfg.Replication,
 		queries:     make(map[QueryID]*Query[K, A]),
-	}
+	}, nil
 }
 
 // Advance advances the state of the query pool by attempting to advance one of its queries
@@ -57,14 +87,14 @@ func (qp *QueryPool[K, A]) Advance(ctx context.Context, ev QueryPoolEvent) Query
 		// TODO: return error as state
 	case *QueryPoolEventStop[K]:
 		if qry, ok := qp.queries[tev.QueryID]; ok {
-			state, terminal := qp.advanceQuery(ctx, qry, &QueryEventCancel{})
+			state, terminal := qp.advanceQuery(ctx, qry, &EventQueryCancel{})
 			if terminal {
 				return state
 			}
 		}
 	case *QueryPoolEventMessageResponse[K, A]:
 		if qry, ok := qp.queries[tev.QueryID]; ok {
-			state, terminal := qp.advanceQuery(ctx, qry, &QueryEventMessageResponse[K, A]{
+			state, terminal := qp.advanceQuery(ctx, qry, &EventQueryMessageResponse[K, A]{
 				NodeID:   tev.NodeID,
 				Response: tev.Response,
 			})
@@ -96,12 +126,12 @@ func (qp *QueryPool[K, A]) Advance(ctx context.Context, ev QueryPoolEvent) Query
 func (qp *QueryPool[K, A]) advanceQuery(ctx context.Context, qry *Query[K, A], qev QueryEvent) (QueryPoolState, bool) {
 	state := qry.Advance(ctx, qev)
 	switch st := state.(type) {
-	case *QueryStateWaiting:
+	case *StateQueryWaiting:
 		return &QueryPoolWaiting{
 			QueryID: st.QueryID,
 			Stats:   st.Stats,
 		}, true
-	case *QueryStateWaitingMessage[K, A]:
+	case *StateQueryWaitingMessage[K, A]:
 		return &QueryPoolWaitingMessage[K, A]{
 			QueryID:    st.QueryID,
 			Stats:      st.Stats,
@@ -109,13 +139,13 @@ func (qp *QueryPool[K, A]) advanceQuery(ctx context.Context, qry *Query[K, A], q
 			ProtocolID: st.ProtocolID,
 			Message:    st.Message,
 		}, true
-	case *QueryStateFinished[K]:
+	case *StateQueryFinished:
 		delete(qp.queries, qry.id)
 		return &QueryPoolFinished{
 			QueryID: st.QueryID,
 			Stats:   st.Stats,
 		}, true
-	case *QueryStateWaitingAtCapacity:
+	case *StateQueryWaitingAtCapacity:
 		elapsed := qp.clk.Since(qry.stats.Start)
 		if elapsed > qp.timeout {
 			delete(qp.queries, qry.id)
@@ -124,7 +154,7 @@ func (qp *QueryPool[K, A]) advanceQuery(ctx context.Context, qry *Query[K, A], q
 				Stats:   st.Stats,
 			}, true
 		}
-	case *QueryStateWaitingWithCapacity:
+	case *StateQueryWaitingWithCapacity:
 		return &QueryPoolWaitingWithCapacity{
 			QueryID: st.QueryID,
 			Stats:   st.Stats,
@@ -139,13 +169,17 @@ func (qp *QueryPool[K, A]) addQuery(ctx context.Context, queryID QueryID, target
 	iterCfg := DefaultClosestNodesIterConfig()
 	iterCfg.Clock = qp.clk
 
-	iter := NewClosestNodesIter(target, knownClosestPeers, iterCfg)
-	qp.queries[queryID] = &Query[K, A]{
-		id:         queryID,
-		clk:        qp.clk,
-		iter:       iter,
-		protocolID: protocolID,
-		msg:        msg,
+	iter, err := NewClosestNodesIter(target, knownClosestPeers, iterCfg)
+	if err != nil {
+		return fmt.Errorf("new closest nodes iter: %w", err)
+	}
+
+	qryCfg := DefaultQueryConfig()
+	qryCfg.Clock = qp.clk
+
+	qp.queries[queryID], err = NewQuery[K, A](queryID, protocolID, msg, iter, qryCfg)
+	if err != nil {
+		return fmt.Errorf("new query: %w", err)
 	}
 	return nil
 }

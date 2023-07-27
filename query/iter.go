@@ -8,6 +8,7 @@ import (
 	"github.com/benbjohnson/clock"
 
 	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/plprobelab/go-kademlia/kaderr"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/key/trie"
 	"github.com/plprobelab/go-kademlia/util"
@@ -80,12 +81,41 @@ func (*EventNodeIterNodeNotContacted[K]) nodeIterEvent() {}
 
 var _ NodeIter[key.Key8] = (*ClosestNodesIter[key.Key8])(nil)
 
-// ClosestNodesIterConfig specifies configuration options for use when creating a ClosestNodesIter
+// ClosestNodesIterConfig specifies optional configuration for a ClosestNodesIter
 type ClosestNodesIterConfig struct {
 	Concurrency int           // the maximum number of concurrent requests that may be in flight
 	NumResults  int           // the minimum number of nodes to successfully contact before considering iteration complete
 	NodeTimeout time.Duration // the timeout for contacting a single node
 	Clock       clock.Clock   // a clock that may replaced by a mock when testing
+}
+
+// Validate checks the configuration options and returns an error if any have invalid values.
+func (cfg *ClosestNodesIterConfig) Validate() error {
+	if cfg.Clock == nil {
+		return &kaderr.ConfigurationError{
+			Component: "ClosestNodesIterConfig",
+			Err:       fmt.Errorf("Clock must not be nil"),
+		}
+	}
+	if cfg.Concurrency < 1 {
+		return &kaderr.ConfigurationError{
+			Component: "ClosestNodesIterConfig",
+			Err:       fmt.Errorf("Concurrency must be greater than zero"),
+		}
+	}
+	if cfg.NumResults < 1 {
+		return &kaderr.ConfigurationError{
+			Component: "ClosestNodesIterConfig",
+			Err:       fmt.Errorf("NumResults must be greater than zero"),
+		}
+	}
+	if cfg.NodeTimeout < 1 {
+		return &kaderr.ConfigurationError{
+			Component: "ClosestNodesIterConfig",
+			Err:       fmt.Errorf("NodeTimeout must be greater than zero"),
+		}
+	}
+	return nil
 }
 
 // DefaultClosestNodesIterConfig returns the default configuration options for a ClosestNodesIter.
@@ -104,7 +134,7 @@ type ClosestNodesIter[K kad.Key[K]] struct {
 	// target is the key whose distance to a node determines the position of that node in the iterator.
 	target K
 
-	// cfg is a copy of the configuration used to create the iterator
+	// cfg is a copy of the optional configuration supplied to the iterator
 	cfg ClosestNodesIterConfig
 
 	// nodelist holds the nodes discovered so far, ordered by increasing distance from the target.
@@ -121,9 +151,11 @@ type ClosestNodesIter[K kad.Key[K]] struct {
 }
 
 // NewClosestNodesIter returns a new ClosestNodesIter
-func NewClosestNodesIter[K kad.Key[K]](target K, knownClosestNodes []kad.NodeID[K], cfg *ClosestNodesIterConfig) *ClosestNodesIter[K] {
+func NewClosestNodesIter[K kad.Key[K]](target K, knownClosestNodes []kad.NodeID[K], cfg *ClosestNodesIterConfig) (*ClosestNodesIter[K], error) {
 	if cfg == nil {
 		cfg = DefaultClosestNodesIterConfig()
+	} else if err := cfg.Validate(); err != nil {
+		return nil, err
 	}
 
 	iter := &ClosestNodesIter[K]{
@@ -140,7 +172,7 @@ func NewClosestNodesIter[K kad.Key[K]](target K, knownClosestNodes []kad.NodeID[
 		})
 	}
 
-	return iter
+	return iter, nil
 }
 
 func (iter *ClosestNodesIter[K]) Advance(ctx context.Context, ev NodeIterEvent) (rstate NodeIterState) {
@@ -212,7 +244,6 @@ func (iter *ClosestNodesIter[K]) Advance(ctx context.Context, ev NodeIterEvent) 
 				ni.State = &stateNodeWaiting{Deadline: deadline}
 				iter.inFlight++
 
-				// TODO: send find nodes to node
 				return &StateNodeIterWaitingContact[K]{
 					NodeID: ni.NodeID,
 				}

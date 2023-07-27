@@ -13,6 +13,43 @@ import (
 	"github.com/plprobelab/go-kademlia/key"
 )
 
+func TestClosestNodesIterConfigValidate(t *testing.T) {
+	t.Run("default is valid", func(t *testing.T) {
+		cfg := DefaultClosestNodesIterConfig()
+		require.NoError(t, cfg.Validate())
+	})
+
+	t.Run("clock is not nil", func(t *testing.T) {
+		cfg := DefaultClosestNodesIterConfig()
+		cfg.Clock = nil
+		require.Error(t, cfg.Validate())
+	})
+
+	t.Run("node timeout positive", func(t *testing.T) {
+		cfg := DefaultClosestNodesIterConfig()
+		cfg.NodeTimeout = 0
+		require.Error(t, cfg.Validate())
+		cfg.NodeTimeout = -1
+		require.Error(t, cfg.Validate())
+	})
+
+	t.Run("concurrency positive", func(t *testing.T) {
+		cfg := DefaultClosestNodesIterConfig()
+		cfg.Concurrency = 0
+		require.Error(t, cfg.Validate())
+		cfg.Concurrency = -1
+		require.Error(t, cfg.Validate())
+	})
+
+	t.Run("num results positive", func(t *testing.T) {
+		cfg := DefaultClosestNodesIterConfig()
+		cfg.NumResults = 0
+		require.Error(t, cfg.Validate())
+		cfg.NumResults = -1
+		require.Error(t, cfg.Validate())
+	})
+}
+
 func TestClosestNodesIterContactsNodes(t *testing.T) {
 	ctx := context.Background()
 
@@ -25,7 +62,8 @@ func TestClosestNodesIterContactsNodes(t *testing.T) {
 		neighbour,
 	}
 
-	iter := NewClosestNodesIter(target, knownNodes, cfg)
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
 
 	// first thing the new iterator should do is contact the nearest node
 	state := iter.Advance(ctx, nil)
@@ -54,7 +92,8 @@ func TestClosestNodesIterContactsNearest(t *testing.T) {
 		near,
 	}
 
-	iter := NewClosestNodesIter(target, knownNodes, cfg)
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
 
 	// first thing the new iterator should do is contact the nearest node
 	state := iter.Advance(ctx, nil)
@@ -75,7 +114,8 @@ func TestClosestNodesIterNoClosest(t *testing.T) {
 	// no known nodes to start with
 	knownNodes := []kad.NodeID[key.Key8]{}
 
-	iter := NewClosestNodesIter(target, knownNodes, cfg)
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
 
 	// iterator is finished because there were no nodes to contat
 	state := iter.Advance(ctx, nil)
@@ -105,7 +145,8 @@ func TestClosestNodesIterWaitsAtCapacity(t *testing.T) {
 	cfg := DefaultClosestNodesIterConfig()
 	cfg.Concurrency = len(knownNodes) - 1 // one less than the number of initial nodes
 
-	iter := NewClosestNodesIter(target, knownNodes, cfg)
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
 
 	// first thing the new iterator should do is contact the nearest node
 	state := iter.Advance(ctx, nil)
@@ -154,7 +195,8 @@ func TestClosestNodesIterTimedOutNodeMakesCapacity(t *testing.T) {
 	cfg.NodeTimeout = 3 * time.Minute
 	cfg.Concurrency = len(knownNodes) - 1 // one less than the number of initial nodes
 
-	iter := NewClosestNodesIter(target, knownNodes, cfg)
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
 
 	// first thing the new iterator should do is contact the nearest node
 	state := iter.Advance(ctx, nil)
@@ -227,7 +269,8 @@ func TestClosestNodesIterSuccessfulContactMakesCapacity(t *testing.T) {
 	cfg.Clock = clk
 	cfg.Concurrency = len(knownNodes) - 1 // one less than the number of initial nodes
 
-	iter := NewClosestNodesIter(target, knownNodes, cfg)
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
 
 	// first thing the new iterator should do is contact the nearest node
 	state := iter.Advance(ctx, nil)
@@ -285,7 +328,8 @@ func TestClosestNodesIterCloserNodesAreAddedToIteration(t *testing.T) {
 	cfg.Clock = clk
 	cfg.Concurrency = 2
 
-	iter := NewClosestNodesIter(target, knownNodes, cfg)
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
 
 	// first thing the new iterator should do is contact the first node
 	state := iter.Advance(ctx, nil)
@@ -332,7 +376,8 @@ func TestClosestNodesIterCloserNodesIgnoresDuplicates(t *testing.T) {
 	cfg.Clock = clk
 	cfg.Concurrency = 2
 
-	iter := NewClosestNodesIter(target, knownNodes, cfg)
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
 
 	// first thing the new iterator should do is contact the first node
 	state := iter.Advance(ctx, nil)
@@ -377,7 +422,8 @@ func TestClosestNodesIterCancelFinishesIteration(t *testing.T) {
 	cfg.Clock = clk
 	cfg.Concurrency = 2
 
-	iter := NewClosestNodesIter(target, knownNodes, cfg)
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
 
 	// first thing the new iterator should do is contact the first node
 	state := iter.Advance(ctx, nil)
@@ -409,7 +455,8 @@ func TestClosestNodesIterFinishedIgnoresLaterEvents(t *testing.T) {
 	cfg.Clock = clk
 	cfg.Concurrency = 2
 
-	iter := NewClosestNodesIter(target, knownNodes, cfg)
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
 
 	// first thing the new iterator should do is contact the first node
 	state := iter.Advance(ctx, nil)
@@ -456,7 +503,8 @@ func TestClosestNodesIterIgnoresMessagesFromUnknownNodes(t *testing.T) {
 	cfg.Clock = clk
 	cfg.Concurrency = 2
 
-	iter := NewClosestNodesIter(target, knownNodes, cfg)
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
 
 	// first thing the new iterator should do is contact the first node
 	state := iter.Advance(ctx, nil)
@@ -493,7 +541,8 @@ func TestClosestNodesIterFinishesWhenNumResultsReached(t *testing.T) {
 	cfg.Concurrency = 4
 	cfg.NumResults = 2
 
-	iter := NewClosestNodesIter(target, knownNodes, cfg)
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
 
 	// contact first node
 	state := iter.Advance(ctx, nil)
@@ -544,7 +593,8 @@ func TestClosestNodesIterContinuesUntilNumResultsReached(t *testing.T) {
 	cfg.Concurrency = 4
 	cfg.NumResults = 2
 
-	iter := NewClosestNodesIter(target, knownNodes, cfg)
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
 
 	// contact first node
 	state := iter.Advance(ctx, nil)
@@ -613,7 +663,8 @@ func TestClosestNodesIterNotContactedMakesCapacity(t *testing.T) {
 	cfg.Clock = clk
 	cfg.Concurrency = len(knownNodes) - 1 // one less than the number of initial nodes
 
-	iter := NewClosestNodesIter(target, knownNodes, cfg)
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
 
 	// first thing the new iterator should do is contact the nearest node
 	state := iter.Advance(ctx, nil)
@@ -665,7 +716,8 @@ func TestClosestNodesIterAllNotContactedFinishes(t *testing.T) {
 	cfg.Clock = clk
 	cfg.Concurrency = len(knownNodes) // allow all to be contacted at once
 
-	iter := NewClosestNodesIter(target, knownNodes, cfg)
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
 
 	// first thing the new iterator should do is contact the nearest node
 	state := iter.Advance(ctx, nil)
@@ -719,7 +771,8 @@ func TestClosestNodesIterAllContactedFinishes(t *testing.T) {
 	cfg.Concurrency = len(knownNodes)    // allow all to be contacted at once
 	cfg.NumResults = len(knownNodes) + 1 // one more than the size of the network
 
-	iter := NewClosestNodesIter(target, knownNodes, cfg)
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
 
 	// first thing the new iterator should do is contact the nearest node
 	state := iter.Advance(ctx, nil)

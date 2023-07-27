@@ -1,0 +1,1009 @@
+package query
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/benbjohnson/clock"
+	"github.com/stretchr/testify/require"
+
+	"github.com/plprobelab/go-kademlia/internal/kadtest"
+	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/network/address"
+)
+
+func TestQueryConfigValidate(t *testing.T) {
+	t.Run("default is valid", func(t *testing.T) {
+		cfg := DefaultQueryConfig()
+		require.NoError(t, cfg.Validate())
+	})
+
+	t.Run("clock is not nil", func(t *testing.T) {
+		cfg := DefaultQueryConfig()
+		cfg.Clock = nil
+		require.Error(t, cfg.Validate())
+	})
+}
+
+func TestQueryMessagesNode(t *testing.T) {
+	ctx := context.Background()
+
+	target := key.Key8(0b00000001)
+	a := kadtest.NewID(key.Key8(0b00000100)) // 4
+
+	// one known node to start with
+	knownNodes := []kad.NodeID[key.Key8]{a}
+
+	clk := clock.NewMock()
+
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Clock = clk
+	cfg.Concurrency = 2
+
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
+
+	qryCfg := DefaultQueryConfig()
+	qryCfg.Clock = clk
+
+	msg := kadtest.NewRequest("1", target)
+
+	queryID := QueryID("test")
+	protocolID := address.ProtocolID("testprotocol")
+
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, qryCfg)
+	require.NoError(t, err)
+
+	// first thing the new query should do is request to send a message to the node
+	state := qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+
+	// check that we are messaging the correct node with the right message
+	st := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, queryID, st.QueryID)
+	require.Equal(t, a, st.NodeID)
+	require.Equal(t, protocolID, st.ProtocolID)
+	require.Equal(t, msg, st.Message)
+
+	// advancing now reports that the query is waiting for a response but its underlying query still has capacity
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingWithCapacity{}, state)
+}
+
+func TestQueryMessagesNearest(t *testing.T) {
+	ctx := context.Background()
+
+	target := key.Key8(0b00000011)
+	far := kadtest.NewID(key.Key8(0b11011011))
+	near := kadtest.NewID(key.Key8(0b00000110))
+
+	// ensure near is nearer to target than far is
+	require.Less(t, target.Xor(near.Key()), target.Xor(far.Key()))
+
+	// knownNodes are in "random" order with furthest before nearest
+	knownNodes := []kad.NodeID[key.Key8]{
+		far,
+		near,
+	}
+	clk := clock.NewMock()
+
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Clock = clk
+	cfg.Concurrency = 2
+
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
+
+	qryCfg := DefaultQueryConfig()
+	qryCfg.Clock = clk
+
+	msg := kadtest.NewRequest("1", target)
+
+	queryID := QueryID("test")
+	protocolID := address.ProtocolID("testprotocol")
+
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, qryCfg)
+	require.NoError(t, err)
+
+	// first thing the new query should do is message the nearest node
+	state := qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+
+	// check that we are contacting the nearest node first
+	st := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, near, st.NodeID)
+}
+
+func TestQueryCancelFinishesQuery(t *testing.T) {
+	ctx := context.Background()
+
+	target := key.Key8(0b00000001)
+	a := kadtest.NewID(key.Key8(0b00000100)) // 4
+
+	// one known node to start with
+	knownNodes := []kad.NodeID[key.Key8]{a}
+
+	clk := clock.NewMock()
+
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Clock = clk
+	cfg.Concurrency = 2
+
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
+
+	qryCfg := DefaultQueryConfig()
+	qryCfg.Clock = clk
+
+	msg := kadtest.NewRequest("1", target)
+
+	queryID := QueryID("test")
+	protocolID := address.ProtocolID("testprotocol")
+
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, qryCfg)
+	require.NoError(t, err)
+
+	// first thing the new query should do is request to send a message to the node
+	state := qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+
+	// cancel the query
+	state = qry.Advance(ctx, &EventQueryCancel{})
+	require.IsType(t, &StateQueryFinished{}, state)
+}
+
+func TestQueryNoClosest(t *testing.T) {
+	ctx := context.Background()
+
+	clk := clock.NewMock()
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Clock = clk
+
+	target := key.Key8(0b00000011)
+
+	// no known nodes to start with
+	knownNodes := []kad.NodeID[key.Key8]{}
+
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
+
+	qryCfg := DefaultQueryConfig()
+	qryCfg.Clock = clk
+
+	msg := kadtest.NewRequest("1", target)
+
+	queryID := QueryID("test")
+	protocolID := address.ProtocolID("testprotocol")
+
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, qryCfg)
+	require.NoError(t, err)
+
+	// query is finished because there were no nodes to contat
+	state := qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryFinished{}, state)
+
+	st := state.(*StateQueryFinished)
+	_ = st
+	// TODO: check query stats
+}
+
+func TestQueryWaitsAtCapacity(t *testing.T) {
+	ctx := context.Background()
+
+	target := key.Key8(0b00000001)
+	a := kadtest.NewID(key.Key8(0b00000100)) // 4
+	b := kadtest.NewID(key.Key8(0b00001000)) // 8
+	c := kadtest.NewID(key.Key8(0b00010000)) // 16
+
+	// one known node to start with
+	knownNodes := []kad.NodeID[key.Key8]{a, b, c}
+
+	clk := clock.NewMock()
+
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Clock = clk
+	cfg.Concurrency = 2
+
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
+
+	qryCfg := DefaultQueryConfig()
+	qryCfg.Clock = clk
+
+	msg := kadtest.NewRequest("1", target)
+	queryID := QueryID("test")
+	protocolID := address.ProtocolID("testprotocol")
+
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, qryCfg)
+	require.NoError(t, err)
+
+	// first thing the new query should do is request to send a message to the node
+	state := qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, a, st.NodeID)
+
+	// advancing sends the message to the next node
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, b, st.NodeID)
+
+	// advancing now reports that the query is waiting at capacity since there are 2 messages in flight
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingAtCapacity{}, state)
+}
+
+func TestQueryTimedOutNodeMakesCapacity(t *testing.T) {
+	ctx := context.Background()
+
+	target := key.Key8(0b00000001)
+	a := kadtest.NewID(key.Key8(0b00000100)) // 4
+	b := kadtest.NewID(key.Key8(0b00001000)) // 8
+	c := kadtest.NewID(key.Key8(0b00010000)) // 16
+	d := kadtest.NewID(key.Key8(0b00100000)) // 32
+
+	// ensure the order of the known nodes
+	require.True(t, target.Xor(a.Key()).Compare(target.Xor(b.Key())) == -1)
+	require.True(t, target.Xor(b.Key()).Compare(target.Xor(c.Key())) == -1)
+	require.True(t, target.Xor(c.Key()).Compare(target.Xor(d.Key())) == -1)
+
+	// knownNodes are in "random" order
+	knownNodes := []kad.NodeID[key.Key8]{b, c, a, d}
+
+	clk := clock.NewMock()
+
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Clock = clk
+	cfg.NodeTimeout = 3 * time.Minute
+	cfg.Concurrency = len(knownNodes) - 1 // one less than the number of initial nodes
+
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
+
+	qryCfg := DefaultQueryConfig()
+	qryCfg.Clock = clk
+
+	msg := kadtest.NewRequest("1", target)
+	queryID := QueryID("test")
+	protocolID := address.ProtocolID("testprotocol")
+
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, qryCfg)
+	require.NoError(t, err)
+
+	// first thing the new query should do is contact the nearest node
+	state := qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, a, st.NodeID)
+
+	// advance time by one minute
+	clk.Add(time.Minute)
+
+	// while the query has capacity the query should contact the next nearest node
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, b, st.NodeID)
+
+	// advance time by one minute
+	clk.Add(time.Minute)
+
+	// while the query has capacity the query should contact the second nearest node
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, c, st.NodeID)
+
+	// advance time by one minute
+	clk.Add(time.Minute)
+
+	// the query should be at capacity
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingAtCapacity{}, state)
+
+	// advance time by another minute, now at 4 minutes, first node connection attempt should now time out
+	clk.Add(time.Minute)
+
+	// the first node request should have timed out, making capacity for the last node to attempt connection
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, d, st.NodeID)
+
+	// advance time by another minute, now at 5 minutes, second node connection attempt should now time out
+	clk.Add(time.Minute)
+
+	// advancing now makes more capacity
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingWithCapacity{}, state)
+}
+
+func TestQuerySuccessfulContactMakesCapacity(t *testing.T) {
+	ctx := context.Background()
+
+	target := key.Key8(0b00000001)
+	a := kadtest.NewID(key.Key8(0b00000100)) // 4
+	b := kadtest.NewID(key.Key8(0b00001000)) // 8
+	c := kadtest.NewID(key.Key8(0b00010000)) // 16
+	d := kadtest.NewID(key.Key8(0b00100000)) // 32
+
+	// ensure the order of the known nodes
+	require.True(t, target.Xor(a.Key()).Compare(target.Xor(b.Key())) == -1)
+	require.True(t, target.Xor(b.Key()).Compare(target.Xor(c.Key())) == -1)
+	require.True(t, target.Xor(c.Key()).Compare(target.Xor(d.Key())) == -1)
+
+	// knownNodes are in "random" order
+	knownNodes := []kad.NodeID[key.Key8]{b, c, a, d}
+
+	clk := clock.NewMock()
+
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Clock = clk
+	cfg.Concurrency = len(knownNodes) - 1 // one less than the number of initial nodes
+
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
+
+	qryCfg := DefaultQueryConfig()
+	qryCfg.Clock = clk
+
+	msg := kadtest.NewRequest("1", target)
+	queryID := QueryID("test")
+	protocolID := address.ProtocolID("testprotocol")
+
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, qryCfg)
+	require.NoError(t, err)
+
+	// first thing the new query should do is contact the nearest node
+	state := qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, a, st.NodeID)
+
+	// while the query has capacity the query should contact the next nearest node
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, b, st.NodeID)
+
+	// while the query has capacity the query should contact the second nearest node
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, c, st.NodeID)
+
+	// the query should be at capacity
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingAtCapacity{}, state)
+
+	// notify query that first node was contacted successfully, now node d can be contacted
+	state = qry.Advance(ctx, &EventQueryMessageResponse[key.Key8, kadtest.StrAddr]{NodeID: a})
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, d, st.NodeID)
+
+	// the query should be at capacity again
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingAtCapacity{}, state)
+}
+
+func TestQueryCloserNodesAreAddedToIteration(t *testing.T) {
+	ctx := context.Background()
+
+	target := key.Key8(0b00000001)
+	a := kadtest.NewID(key.Key8(0b00000100)) // 4
+	b := kadtest.NewID(key.Key8(0b00001000)) // 8
+	c := kadtest.NewID(key.Key8(0b00010000)) // 16
+	d := kadtest.NewID(key.Key8(0b00100000)) // 32
+
+	// ensure the order of the known nodes
+	require.True(t, target.Xor(a.Key()).Compare(target.Xor(b.Key())) == -1)
+	require.True(t, target.Xor(b.Key()).Compare(target.Xor(c.Key())) == -1)
+	require.True(t, target.Xor(c.Key()).Compare(target.Xor(d.Key())) == -1)
+
+	// one known node to start with
+	knownNodes := []kad.NodeID[key.Key8]{d}
+
+	clk := clock.NewMock()
+
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Clock = clk
+	cfg.Concurrency = 2
+
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
+
+	qryCfg := DefaultQueryConfig()
+	qryCfg.Clock = clk
+
+	msg := kadtest.NewRequest("1", target)
+	queryID := QueryID("test")
+	protocolID := address.ProtocolID("testprotocol")
+
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, qryCfg)
+	require.NoError(t, err)
+
+	// first thing the new query should do is contact the first node
+	state := qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, d, st.NodeID)
+
+	// advancing reports query has capacity
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingWithCapacity{}, state)
+
+	// notify query that first node was contacted successfully, with closer nodes
+	state = qry.Advance(ctx, &EventQueryMessageResponse[key.Key8, kadtest.StrAddr]{
+		NodeID: d,
+		Response: kadtest.NewResponse("resp_d", []kad.NodeInfo[key.Key8, kadtest.StrAddr]{
+			kadtest.NewInfo(b, []kadtest.StrAddr{"addr_b"}),
+			kadtest.NewInfo(a, []kadtest.StrAddr{"addr_a"}),
+		}),
+	})
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+
+	// query should contact the next nearest uncontacted node
+	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, a, st.NodeID)
+}
+
+func TestQueryCloserNodesIgnoresDuplicates(t *testing.T) {
+	ctx := context.Background()
+
+	target := key.Key8(0b00000001)
+	a := kadtest.NewID(key.Key8(0b00000100)) // 4
+	b := kadtest.NewID(key.Key8(0b00001000)) // 8
+	c := kadtest.NewID(key.Key8(0b00010000)) // 16
+	d := kadtest.NewID(key.Key8(0b00100000)) // 32
+
+	// ensure the order of the known nodes
+	require.True(t, target.Xor(a.Key()).Compare(target.Xor(b.Key())) == -1)
+	require.True(t, target.Xor(b.Key()).Compare(target.Xor(c.Key())) == -1)
+	require.True(t, target.Xor(c.Key()).Compare(target.Xor(d.Key())) == -1)
+
+	// one known node to start with
+	knownNodes := []kad.NodeID[key.Key8]{d, a}
+
+	clk := clock.NewMock()
+
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Clock = clk
+	cfg.Concurrency = 2
+
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
+
+	qryCfg := DefaultQueryConfig()
+	qryCfg.Clock = clk
+
+	msg := kadtest.NewRequest("1", target)
+	queryID := QueryID("test")
+	protocolID := address.ProtocolID("testprotocol")
+
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, qryCfg)
+	require.NoError(t, err)
+
+	// first thing the new query should do is contact the first node
+	state := qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, a, st.NodeID)
+
+	// next the query attempts to contact second nearest node
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, d, st.NodeID)
+
+	// advancing reports query has no capacity
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingAtCapacity{}, state)
+
+	// notify query that second node was contacted successfully, with closer nodes
+	state = qry.Advance(ctx, &EventQueryMessageResponse[key.Key8, kadtest.StrAddr]{
+		NodeID: d,
+		Response: kadtest.NewResponse("resp_d", []kad.NodeInfo[key.Key8, kadtest.StrAddr]{
+			kadtest.NewInfo(b, []kadtest.StrAddr{"addr_b"}),
+			kadtest.NewInfo(a, []kadtest.StrAddr{"addr_a"}),
+		}),
+	})
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+
+	// query should contact the next nearest uncontacted node, which is b
+	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, b, st.NodeID)
+}
+
+func TestQueryCancelFinishesIteration(t *testing.T) {
+	ctx := context.Background()
+
+	target := key.Key8(0b00000001)
+	a := kadtest.NewID(key.Key8(0b00000100)) // 4
+
+	// one known node to start with
+	knownNodes := []kad.NodeID[key.Key8]{a}
+
+	clk := clock.NewMock()
+
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Clock = clk
+	cfg.Concurrency = 2
+
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
+
+	qryCfg := DefaultQueryConfig()
+	qryCfg.Clock = clk
+
+	msg := kadtest.NewRequest("1", target)
+	queryID := QueryID("test")
+	protocolID := address.ProtocolID("testprotocol")
+
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, qryCfg)
+	require.NoError(t, err)
+
+	// first thing the new query should do is contact the first node
+	state := qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, a, st.NodeID)
+
+	// cancel the query so it is now finished
+	state = qry.Advance(ctx, &EventQueryCancel{})
+	require.IsType(t, &StateQueryFinished{}, state)
+
+	stf := state.(*StateQueryFinished)
+	require.Equal(t, 0, stf.Stats.Success)
+}
+
+func TestQueryFinishedIgnoresLaterEvents(t *testing.T) {
+	ctx := context.Background()
+
+	target := key.Key8(0b00000001)
+	a := kadtest.NewID(key.Key8(0b00000100)) // 4
+	b := kadtest.NewID(key.Key8(0b00001000)) // 8
+
+	// one known node to start with
+	knownNodes := []kad.NodeID[key.Key8]{b}
+
+	clk := clock.NewMock()
+
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Clock = clk
+	cfg.Concurrency = 2
+
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
+
+	qryCfg := DefaultQueryConfig()
+	qryCfg.Clock = clk
+
+	msg := kadtest.NewRequest("1", target)
+	queryID := QueryID("test")
+	protocolID := address.ProtocolID("testprotocol")
+
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, qryCfg)
+	require.NoError(t, err)
+
+	// first thing the new query should do is contact the first node
+	state := qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, b, st.NodeID)
+
+	// cancel the query so it is now finished
+	state = qry.Advance(ctx, &EventQueryCancel{})
+	require.IsType(t, &StateQueryFinished{}, state)
+
+	// no successes
+	stf := state.(*StateQueryFinished)
+	require.Equal(t, 0, stf.Stats.Success)
+
+	// notify query that second node was contacted successfully, with closer nodes
+	state = qry.Advance(ctx, &EventQueryMessageResponse[key.Key8, kadtest.StrAddr]{
+		NodeID: b,
+		Response: kadtest.NewResponse("resp_b", []kad.NodeInfo[key.Key8, kadtest.StrAddr]{
+			kadtest.NewInfo(a, []kadtest.StrAddr{"addr_a"}),
+		}),
+	})
+
+	// query remains finished
+	require.IsType(t, &StateQueryFinished{}, state)
+
+	// still no successes since contact message was after query had been cancelled
+	stf = state.(*StateQueryFinished)
+	require.Equal(t, 0, stf.Stats.Success)
+}
+
+func TestQueryIgnoresMessagesFromUnknownNodes(t *testing.T) {
+	ctx := context.Background()
+
+	target := key.Key8(0b00000001)
+	a := kadtest.NewID(key.Key8(0b00000100)) // 4
+	b := kadtest.NewID(key.Key8(0b00001000)) // 8
+	c := kadtest.NewID(key.Key8(0b00010000)) // 16
+
+	// one known node to start with
+	knownNodes := []kad.NodeID[key.Key8]{c}
+
+	clk := clock.NewMock()
+
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Clock = clk
+	cfg.Concurrency = 2
+
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
+
+	qryCfg := DefaultQueryConfig()
+	qryCfg.Clock = clk
+
+	msg := kadtest.NewRequest("1", target)
+	queryID := QueryID("test")
+	protocolID := address.ProtocolID("testprotocol")
+
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, qryCfg)
+	require.NoError(t, err)
+
+	// first thing the new query should do is contact the first node
+	state := qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, c, st.NodeID)
+
+	// notify query that second node was contacted successfully, with closer nodes
+	state = qry.Advance(ctx, &EventQueryMessageResponse[key.Key8, kadtest.StrAddr]{
+		NodeID: b,
+		Response: kadtest.NewResponse("resp_b", []kad.NodeInfo[key.Key8, kadtest.StrAddr]{
+			kadtest.NewInfo(a, []kadtest.StrAddr{"addr_a"}),
+		}),
+	})
+
+	// query ignores message from unknown node
+	require.IsType(t, &StateQueryWaitingWithCapacity{}, state)
+}
+
+func TestQueryFinishesWhenNumResultsReached(t *testing.T) {
+	ctx := context.Background()
+
+	target := key.Key8(0b00000001)
+	a := kadtest.NewID(key.Key8(0b00000100)) // 4
+	b := kadtest.NewID(key.Key8(0b00001000)) // 8
+	c := kadtest.NewID(key.Key8(0b00010000)) // 16
+	d := kadtest.NewID(key.Key8(0b00100000)) // 32
+
+	// one known node to start with
+	knownNodes := []kad.NodeID[key.Key8]{a, b, c, d}
+
+	clk := clock.NewMock()
+
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Clock = clk
+	cfg.Concurrency = 4
+	cfg.NumResults = 2
+
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
+
+	qryCfg := DefaultQueryConfig()
+	qryCfg.Clock = clk
+
+	msg := kadtest.NewRequest("1", target)
+	queryID := QueryID("test")
+	protocolID := address.ProtocolID("testprotocol")
+
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, qryCfg)
+	require.NoError(t, err)
+
+	// contact first node
+	state := qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, a, st.NodeID)
+
+	// contact second node
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, b, st.NodeID)
+
+	// notify query that first node was contacted successfully
+	state = qry.Advance(ctx, &EventQueryMessageResponse[key.Key8, kadtest.StrAddr]{
+		NodeID: a,
+	})
+
+	// query attempts to contact third node
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, c, st.NodeID)
+
+	// notify query that second node was contacted successfully
+	state = qry.Advance(ctx, &EventQueryMessageResponse[key.Key8, kadtest.StrAddr]{
+		NodeID: b,
+	})
+
+	// query has finished since it contacted the NumResults closest peers
+	require.IsType(t, &StateQueryFinished{}, state)
+}
+
+func TestQueryContinuesUntilNumResultsReached(t *testing.T) {
+	ctx := context.Background()
+
+	target := key.Key8(0b00000001)
+	a := kadtest.NewID(key.Key8(0b00000100)) // 4
+	b := kadtest.NewID(key.Key8(0b00001000)) // 8
+	c := kadtest.NewID(key.Key8(0b00010000)) // 16
+
+	// one known node to start with, the furthesr
+	knownNodes := []kad.NodeID[key.Key8]{c}
+
+	clk := clock.NewMock()
+
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Clock = clk
+	cfg.Concurrency = 4
+	cfg.NumResults = 2
+
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
+
+	qryCfg := DefaultQueryConfig()
+	qryCfg.Clock = clk
+
+	msg := kadtest.NewRequest("1", target)
+	queryID := QueryID("test")
+	protocolID := address.ProtocolID("testprotocol")
+
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, qryCfg)
+	require.NoError(t, err)
+
+	// contact first node
+	state := qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, c, st.NodeID)
+
+	// notify query that node was contacted successfully and tell it about
+	// a closer one
+	state = qry.Advance(ctx, &EventQueryMessageResponse[key.Key8, kadtest.StrAddr]{
+		NodeID: c,
+		Response: kadtest.NewResponse("resp_c", []kad.NodeInfo[key.Key8, kadtest.StrAddr]{
+			kadtest.NewInfo(b, []kadtest.StrAddr{"addr_b"}),
+		}),
+	})
+
+	// query attempts to contact second node
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, b, st.NodeID)
+
+	// notify query that node was contacted successfully and tell it about
+	// a closer one
+	state = qry.Advance(ctx, &EventQueryMessageResponse[key.Key8, kadtest.StrAddr]{
+		NodeID: b,
+		Response: kadtest.NewResponse("resp_b", []kad.NodeInfo[key.Key8, kadtest.StrAddr]{
+			kadtest.NewInfo(a, []kadtest.StrAddr{"addr_a"}),
+		}),
+	})
+
+	// query has seen enough successful contacts but there are still
+	// closer nodes that have not been contacted, so query attempts
+	// to contact third node
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, a, st.NodeID)
+
+	// notify query that second node was contacted successfully
+	state = qry.Advance(ctx, &EventQueryMessageResponse[key.Key8, kadtest.StrAddr]{
+		NodeID: a,
+	})
+
+	// query has finished since it contacted the NumResults closest peers
+	require.IsType(t, &StateQueryFinished{}, state)
+
+	stf := state.(*StateQueryFinished)
+	require.Equal(t, 2, stf.Stats.Success)
+}
+
+func TestQueryNotContactedMakesCapacity(t *testing.T) {
+	ctx := context.Background()
+
+	target := key.Key8(0b00000001)
+	a := kadtest.NewID(key.Key8(0b00000100)) // 4
+	b := kadtest.NewID(key.Key8(0b00001000)) // 8
+	c := kadtest.NewID(key.Key8(0b00010000)) // 16
+	d := kadtest.NewID(key.Key8(0b00100000)) // 32
+
+	// ensure the order of the known nodes
+	require.True(t, target.Xor(a.Key()).Compare(target.Xor(b.Key())) == -1)
+	require.True(t, target.Xor(b.Key()).Compare(target.Xor(c.Key())) == -1)
+	require.True(t, target.Xor(c.Key()).Compare(target.Xor(d.Key())) == -1)
+
+	// knownNodes are in "random" order
+	knownNodes := []kad.NodeID[key.Key8]{b, c, a, d}
+
+	clk := clock.NewMock()
+
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Clock = clk
+	cfg.Concurrency = len(knownNodes) - 1 // one less than the number of initial nodes
+
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
+
+	qryCfg := DefaultQueryConfig()
+	qryCfg.Clock = clk
+
+	msg := kadtest.NewRequest("1", target)
+	queryID := QueryID("test")
+	protocolID := address.ProtocolID("testprotocol")
+
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, qryCfg)
+	require.NoError(t, err)
+
+	// first thing the new query should do is contact the nearest node
+	state := qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, a, st.NodeID)
+
+	// while the query has capacity the query should contact the next nearest node
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, b, st.NodeID)
+
+	// while the query has capacity the query should contact the second nearest node
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, c, st.NodeID)
+
+	// the query should be at capacity
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingAtCapacity{}, state)
+
+	// notify query that first node was not contacted, now node d can be contacted
+	state = qry.Advance(ctx, &EventQueryMessageFailure[key.Key8]{NodeID: a})
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, d, st.NodeID)
+
+	// the query should be at capacity again
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingAtCapacity{}, state)
+}
+
+func TestQueryAllNotContactedFinishes(t *testing.T) {
+	ctx := context.Background()
+
+	target := key.Key8(0b00000001)
+	a := kadtest.NewID(key.Key8(0b00000100)) // 4
+	b := kadtest.NewID(key.Key8(0b00001000)) // 8
+	c := kadtest.NewID(key.Key8(0b00010000)) // 16
+
+	// knownNodes are in "random" order
+	knownNodes := []kad.NodeID[key.Key8]{a, b, c}
+
+	clk := clock.NewMock()
+
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Clock = clk
+	cfg.Concurrency = len(knownNodes) // allow all to be contacted at once
+
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
+
+	qryCfg := DefaultQueryConfig()
+	qryCfg.Clock = clk
+
+	msg := kadtest.NewRequest("1", target)
+	queryID := QueryID("test")
+	protocolID := address.ProtocolID("testprotocol")
+
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, qryCfg)
+	require.NoError(t, err)
+
+	// first thing the new query should do is contact the nearest node
+	state := qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+
+	// while the query has capacity the query should contact the next nearest node
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+
+	// while the query has capacity the query should contact the third nearest node
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+
+	// the query should be at capacity
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingAtCapacity{}, state)
+
+	// notify query that first node was not contacted
+	state = qry.Advance(ctx, &EventQueryMessageFailure[key.Key8]{NodeID: a})
+	require.IsType(t, &StateQueryWaitingWithCapacity{}, state)
+
+	// notify query that second node was not contacted
+	state = qry.Advance(ctx, &EventQueryMessageFailure[key.Key8]{NodeID: b})
+	require.IsType(t, &StateQueryWaitingWithCapacity{}, state)
+
+	// notify query that third node was not contacted
+	state = qry.Advance(ctx, &EventQueryMessageFailure[key.Key8]{NodeID: c})
+
+	// query has finished since it contacted all possible nodes
+	require.IsType(t, &StateQueryFinished{}, state)
+
+	stf := state.(*StateQueryFinished)
+	require.Equal(t, 0, stf.Stats.Success)
+}
+
+func TestQueryAllContactedFinishes(t *testing.T) {
+	ctx := context.Background()
+
+	target := key.Key8(0b00000001)
+	a := kadtest.NewID(key.Key8(0b00000100)) // 4
+	b := kadtest.NewID(key.Key8(0b00001000)) // 8
+	c := kadtest.NewID(key.Key8(0b00010000)) // 16
+
+	// knownNodes are in "random" order
+	knownNodes := []kad.NodeID[key.Key8]{a, b, c}
+
+	clk := clock.NewMock()
+
+	cfg := DefaultClosestNodesIterConfig()
+	cfg.Clock = clk
+	cfg.Concurrency = len(knownNodes)    // allow all to be contacted at once
+	cfg.NumResults = len(knownNodes) + 1 // one more than the size of the network
+
+	iter, err := NewClosestNodesIter(target, knownNodes, cfg)
+	require.NoError(t, err)
+
+	qryCfg := DefaultQueryConfig()
+	qryCfg.Clock = clk
+
+	msg := kadtest.NewRequest("1", target)
+	queryID := QueryID("test")
+	protocolID := address.ProtocolID("testprotocol")
+
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, qryCfg)
+	require.NoError(t, err)
+
+	// first thing the new query should do is contact the nearest node
+	state := qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+
+	// while the query has capacity the query should contact the next nearest node
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+
+	// while the query has capacity the query should contact the third nearest node
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+
+	// the query should be at capacity
+	state = qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingAtCapacity{}, state)
+
+	// notify query that first node was contacted successfully, but no closer nodes
+	state = qry.Advance(ctx, &EventQueryMessageResponse[key.Key8, kadtest.StrAddr]{NodeID: a})
+	require.IsType(t, &StateQueryWaitingWithCapacity{}, state)
+
+	// notify query that second node was contacted successfully, but no closer nodes
+	state = qry.Advance(ctx, &EventQueryMessageResponse[key.Key8, kadtest.StrAddr]{NodeID: b})
+	require.IsType(t, &StateQueryWaitingWithCapacity{}, state)
+
+	// notify query that third node was contacted successfully, but no closer nodes
+	state = qry.Advance(ctx, &EventQueryMessageResponse[key.Key8, kadtest.StrAddr]{NodeID: c})
+
+	// query has finished since it contacted all possible nodes, even though it didn't
+	// reach the desired NumResults
+	require.IsType(t, &StateQueryFinished{}, state)
+
+	stf := state.(*StateQueryFinished)
+	require.Equal(t, 3, stf.Stats.Success)
+}
