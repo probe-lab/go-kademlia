@@ -59,7 +59,7 @@ func main() {
 		}
 	}(ctx)
 
-	ccfg := coord.DefaultCoordinatorConfig()
+	ccfg := coord.DefaultConfig()
 	ccfg.Clock = siml.Clock()
 	ccfg.PeerstoreTTL = peerstoreTTL
 

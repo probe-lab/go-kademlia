@@ -10,6 +10,7 @@ import (
 	"github.com/benbjohnson/clock"
 
 	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/plprobelab/go-kademlia/kaderr"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"github.com/plprobelab/go-kademlia/query"
@@ -20,7 +21,11 @@ import (
 // Currently this is only queries but will expand to include other state machines such as routing table refresh,
 // and reproviding.
 type Coordinator[K kad.Key[K], A kad.Address[A]] struct {
-	clk clock.Clock
+	// self is the node id of the system the coordinator is running on
+	self kad.NodeID[K]
+
+	// cfg is a copy of the optional configuration supplied to the coordinator
+	cfg Config
 
 	qp *query.Pool[K, A]
 
@@ -32,7 +37,6 @@ type Coordinator[K kad.Key[K], A kad.Address[A]] struct {
 
 	peerstoreTTL time.Duration
 
-	notify         chan struct{} // channel to notify there is potentially work to do
 	outboundEvents chan KademliaEvent
 	inboundEvents  chan coordinatorInternalEvent
 	startOnce      sync.Once
@@ -47,16 +51,30 @@ type Config struct {
 	Clock clock.Clock // a clock that may replaced by a mock when testing
 }
 
-func DefaultCoordinatorConfig() *Config {
+// Validate checks the configuration options and returns an error if any have invalid values.
+func (cfg *Config) Validate() error {
+	if cfg.Clock == nil {
+		return &kaderr.ConfigurationError{
+			Component: "CoordinatorConfig",
+			Err:       fmt.Errorf("clock must not be nil"),
+		}
+	}
+
+	return nil
+}
+
+func DefaultConfig() *Config {
 	return &Config{
 		Clock:        clock.New(), // use standard time
 		PeerstoreTTL: 10 * time.Minute,
 	}
 }
 
-func NewCoordinator[K kad.Key[K], A kad.Address[A]](ep endpoint.Endpoint[K, A], rt kad.RoutingTable[K], cfg *Config) (*Coordinator[K, A], error) {
+func NewCoordinator[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], ep endpoint.Endpoint[K, A], rt kad.RoutingTable[K], cfg *Config) (*Coordinator[K, A], error) {
 	if cfg == nil {
-		cfg = DefaultCoordinatorConfig()
+		cfg = DefaultConfig()
+	} else if err := cfg.Validate(); err != nil {
+		return nil, err
 	}
 
 	qpCfg := query.DefaultPoolConfig()
@@ -67,51 +85,57 @@ func NewCoordinator[K kad.Key[K], A kad.Address[A]](ep endpoint.Endpoint[K, A], 
 		return nil, fmt.Errorf("query pool: %w", err)
 	}
 	return &Coordinator[K, A]{
-		clk:            cfg.Clock,
+		self:           self,
+		cfg:            *cfg,
 		ep:             ep,
 		rt:             rt,
 		qp:             qp,
-		notify:         make(chan struct{}, 20),
 		outboundEvents: make(chan KademliaEvent, 20),
 		inboundEvents:  make(chan coordinatorInternalEvent, 20),
 	}, nil
 }
 
-func (k *Coordinator[K, A]) Start(ctx context.Context) <-chan KademliaEvent {
+func (c *Coordinator[K, A]) Start(ctx context.Context) <-chan KademliaEvent {
 	ctx, span := util.StartSpan(ctx, "Coordinator.Start")
 	defer span.End()
 	// ensure there is only ever one mainloop
-	k.startOnce.Do(func() {
-		go k.mainloop(ctx)
+	c.startOnce.Do(func() {
+		go c.mainloop(ctx)
+		go c.heartbeat(ctx)
 	})
-	return k.outboundEvents
+	return c.outboundEvents
 }
 
-func (k *Coordinator[K, A]) mainloop(ctx context.Context) {
+func (c *Coordinator[K, A]) mainloop(ctx context.Context) {
 	ctx, span := util.StartSpan(ctx, "Coordinator.mainloop")
 	defer span.End()
+
+	// once the main loop exits no further events will be sent so clients waiting
+	// on the event channel should be notified
+	defer close(c.outboundEvents)
+
 	for {
 		// wait for inbound events to trigger state changes
 		select {
 		case <-ctx.Done():
 			return
-		case ev := <-k.inboundEvents:
+		case ev := <-c.inboundEvents:
 			switch tev := ev.(type) {
-			case *unroutablePeerEvent[K]:
-				k.dispatchQueryPoolEvent(ctx, nil)
+			case *eventUnroutablePeer[K]:
+				c.dispatchQueryPoolEvent(ctx, nil)
 
-			case *messageFailedEvent[K]:
-				k.dispatchQueryPoolEvent(ctx, nil)
+			case *eventMessageFailed[K]:
+				c.dispatchQueryPoolEvent(ctx, nil)
 
-			case *messageResponseEvent[K, A]:
-				k.onMessageSuccess(ctx, tev.QueryID, tev.NodeID, tev.Response)
+			case *eventMessageResponse[K, A]:
+				c.onMessageSuccess(ctx, tev.QueryID, tev.NodeID, tev.Response)
 				qev := &query.EventPoolMessageResponse[K, A]{
 					QueryID:  tev.QueryID,
 					NodeID:   tev.NodeID,
 					Response: tev.Response,
 				}
-				k.dispatchQueryPoolEvent(ctx, qev)
-			case *addQueryEvent[K, A]:
+				c.dispatchQueryPoolEvent(ctx, qev)
+			case *eventAddQuery[K, A]:
 				qev := &query.EventPoolAddQuery[K, A]{
 					QueryID:           tev.QueryID,
 					Target:            tev.Target,
@@ -119,33 +143,45 @@ func (k *Coordinator[K, A]) mainloop(ctx context.Context) {
 					Message:           tev.Message,
 					KnownClosestPeers: tev.KnownClosestPeers,
 				}
-				k.dispatchQueryPoolEvent(ctx, qev)
-			case *stopQueryEvent[K]:
+				c.dispatchQueryPoolEvent(ctx, qev)
+			case *eventStopQuery[K]:
 				qev := &query.EventPoolStopQuery{
 					QueryID: tev.QueryID,
 				}
-				k.dispatchQueryPoolEvent(ctx, qev)
+				c.dispatchQueryPoolEvent(ctx, qev)
+			case *eventPoll:
+				c.dispatchQueryPoolEvent(ctx, nil)
 			default:
 				panic(fmt.Sprintf("unexpected event: %T", tev))
 			}
-		case <-k.notify:
-			// got a hint that there is work to do
-			// TODO: decide if this is a hack that can be removed
-			k.dispatchQueryPoolEvent(ctx, nil)
 		}
 	}
 }
 
-func (k *Coordinator[K, A]) dispatchQueryPoolEvent(ctx context.Context, ev query.PoolEvent) {
+func (c *Coordinator[K, A]) heartbeat(ctx context.Context) {
+	ticker := c.cfg.Clock.Ticker(5 * time.Millisecond)
+
+	for {
+		// wait for inbound events to trigger state changes
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			c.inboundEvents <- &eventPoll{}
+		}
+	}
+}
+
+func (c *Coordinator[K, A]) dispatchQueryPoolEvent(ctx context.Context, ev query.PoolEvent) {
 	ctx, span := util.StartSpan(ctx, "Coordinator.dispatchQueryPoolEvent")
 	defer span.End()
 	// attempt to advance the query state machine
-	state := k.qp.Advance(ctx, ev)
+	state := c.qp.Advance(ctx, ev)
 	switch st := state.(type) {
 	case *query.StatePoolWaiting:
 		// TODO
 	case *query.StatePoolQueryMessage[K, A]:
-		k.attemptSendMessage(ctx, st.ProtocolID, st.NodeID, st.Message, st.QueryID)
+		c.attemptSendMessage(ctx, st.ProtocolID, st.NodeID, st.Message, st.QueryID)
 	case *query.StatePoolWaitingAtCapacity:
 		// TODO
 	case *query.StatePoolWaitingWithCapacity:
@@ -161,46 +197,53 @@ func (k *Coordinator[K, A]) dispatchQueryPoolEvent(ctx context.Context, ev query
 	}
 }
 
-func (h *Coordinator[K, A]) attemptSendMessage(ctx context.Context, protoID address.ProtocolID, to kad.NodeID[K], msg kad.Request[K, A], queryID query.QueryID) {
+func (c *Coordinator[K, A]) attemptSendMessage(ctx context.Context, protoID address.ProtocolID, to kad.NodeID[K], msg kad.Request[K, A], queryID query.QueryID) {
 	ctx, span := util.StartSpan(ctx, "Coordinator.attemptSendMessage")
 	defer span.End()
 	go func() {
-		resp, err := h.ep.SendMessage(ctx, protoID, to, msg)
+		resp, err := c.ep.SendMessage(ctx, protoID, to, msg)
 		if err != nil {
 			if errors.Is(err, endpoint.ErrCannotConnect) {
 				// here we can notify that the peer is unroutable, which would feed into peerstore and routing table
-				h.inboundEvents <- &unroutablePeerEvent[K]{NodeID: to}
+				ev := &eventUnroutablePeer[K]{NodeID: to}
+				// c.queue.Enqueue(ctx, ev)
+				c.inboundEvents <- ev
+				return
 			}
-			h.inboundEvents <- &messageFailedEvent[K]{NodeID: to, QueryID: queryID}
+			ev := &eventMessageFailed[K]{NodeID: to, QueryID: queryID}
+			// c.queue.Enqueue(ctx, ev)
+			c.inboundEvents <- ev
 			return
 		}
 
-		h.inboundEvents <- &messageResponseEvent[K, A]{NodeID: to, QueryID: queryID, Response: resp}
+		ev := &eventMessageResponse[K, A]{NodeID: to, QueryID: queryID, Response: resp}
+		// c.queue.Enqueue(ctx, ev)
+		c.inboundEvents <- ev
 	}()
 }
 
-func (k *Coordinator[K, A]) onMessageSuccess(ctx context.Context, queryID query.QueryID, node kad.NodeID[K], resp kad.Response[K, A]) {
+func (c *Coordinator[K, A]) onMessageSuccess(ctx context.Context, queryID query.QueryID, node kad.NodeID[K], resp kad.Response[K, A]) {
 	ctx, span := util.StartSpan(ctx, "Coordinator.onMessageSuccess")
 	defer span.End()
 	// HACK: add closer nodes to peer store
 	// TODO: make this an inbound event
 	for _, addr := range resp.CloserNodes() {
-		k.rt.AddNode(addr.ID())
-		k.ep.MaybeAddToPeerstore(ctx, addr, k.peerstoreTTL)
+		c.rt.AddNode(addr.ID())
+		c.ep.MaybeAddToPeerstore(ctx, addr, c.peerstoreTTL)
 	}
 
 	// notify caller so they have chance to stop query
-	k.outboundEvents <- &KademliaOutboundQueryProgressedEvent[K, A]{
+	c.outboundEvents <- &KademliaOutboundQueryProgressedEvent[K, A]{
 		NodeID:   node,
 		QueryID:  queryID,
 		Response: resp,
 	}
 }
 
-func (k *Coordinator[K, A]) StartQuery(ctx context.Context, queryID query.QueryID, protocolID address.ProtocolID, msg kad.Request[K, A]) error {
-	knownClosestPeers := k.rt.NearestNodes(msg.Target(), 20)
+func (c *Coordinator[K, A]) StartQuery(ctx context.Context, queryID query.QueryID, protocolID address.ProtocolID, msg kad.Request[K, A]) error {
+	knownClosestPeers := c.rt.NearestNodes(msg.Target(), 20)
 
-	k.inboundEvents <- &addQueryEvent[K, A]{
+	ev := &eventAddQuery[K, A]{
 		QueryID:           queryID,
 		Target:            msg.Target(),
 		ProtocolID:        protocolID,
@@ -208,13 +251,20 @@ func (k *Coordinator[K, A]) StartQuery(ctx context.Context, queryID query.QueryI
 		KnownClosestPeers: knownClosestPeers,
 	}
 
+	// c.queue.Enqueue(ctx, ev)
+	c.inboundEvents <- ev
+
 	return nil
 }
 
-func (k *Coordinator[K, A]) StopQuery(ctx context.Context, queryID query.QueryID) error {
-	k.inboundEvents <- &stopQueryEvent[K]{
+func (c *Coordinator[K, A]) StopQuery(ctx context.Context, queryID query.QueryID) error {
+	ev := &eventStopQuery[K]{
 		QueryID: queryID,
 	}
+
+	// c.queue.Enqueue(ctx, ev)
+
+	c.inboundEvents <- ev
 	return nil
 }
 
@@ -248,26 +298,22 @@ type coordinatorInternalEvent interface {
 	coordinatorInternalEvent()
 }
 
-// TODO: unexport name and make consistent with other internal events
-type unroutablePeerEvent[K kad.Key[K]] struct {
+type eventUnroutablePeer[K kad.Key[K]] struct {
 	NodeID kad.NodeID[K]
 }
 
-// TODO: unexport name and make consistent with other internal events
-type messageFailedEvent[K kad.Key[K]] struct {
+type eventMessageFailed[K kad.Key[K]] struct {
 	NodeID  kad.NodeID[K]
 	QueryID query.QueryID
 }
 
-// TODO: unexport name and make consistent with other internal events
-type messageResponseEvent[K kad.Key[K], A kad.Address[A]] struct {
+type eventMessageResponse[K kad.Key[K], A kad.Address[A]] struct {
 	NodeID   kad.NodeID[K]
 	QueryID  query.QueryID
 	Response kad.Response[K, A]
 }
 
-// TODO: unexport name and make consistent with other internal events
-type addQueryEvent[K kad.Key[K], A kad.Address[A]] struct {
+type eventAddQuery[K kad.Key[K], A kad.Address[A]] struct {
 	QueryID           query.QueryID
 	Target            K
 	ProtocolID        address.ProtocolID
@@ -275,14 +321,16 @@ type addQueryEvent[K kad.Key[K], A kad.Address[A]] struct {
 	KnownClosestPeers []kad.NodeID[K]
 }
 
-// TODO: unexport name and make consistent with other internal events
-type stopQueryEvent[K kad.Key[K]] struct {
+type eventStopQuery[K kad.Key[K]] struct {
 	QueryID query.QueryID
 }
 
-// coordinatorInternalEvent() ensures that only an internal coordinator event can be assigned to a coordinatorInternalEvent.
-func (*unroutablePeerEvent[K]) coordinatorInternalEvent()     {}
-func (*messageFailedEvent[K]) coordinatorInternalEvent()      {}
-func (*messageResponseEvent[K, A]) coordinatorInternalEvent() {}
-func (*addQueryEvent[K, A]) coordinatorInternalEvent()        {}
-func (*stopQueryEvent[K]) coordinatorInternalEvent()          {}
+type eventPoll struct{}
+
+// coordinatorInternalEvent() ensures that only an internal coordinator event can be assigned to the coordinatorInternalEvent interface.
+func (*eventUnroutablePeer[K]) coordinatorInternalEvent()     {}
+func (*eventMessageFailed[K]) coordinatorInternalEvent()      {}
+func (*eventMessageResponse[K, A]) coordinatorInternalEvent() {}
+func (*eventAddQuery[K, A]) coordinatorInternalEvent()        {}
+func (*eventStopQuery[K]) coordinatorInternalEvent()          {}
+func (*eventPoll) coordinatorInternalEvent()                  {}

@@ -5,11 +5,12 @@ import (
 	"testing"
 
 	"github.com/benbjohnson/clock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/stretchr/testify/require"
 )
 
 func TestPoolConfigValidate(t *testing.T) {
