@@ -146,7 +146,9 @@ func (k *Coordinator[K, A]) dispatchQueryPoolEvent(ctx context.Context, ev query
 		// TODO
 	case *query.StatePoolQueryMessage[K, A]:
 		k.attemptSendMessage(ctx, st.ProtocolID, st.NodeID, st.Message, st.QueryID)
-	case *query.StatePoolQueryWaiting:
+	case *query.StatePoolWaitingAtCapacity:
+		// TODO
+	case *query.StatePoolWaitingWithCapacity:
 		// TODO
 	case *query.StatePoolQueryFinished:
 		// TODO
