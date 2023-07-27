@@ -11,8 +11,6 @@ import (
 	"github.com/plprobelab/go-kademlia/kaderr"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/util"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 type QueryID string
@@ -93,7 +91,10 @@ func (*EventQueryMessageFailure[K]) queryEvent()     {}
 
 // QueryConfig specifies optional configuration for a Query
 type QueryConfig struct {
-	Clock clock.Clock // a clock that may replaced by a mock when testing
+	Concurrency int           // the maximum number of concurrent requests that may be in flight
+	NumResults  int           // the minimum number of nodes to successfully contact before considering iteration complete
+	NodeTimeout time.Duration // the timeout for contacting a single node
+	Clock       clock.Clock   // a clock that may replaced by a mock when testing
 }
 
 // Validate checks the configuration options and returns an error if any have invalid values.
@@ -104,6 +105,24 @@ func (cfg *QueryConfig) Validate() error {
 			Err:       fmt.Errorf("Clock must not be nil"),
 		}
 	}
+	if cfg.Concurrency < 1 {
+		return &kaderr.ConfigurationError{
+			Component: "QueryConfig",
+			Err:       fmt.Errorf("Concurrency must be greater than zero"),
+		}
+	}
+	if cfg.NumResults < 1 {
+		return &kaderr.ConfigurationError{
+			Component: "QueryConfig",
+			Err:       fmt.Errorf("NumResults must be greater than zero"),
+		}
+	}
+	if cfg.NodeTimeout < 1 {
+		return &kaderr.ConfigurationError{
+			Component: "QueryConfig",
+			Err:       fmt.Errorf("NodeTimeout must be greater than zero"),
+		}
+	}
 	return nil
 }
 
@@ -111,7 +130,10 @@ func (cfg *QueryConfig) Validate() error {
 // Options may be overridden before passing to NewQuery
 func DefaultQueryConfig() *QueryConfig {
 	return &QueryConfig{
-		Clock: clock.New(), // use standard time
+		Concurrency: 3,
+		NumResults:  20,
+		NodeTimeout: time.Minute,
+		Clock:       clock.New(), // use standard time
 	}
 }
 
@@ -128,13 +150,26 @@ type Query[K kad.Key[K], A kad.Address[A]] struct {
 
 	// finished indicates that that the query has completed its work or has been stopped.
 	finished bool
+
+	// inFlight is number of requests in flight, will be <= concurrency
+	inFlight int
+
+	// successes counts how many nodes have been successfully contacted
+	successes int
 }
 
-func NewQuery[K kad.Key[K], A kad.Address[A]](id QueryID, protocolID address.ProtocolID, msg kad.Request[K, A], iter NodeIter[K], cfg *QueryConfig) (*Query[K, A], error) {
+func NewQuery[K kad.Key[K], A kad.Address[A]](id QueryID, protocolID address.ProtocolID, msg kad.Request[K, A], iter NodeIter[K], knownClosestNodes []kad.NodeID[K], cfg *QueryConfig) (*Query[K, A], error) {
 	if cfg == nil {
 		cfg = DefaultQueryConfig()
 	} else if err := cfg.Validate(); err != nil {
 		return nil, err
+	}
+
+	for _, node := range knownClosestNodes {
+		iter.Add(&NodeStatus[K]{
+			NodeID: node,
+			State:  &StateNodeNotContacted{},
+		})
 	}
 
 	return &Query[K, A]{
@@ -146,12 +181,9 @@ func NewQuery[K kad.Key[K], A kad.Address[A]](id QueryID, protocolID address.Pro
 	}, nil
 }
 
-// Advance advances the state of the query by attempting to advance its iterator
 func (q *Query[K, A]) Advance(ctx context.Context, ev QueryEvent) QueryState {
-	ctx, span := util.StartSpan(ctx, "Query.Advance", trace.WithAttributes(
-		attribute.String("QueryID", string(q.id))))
+	ctx, span := util.StartSpan(ctx, "Query.Advance")
 	defer span.End()
-
 	if q.finished {
 		return &StateQueryFinished{
 			QueryID: q.id,
@@ -159,76 +191,178 @@ func (q *Query[K, A]) Advance(ctx context.Context, ev QueryEvent) QueryState {
 		}
 	}
 
-	var nev NodeIterEvent
-
 	switch tev := ev.(type) {
 	case *EventQueryCancel:
-		nev = &EventNodeIterCancel{}
+		q.finished = true
+		return &StateQueryFinished{
+			QueryID: q.id,
+			Stats:   q.stats,
+		}
 	case *EventQueryMessageResponse[K, A]:
-
-		var nodes []kad.NodeID[K]
-
-		if tev.Response != nil {
-			nodes = make([]kad.NodeID[K], len(tev.Response.CloserNodes()))
-			for i, a := range tev.Response.CloserNodes() {
-				nodes[i] = a.ID()
-			}
-		}
-
-		nev = &EventNodeIterNodeContacted[K]{
-			NodeID:      tev.NodeID,
-			CloserNodes: nodes,
-		}
+		q.onMessageResponse(ctx, tev.NodeID, tev.Response)
 	case *EventQueryMessageFailure[K]:
-		nev = &EventNodeIterNodeNotContacted[K]{
-			NodeID: tev.NodeID,
-		}
+		q.onMessageFailure(ctx, tev.NodeID)
 	case nil:
 		// TEMPORARY: no event to process
 	default:
 		panic(fmt.Sprintf("unexpected event: %T", tev))
 	}
 
-	state := q.iter.Advance(ctx, nev)
-	switch st := state.(type) {
+	// reset the success count to allow recalculation during loop through closest nodes
+	q.successes = 0
 
-	case *StateNodeIterFinished:
-		q.finished = true
-		q.stats.Success = st.Successes
-		if q.stats.End.IsZero() {
-			q.stats.End = q.cfg.Clock.Now()
-		}
-		return &StateQueryFinished{
-			QueryID: q.id,
-			Stats:   q.stats,
+	// progressing is set to true if any node is still awaiting contact
+	progressing := false
+
+	// TODO: if stalled then we should contact all remaining nodes that have not already been queried
+	atCapacity := func() bool {
+		return q.inFlight >= q.cfg.Concurrency
+	}
+
+	// get all the nodes in order of distance from the target
+	// TODO: turn this into a walk or iterator on trie.Trie
+
+	var returnState QueryState
+
+	q.iter.Each(ctx, func(ctx context.Context, ni *NodeStatus[K]) bool {
+		switch st := ni.State.(type) {
+		case *StateNodeWaiting:
+			if q.cfg.Clock.Now().After(st.Deadline) {
+				// mark node as unresponsive
+				ni.State = &StateNodeUnresponsive{}
+				q.inFlight--
+			} else if atCapacity() {
+				returnState = &StateQueryWaitingAtCapacity{}
+				return true
+			} else {
+				// The iterator is still waiting for a result from a node so can't be considered done
+				progressing = true
+			}
+		case *StateNodeSucceeded:
+			q.successes++
+			// The iterator has attempted to contact all nodes closer than this one.
+			// If the iterator is not progressing then it doesn't expect any more nodes to be added to the list.
+			// If it has contacted at least NumResults nodes successfully then the iteration is done.
+			if !progressing && q.successes >= q.cfg.NumResults {
+				q.finished = true
+				returnState = &StateQueryFinished{
+					QueryID: q.id,
+					Stats:   q.stats,
+				}
+				return true
+			}
+
+		case *StateNodeNotContacted:
+			if !atCapacity() {
+				deadline := q.cfg.Clock.Now().Add(q.cfg.NodeTimeout)
+				ni.State = &StateNodeWaiting{Deadline: deadline}
+				q.inFlight++
+
+				returnState = &StateQueryWaitingMessage[K, A]{
+					NodeID:     ni.NodeID,
+					QueryID:    q.id,
+					Stats:      q.stats,
+					ProtocolID: q.protocolID,
+					Message:    q.msg,
+				}
+				return true
+
+			}
+			returnState = &StateQueryWaitingAtCapacity{}
+			return true
+		case *StateNodeUnresponsive:
+			// ignore
+		case *StateNodeFailed:
+			// ignore
+		default:
+			panic(fmt.Sprintf("unexpected state: %T", ni.State))
 		}
 
-	case *StateNodeIterWaitingContact[K]:
-		q.stats.Requests++
-		return &StateQueryWaitingMessage[K, A]{
-			QueryID:    q.id,
-			Stats:      q.stats,
-			NodeID:     st.NodeID,
-			ProtocolID: q.protocolID,
-			Message:    q.msg,
-		}
+		return false
+	})
 
-	case *StateNodeIterWaiting:
-		return &StateQueryWaiting{
-			QueryID: q.id,
-			Stats:   q.stats,
-		}
-	case *StateNodeIterWaitingAtCapacity:
-		return &StateQueryWaitingAtCapacity{
-			QueryID: q.id,
-			Stats:   q.stats,
-		}
-	case *StateNodeIterWaitingWithCapacity:
-		return &StateQueryWaitingWithCapacity{
-			QueryID: q.id,
-			Stats:   q.stats,
-		}
+	if returnState != nil {
+		return returnState
+	}
+
+	if q.inFlight > 0 {
+		// The iterator is still waiting for results and not at capacity
+		return &StateQueryWaitingWithCapacity{}
+	}
+
+	// The iterator is finished because all available nodes have been contacted
+	// and the iterator is not waiting for any more results.
+	q.finished = true
+	return &StateQueryFinished{
+		QueryID: q.id,
+		Stats:   q.stats,
+	}
+}
+
+// onMessageResponse processes the result of a successful response received from a node.
+func (q *Query[K, A]) onMessageResponse(ctx context.Context, node kad.NodeID[K], resp kad.Response[K, A]) {
+	ni, found := q.iter.Find(node.Key())
+	if !found {
+		// got a rogue message
+		return
+	}
+	switch st := ni.State.(type) {
+	case *StateNodeWaiting:
+		q.inFlight--
+		q.stats.Success++
+	case *StateNodeUnresponsive:
+		q.stats.Success++
+
+	case *StateNodeNotContacted:
+		// ignore duplicate or late response
+		return
+	case *StateNodeFailed:
+		// ignore duplicate or late response
+		return
+	case *StateNodeSucceeded:
+		// ignore duplicate or late response
+		return
 	default:
 		panic(fmt.Sprintf("unexpected state: %T", st))
 	}
+
+	if resp != nil {
+		// add closer nodes to list
+		for _, info := range resp.CloserNodes() {
+			q.iter.Add(&NodeStatus[K]{
+				NodeID: info.ID(),
+				State:  &StateNodeNotContacted{},
+			})
+		}
+	}
+	ni.State = &StateNodeSucceeded{}
+}
+
+// onMessageFailure processes the result of a failed attempt to contact a node.
+func (q *Query[K, A]) onMessageFailure(ctx context.Context, node kad.NodeID[K]) {
+	ni, found := q.iter.Find(node.Key())
+	if !found {
+		// got a rogue message
+		return
+	}
+	switch st := ni.State.(type) {
+	case *StateNodeWaiting:
+		q.inFlight--
+	case *StateNodeUnresponsive:
+		// update node state to failed
+		break
+	case *StateNodeNotContacted:
+		// update node state to failed
+		break
+	case *StateNodeFailed:
+		// ignore duplicate or late response
+		return
+	case *StateNodeSucceeded:
+		// ignore duplicate or late response
+		return
+	default:
+		panic(fmt.Sprintf("unexpected state: %T", st))
+	}
+
+	ni.State = &StateNodeFailed{}
 }

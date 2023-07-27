@@ -1,6 +1,7 @@
 package key
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/plprobelab/go-kademlia/kad"
@@ -59,4 +60,9 @@ func HexString[K kad.Key[K]](k K) string {
 		b.WriteByte(h[n])
 	}
 	return b.String()
+}
+
+// IsSorted reports whether a list of keys is sorted in ascending numerical order.
+func IsSorted[K kad.Key[K]](ks []K) bool {
+	return sort.IsSorted(KeyList[K](ks))
 }

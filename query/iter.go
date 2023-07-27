@@ -2,131 +2,23 @@ package query
 
 import (
 	"context"
-	"fmt"
-	"time"
-
-	"github.com/benbjohnson/clock"
 
 	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/kaderr"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/key/trie"
-	"github.com/plprobelab/go-kademlia/util"
 )
 
 // A NodeIter iterates nodes according to some strategy.
 type NodeIter[K kad.Key[K]] interface {
-	// Advance signals the iterator to advance its work to the next state.
-	Advance(context.Context, NodeIterEvent) NodeIterState
-}
+	// Add adds node information to the iterator
+	Add(*NodeStatus[K])
 
-// NodeIter states
+	// Find returns the node information corresponding to the given Kademlia key
+	Find(K) (*NodeStatus[K], bool)
 
-type NodeIterState interface {
-	nodeIterState()
-}
-
-// StateNodeIterFinished indicates that the NodeIter has finished.
-type StateNodeIterFinished struct {
-	Successes int // the number of nodes successfully contacted
-}
-
-// StateNodeIterWaitingContact indicates that the NodeIter is waiting to to make contact with a node.
-type StateNodeIterWaitingContact[K kad.Key[K]] struct {
-	NodeID kad.NodeID[K]
-}
-
-// StateNodeIterWaiting indicates that the NodeIter is waiting for results from one or more nodes.
-type StateNodeIterWaiting struct{}
-
-// StateNodeIterWaitingAtCapacity indicates that the NodeIter is waiting for results and is at capacity.
-type StateNodeIterWaitingAtCapacity struct{}
-
-// StateNodeIterWaitingWithCapacity indicates that the NodeIter is waiting for results but has no further nodes to contact.
-type StateNodeIterWaitingWithCapacity struct{}
-
-// nodeIterState() ensures that only NodeIter states can be assigned to a NodeIterState.
-func (*StateNodeIterFinished) nodeIterState()            {}
-func (*StateNodeIterWaitingContact[K]) nodeIterState()   {}
-func (*StateNodeIterWaiting) nodeIterState()             {}
-func (*StateNodeIterWaitingAtCapacity) nodeIterState()   {}
-func (*StateNodeIterWaitingWithCapacity) nodeIterState() {}
-
-// NodeIter events
-
-type NodeIterEvent interface {
-	nodeIterEvent()
-}
-
-// EventNodeIterNodeNotContacted is the event that signals a NodeIter to stop processing work.
-// After this event is received the NodeIter must return StateNodeIterFinished for all subsequent
-// calls to Advance.
-type EventNodeIterCancel struct{}
-
-// EventNodeIterNodeNotContacted is the event that signals a NodeIter that a node was successfully contacted.
-type EventNodeIterNodeContacted[K kad.Key[K]] struct {
-	NodeID      kad.NodeID[K]
-	CloserNodes []kad.NodeID[K]
-}
-
-// EventNodeIterNodeNotContacted is the event that signals a NodeIter that a node could not be contacted.
-type EventNodeIterNodeNotContacted[K kad.Key[K]] struct {
-	NodeID kad.NodeID[K]
-}
-
-// nodeIterEvent() ensures that only NodeIter events can be assigned to a NodeIterEvent.
-func (*EventNodeIterCancel) nodeIterEvent()              {}
-func (*EventNodeIterNodeContacted[K]) nodeIterEvent()    {}
-func (*EventNodeIterNodeNotContacted[K]) nodeIterEvent() {}
-
-var _ NodeIter[key.Key8] = (*ClosestNodesIter[key.Key8])(nil)
-
-// ClosestNodesIterConfig specifies optional configuration for a ClosestNodesIter
-type ClosestNodesIterConfig struct {
-	Concurrency int           // the maximum number of concurrent requests that may be in flight
-	NumResults  int           // the minimum number of nodes to successfully contact before considering iteration complete
-	NodeTimeout time.Duration // the timeout for contacting a single node
-	Clock       clock.Clock   // a clock that may replaced by a mock when testing
-}
-
-// Validate checks the configuration options and returns an error if any have invalid values.
-func (cfg *ClosestNodesIterConfig) Validate() error {
-	if cfg.Clock == nil {
-		return &kaderr.ConfigurationError{
-			Component: "ClosestNodesIterConfig",
-			Err:       fmt.Errorf("Clock must not be nil"),
-		}
-	}
-	if cfg.Concurrency < 1 {
-		return &kaderr.ConfigurationError{
-			Component: "ClosestNodesIterConfig",
-			Err:       fmt.Errorf("Concurrency must be greater than zero"),
-		}
-	}
-	if cfg.NumResults < 1 {
-		return &kaderr.ConfigurationError{
-			Component: "ClosestNodesIterConfig",
-			Err:       fmt.Errorf("NumResults must be greater than zero"),
-		}
-	}
-	if cfg.NodeTimeout < 1 {
-		return &kaderr.ConfigurationError{
-			Component: "ClosestNodesIterConfig",
-			Err:       fmt.Errorf("NodeTimeout must be greater than zero"),
-		}
-	}
-	return nil
-}
-
-// DefaultClosestNodesIterConfig returns the default configuration options for a ClosestNodesIter.
-// Options may be overridden before passing to NewClosestNodesIter
-func DefaultClosestNodesIterConfig() *ClosestNodesIterConfig {
-	return &ClosestNodesIterConfig{
-		Clock:       clock.New(), // use standard time
-		Concurrency: 3,
-		NumResults:  20,
-		NodeTimeout: time.Minute,
-	}
+	// Each applies fn to each entry in the iterator in order. Each stops and returns true if fn returns true.
+	// Otherwise Each returns false when there are no further entries.
+	Each(ctx context.Context, fn func(context.Context, *NodeStatus[K]) bool) bool
 }
 
 // A ClosestNodesIter iterates nodes in order of ascending distance from a key.
@@ -134,205 +26,78 @@ type ClosestNodesIter[K kad.Key[K]] struct {
 	// target is the key whose distance to a node determines the position of that node in the iterator.
 	target K
 
-	// cfg is a copy of the optional configuration supplied to the iterator
-	cfg ClosestNodesIterConfig
-
 	// nodelist holds the nodes discovered so far, ordered by increasing distance from the target.
-	nodes *trie.Trie[K, *nodeInfo[K]]
-
-	// inFlight is number of requests in flight, will be <= concurrency
-	inFlight int
-
-	// finished indicates that that the iterator has completed its work or has been stopped.
-	finished bool
-
-	// successes counts how many nodes have been successfully contacted
-	successes int
+	nodes *trie.Trie[K, *NodeStatus[K]]
 }
 
-// NewClosestNodesIter returns a new ClosestNodesIter
-func NewClosestNodesIter[K kad.Key[K]](target K, knownClosestNodes []kad.NodeID[K], cfg *ClosestNodesIterConfig) (*ClosestNodesIter[K], error) {
-	if cfg == nil {
-		cfg = DefaultClosestNodesIterConfig()
-	} else if err := cfg.Validate(); err != nil {
-		return nil, err
-	}
+var _ NodeIter[key.Key8] = (*ClosestNodesIter[key.Key8])(nil)
 
-	iter := &ClosestNodesIter[K]{
+// NewClosestNodesIter creates a new ClosestNodesIter
+func NewClosestNodesIter[K kad.Key[K]](target K) *ClosestNodesIter[K] {
+	return &ClosestNodesIter[K]{
 		target: target,
-		cfg:    *cfg,
-		nodes:  trie.New[K, *nodeInfo[K]](),
+		nodes:  trie.New[K, *NodeStatus[K]](),
 	}
-
-	for _, node := range knownClosestNodes {
-		iter.nodes.Add(node.Key(), &nodeInfo[K]{
-			Distance: target.Xor(node.Key()),
-			NodeID:   node,
-			State:    &stateNodeNotContacted{},
-		})
-	}
-
-	return iter, nil
 }
 
-func (iter *ClosestNodesIter[K]) Advance(ctx context.Context, ev NodeIterEvent) (rstate NodeIterState) {
-	ctx, span := util.StartSpan(ctx, "ClosestNodesIter.Advance")
-	defer span.End()
-	if iter.finished {
-		return &StateNodeIterFinished{
-			Successes: iter.successes,
-		}
-	}
+func (iter *ClosestNodesIter[K]) Add(ni *NodeStatus[K]) {
+	iter.nodes.Add(ni.NodeID.Key(), ni)
+}
 
-	switch tev := ev.(type) {
-	case *EventNodeIterCancel:
-		iter.finished = true
-		return &StateNodeIterFinished{Successes: iter.successes}
-	case *EventNodeIterNodeContacted[K]:
-		iter.onNodeContacted(ctx, tev.NodeID, tev.CloserNodes)
-	case *EventNodeIterNodeNotContacted[K]:
-		iter.onNodeNotContacted(ctx, tev.NodeID)
-	case nil:
-		// TEMPORARY: no event to process
-	default:
-		panic(fmt.Sprintf("unexpected event: %T", tev))
-	}
+func (iter *ClosestNodesIter[K]) Find(k K) (*NodeStatus[K], bool) {
+	found, ni := trie.Find(iter.nodes, k)
+	return ni, found
+}
 
-	// reset the success count to allow recalculation during loop through closest nodes
-	iter.successes = 0
-
-	// progressing is set to true if any node is still awaiting contact
-	progressing := false
-
-	// TODO: if stalled then we should contact all remaining nodes that have not already been queried
-	atCapacity := func() bool {
-		return iter.inFlight >= iter.cfg.Concurrency
-	}
-
+func (iter *ClosestNodesIter[K]) Each(ctx context.Context, fn func(context.Context, *NodeStatus[K]) bool) bool {
 	// get all the nodes in order of distance from the target
 	// TODO: turn this into a walk or iterator on trie.Trie
 	entries := trie.Closest(iter.nodes, iter.target, iter.nodes.Size())
 	for _, e := range entries {
 		ni := e.Data
-		switch st := ni.State.(type) {
-		case *stateNodeWaiting:
-			if iter.cfg.Clock.Now().After(st.Deadline) {
-				// mark node as unresponsive
-				ni.State = &stateNodeUnresponsive{}
-				iter.inFlight--
-			} else if atCapacity() {
-				return &StateNodeIterWaitingAtCapacity{}
-			} else {
-				// The iterator is still waiting for a result from a node so can't be considered done
-				progressing = true
-			}
-		case *stateNodeSucceeded:
-			iter.successes++
-			// The iterator has attempted to contact all nodes closer than this one.
-			// If the iterator is not progressing then it doesn't expect any more nodes to be added to the list.
-			// If it has contacted at least NumResults nodes successfully then the iteration is done.
-			if !progressing && iter.successes >= iter.cfg.NumResults {
-				iter.finished = true
-				return &StateNodeIterFinished{
-					Successes: iter.successes,
-				}
-			}
+		if fn(ctx, ni) {
+			return true
+		}
+	}
+	return false
+}
 
-		case *stateNodeNotContacted:
-			if !atCapacity() {
-				deadline := iter.cfg.Clock.Now().Add(iter.cfg.NodeTimeout)
-				ni.State = &stateNodeWaiting{Deadline: deadline}
-				iter.inFlight++
+// A SequentialIter iterates nodes in the order they were added to the iterator.
+type SequentialIter[K kad.Key[K]] struct {
+	// nodelist holds the nodes discovered so far, ordered by increasing distance from the target.
+	nodes []*NodeStatus[K]
+}
 
-				return &StateNodeIterWaitingContact[K]{
-					NodeID: ni.NodeID,
-				}
+var _ NodeIter[key.Key8] = (*SequentialIter[key.Key8])(nil)
 
-			}
-			return &StateNodeIterWaitingAtCapacity{}
-		case *stateNodeUnresponsive:
-			// ignore
-		case *stateNodeFailed:
-			// ignore
-		default:
-			panic(fmt.Sprintf("unexpected state: %T", ni.State))
+// NewSequentialIter creates a new SequentialIter
+func NewSequentialIter[K kad.Key[K]]() *SequentialIter[K] {
+	return &SequentialIter[K]{
+		nodes: make([]*NodeStatus[K], 0),
+	}
+}
+
+func (iter *SequentialIter[K]) Add(ni *NodeStatus[K]) {
+	iter.nodes = append(iter.nodes, ni)
+}
+
+// Find returns the node information corresponding to the given Kademlia key. It uses a linear
+// search which makes it unsuitable for large numbers of entries.
+func (iter *SequentialIter[K]) Find(k K) (*NodeStatus[K], bool) {
+	for i := range iter.nodes {
+		if key.Equal(k, iter.nodes[i].NodeID.Key()) {
+			return iter.nodes[i], true
 		}
 	}
 
-	if iter.inFlight > 0 {
-		// The iterator is still waiting for results and not at capacity
-		return &StateNodeIterWaitingWithCapacity{}
-	}
-
-	// The iterator is finished because all available nodes have been contacted
-	// and the iterator is not waiting for any more results.
-	iter.finished = true
-	return &StateNodeIterFinished{
-		Successes: iter.successes,
-	}
+	return nil, false
 }
 
-// onNodeContacted processes the result of a successful attempt to contact a node.
-func (iter *ClosestNodesIter[K]) onNodeContacted(ctx context.Context, node kad.NodeID[K], closerNodes []kad.NodeID[K]) {
-	found, ni := trie.Find(iter.nodes, node.Key())
-	if !found {
-		// got a rogue message
-		return
+func (iter *SequentialIter[K]) Each(ctx context.Context, fn func(context.Context, *NodeStatus[K]) bool) bool {
+	for _, ns := range iter.nodes {
+		if fn(ctx, ns) {
+			return true
+		}
 	}
-	switch st := ni.State.(type) {
-	case *stateNodeWaiting:
-		iter.inFlight--
-	case *stateNodeUnresponsive:
-
-	case *stateNodeNotContacted:
-		// ignore duplicate or late response
-		return
-	case *stateNodeFailed:
-		// ignore duplicate or late response
-		return
-	case *stateNodeSucceeded:
-		// ignore duplicate or late response
-		return
-	default:
-		panic(fmt.Sprintf("unexpected state: %T", st))
-	}
-
-	// add closer nodes to list
-	for _, n := range closerNodes {
-		iter.nodes.Add(n.Key(), &nodeInfo[K]{
-			Distance: iter.target.Xor(n.Key()),
-			NodeID:   n,
-			State:    &stateNodeNotContacted{},
-		})
-	}
-	ni.State = &stateNodeSucceeded{}
-}
-
-// onNodeNotContacted processes the result of a failed attempt to contact a node.
-func (iter *ClosestNodesIter[K]) onNodeNotContacted(ctx context.Context, node kad.NodeID[K]) {
-	found, ni := trie.Find(iter.nodes, node.Key())
-	if !found {
-		// got a rogue message
-		return
-	}
-	switch st := ni.State.(type) {
-	case *stateNodeWaiting:
-		iter.inFlight--
-	case *stateNodeUnresponsive:
-		// update node state to failed
-		break
-	case *stateNodeNotContacted:
-		// update node state to failed
-		break
-	case *stateNodeFailed:
-		// ignore duplicate or late response
-		return
-	case *stateNodeSucceeded:
-		// ignore duplicate or late response
-		return
-	default:
-		panic(fmt.Sprintf("unexpected state: %T", st))
-	}
-
-	ni.State = &stateNodeFailed{}
+	return false
 }

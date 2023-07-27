@@ -6,36 +6,35 @@ import (
 	"github.com/plprobelab/go-kademlia/kad"
 )
 
-type nodeInfo[K kad.Key[K]] struct {
-	Distance K
-	State    nodeState
-	NodeID   kad.NodeID[K]
+type NodeStatus[K kad.Key[K]] struct {
+	NodeID kad.NodeID[K]
+	State  NodeState
 }
 
-type nodeState interface {
+type NodeState interface {
 	nodeState()
 }
 
-// stateNodeNotContacted indicates that the node has not been contacted yet.
-type stateNodeNotContacted struct{}
+// StateNodeNotContacted indicates that the node has not been contacted yet.
+type StateNodeNotContacted struct{}
 
-// stateNodeWaiting indicates that the iterator is waiting for a response from the node.
-type stateNodeWaiting struct {
+// StateNodeWaiting indicates that a query is waiting for a response from the node.
+type StateNodeWaiting struct {
 	Deadline time.Time
 }
 
-// stateNodeUnresponsive indicates that the node did not respond within the configured timeout.
-type stateNodeUnresponsive struct{}
+// StateNodeUnresponsive indicates that the node did not respond within the configured timeout.
+type StateNodeUnresponsive struct{}
 
-// stateNodeFailed indicates that the attempt to contact the node failed.
-type stateNodeFailed struct{}
+// StateNodeFailed indicates that the attempt to contact the node failed.
+type StateNodeFailed struct{}
 
-// stateNodeSucceeded indicates that the attempt to contact the node succeeded.
-type stateNodeSucceeded struct{}
+// StateNodeSucceeded indicates that the attempt to contact the node succeeded.
+type StateNodeSucceeded struct{}
 
 // nodeState() ensures that only node states can be assigned to a nodeState interface.
-func (*stateNodeNotContacted) nodeState() {}
-func (*stateNodeWaiting) nodeState()      {}
-func (*stateNodeUnresponsive) nodeState() {}
-func (*stateNodeFailed) nodeState()       {}
-func (*stateNodeSucceeded) nodeState()    {}
+func (*StateNodeNotContacted) nodeState() {}
+func (*StateNodeWaiting) nodeState()      {}
+func (*StateNodeUnresponsive) nodeState() {}
+func (*StateNodeFailed) nodeState()       {}
+func (*StateNodeSucceeded) nodeState()    {}
