@@ -102,19 +102,19 @@ func (cfg *QueryConfig) Validate() error {
 	if cfg.Clock == nil {
 		return &kaderr.ConfigurationError{
 			Component: "QueryConfig",
-			Err:       fmt.Errorf("Clock must not be nil"),
+			Err:       fmt.Errorf("clock must not be nil"),
 		}
 	}
 	if cfg.Concurrency < 1 {
 		return &kaderr.ConfigurationError{
 			Component: "QueryConfig",
-			Err:       fmt.Errorf("Concurrency must be greater than zero"),
+			Err:       fmt.Errorf("concurrency must be greater than zero"),
 		}
 	}
 	if cfg.NumResults < 1 {
 		return &kaderr.ConfigurationError{
 			Component: "QueryConfig",
-			Err:       fmt.Errorf("NumResults must be greater than zero"),
+			Err:       fmt.Errorf("num results must be greater than zero"),
 		}
 	}
 	if cfg.NodeTimeout < 1 {

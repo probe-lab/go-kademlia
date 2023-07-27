@@ -33,19 +33,19 @@ func (cfg *QueryPoolConfig) Validate() error {
 	if cfg.Clock == nil {
 		return &kaderr.ConfigurationError{
 			Component: "QueryPoolConfig",
-			Err:       fmt.Errorf("Clock must not be nil"),
+			Err:       fmt.Errorf("clock must not be nil"),
 		}
 	}
 	if cfg.Concurrency < 1 {
 		return &kaderr.ConfigurationError{
 			Component: "QueryPoolConfig",
-			Err:       fmt.Errorf("Concurrency must be greater than zero"),
+			Err:       fmt.Errorf("concurrency must be greater than zero"),
 		}
 	}
 	if cfg.Replication < 1 {
 		return &kaderr.ConfigurationError{
 			Component: "QueryPoolConfig",
-			Err:       fmt.Errorf("Replication must be greater than zero"),
+			Err:       fmt.Errorf("replication must be greater than zero"),
 		}
 	}
 	return nil
