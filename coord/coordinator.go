@@ -112,7 +112,7 @@ func (k *Coordinator[K, A]) mainloop(ctx context.Context) {
 				}
 				k.dispatchQueryPoolEvent(ctx, qev)
 			case *addQueryEvent[K, A]:
-				qev := &query.EventPoolAdd[K, A]{
+				qev := &query.EventPoolAddQuery[K, A]{
 					QueryID:           tev.QueryID,
 					Target:            tev.Target,
 					ProtocolID:        tev.ProtocolID,
@@ -121,7 +121,7 @@ func (k *Coordinator[K, A]) mainloop(ctx context.Context) {
 				}
 				k.dispatchQueryPoolEvent(ctx, qev)
 			case *stopQueryEvent[K]:
-				qev := &query.EventPoolStop[K]{
+				qev := &query.EventPoolStopQuery{
 					QueryID: tev.QueryID,
 				}
 				k.dispatchQueryPoolEvent(ctx, qev)
@@ -146,7 +146,7 @@ func (k *Coordinator[K, A]) dispatchQueryPoolEvent(ctx context.Context, ev query
 		// TODO
 	case *query.StatePoolQueryMessage[K, A]:
 		k.attemptSendMessage(ctx, st.ProtocolID, st.NodeID, st.Message, st.QueryID)
-	case *query.StatePoolWaitingWithCapacity:
+	case *query.StatePoolQueryWaiting:
 		// TODO
 	case *query.StatePoolQueryFinished:
 		// TODO

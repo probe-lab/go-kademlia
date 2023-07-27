@@ -44,12 +44,6 @@ type StateQueryWaitingMessage[K kad.Key[K], A kad.Address[A]] struct {
 	Message    kad.Request[K, A]
 }
 
-// StateQueryWaiting indicates that the Query is waiting for results from one or more nodes.
-type StateQueryWaiting struct {
-	QueryID QueryID
-	Stats   QueryStats
-}
-
 // StateQueryWaitingAtCapacity indicates that the Query is waiting for results and is at capacity.
 type StateQueryWaitingAtCapacity struct {
 	QueryID QueryID
@@ -65,7 +59,6 @@ type StateQueryWaitingWithCapacity struct {
 // queryState() ensures that only Query states can be assigned to a QueryState.
 func (*StateQueryFinished) queryState()             {}
 func (*StateQueryWaitingMessage[K, A]) queryState() {}
-func (*StateQueryWaiting) queryState()              {}
 func (*StateQueryWaitingAtCapacity) queryState()    {}
 func (*StateQueryWaitingWithCapacity) queryState()  {}
 
@@ -91,10 +84,10 @@ func (*EventQueryMessageFailure[K]) queryEvent()     {}
 
 // QueryConfig specifies optional configuration for a Query
 type QueryConfig struct {
-	Concurrency int           // the maximum number of concurrent requests that may be in flight
-	NumResults  int           // the minimum number of nodes to successfully contact before considering iteration complete
-	NodeTimeout time.Duration // the timeout for contacting a single node
-	Clock       clock.Clock   // a clock that may replaced by a mock when testing
+	Concurrency    int           // the maximum number of concurrent requests that may be in flight
+	NumResults     int           // the minimum number of nodes to successfully contact before considering iteration complete
+	RequestTimeout time.Duration // the timeout for contacting a single node
+	Clock          clock.Clock   // a clock that may replaced by a mock when testing
 }
 
 // Validate checks the configuration options and returns an error if any have invalid values.
@@ -117,10 +110,10 @@ func (cfg *QueryConfig) Validate() error {
 			Err:       fmt.Errorf("num results must be greater than zero"),
 		}
 	}
-	if cfg.NodeTimeout < 1 {
+	if cfg.RequestTimeout < 1 {
 		return &kaderr.ConfigurationError{
 			Component: "QueryConfig",
-			Err:       fmt.Errorf("NodeTimeout must be greater than zero"),
+			Err:       fmt.Errorf("request timeout must be greater than zero"),
 		}
 	}
 	return nil
@@ -130,10 +123,10 @@ func (cfg *QueryConfig) Validate() error {
 // Options may be overridden before passing to NewQuery
 func DefaultQueryConfig() *QueryConfig {
 	return &QueryConfig{
-		Concurrency: 3,
-		NumResults:  20,
-		NodeTimeout: time.Minute,
-		Clock:       clock.New(), // use standard time
+		Concurrency:    3,
+		NumResults:     20,
+		RequestTimeout: time.Minute,
+		Clock:          clock.New(), // use standard time
 	}
 }
 
@@ -255,7 +248,7 @@ func (q *Query[K, A]) Advance(ctx context.Context, ev QueryEvent) QueryState {
 
 		case *StateNodeNotContacted:
 			if !atCapacity() {
-				deadline := q.cfg.Clock.Now().Add(q.cfg.NodeTimeout)
+				deadline := q.cfg.Clock.Now().Add(q.cfg.RequestTimeout)
 				ni.State = &StateNodeWaiting{Deadline: deadline}
 				q.inFlight++
 				q.stats.Requests++

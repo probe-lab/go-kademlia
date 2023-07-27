@@ -26,11 +26,11 @@ func TestQueryConfigValidate(t *testing.T) {
 		require.Error(t, cfg.Validate())
 	})
 
-	t.Run("node timeout positive", func(t *testing.T) {
+	t.Run("request timeout positive", func(t *testing.T) {
 		cfg := DefaultQueryConfig()
-		cfg.NodeTimeout = 0
+		cfg.RequestTimeout = 0
 		require.Error(t, cfg.Validate())
-		cfg.NodeTimeout = -1
+		cfg.RequestTimeout = -1
 		require.Error(t, cfg.Validate())
 	})
 
@@ -295,7 +295,7 @@ func TestQueryTimedOutNodeMakesCapacity(t *testing.T) {
 
 	cfg := DefaultQueryConfig()
 	cfg.Clock = clk
-	cfg.NodeTimeout = 3 * time.Minute
+	cfg.RequestTimeout = 3 * time.Minute
 	cfg.Concurrency = len(knownNodes) - 1 // one less than the number of initial nodes
 
 	msg := kadtest.NewRequest("1", target)
@@ -379,7 +379,7 @@ func TestQueryTimedOutNodeMakesCapacity(t *testing.T) {
 	require.Equal(t, 2, stww.Stats.Failure)
 }
 
-func TestQuerySuccessfulContactMakesCapacity(t *testing.T) {
+func TestQueryMessageResponseMakesCapacity(t *testing.T) {
 	ctx := context.Background()
 
 	target := key.Key8(0b00000001)
