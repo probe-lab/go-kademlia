@@ -153,9 +153,6 @@ type Query[K kad.Key[K], A kad.Address[A]] struct {
 
 	// inFlight is number of requests in flight, will be <= concurrency
 	inFlight int
-
-	// successes counts how many nodes have been successfully contacted
-	successes int
 }
 
 func NewQuery[K kad.Key[K], A kad.Address[A]](id QueryID, protocolID address.ProtocolID, msg kad.Request[K, A], iter NodeIter[K], knownClosestNodes []kad.NodeID[K], cfg *QueryConfig) (*Query[K, A], error) {
@@ -193,7 +190,7 @@ func (q *Query[K, A]) Advance(ctx context.Context, ev QueryEvent) QueryState {
 
 	switch tev := ev.(type) {
 	case *EventQueryCancel:
-		q.finished = true
+		q.markFinished()
 		return &StateQueryFinished{
 			QueryID: q.id,
 			Stats:   q.stats,
@@ -208,8 +205,8 @@ func (q *Query[K, A]) Advance(ctx context.Context, ev QueryEvent) QueryState {
 		panic(fmt.Sprintf("unexpected event: %T", tev))
 	}
 
-	// reset the success count to allow recalculation during loop through closest nodes
-	q.successes = 0
+	// count number of successes in the order of the iteration
+	successes := 0
 
 	// progressing is set to true if any node is still awaiting contact
 	progressing := false
@@ -231,20 +228,24 @@ func (q *Query[K, A]) Advance(ctx context.Context, ev QueryEvent) QueryState {
 				// mark node as unresponsive
 				ni.State = &StateNodeUnresponsive{}
 				q.inFlight--
+				q.stats.Failure++
 			} else if atCapacity() {
-				returnState = &StateQueryWaitingAtCapacity{}
+				returnState = &StateQueryWaitingAtCapacity{
+					QueryID: q.id,
+					Stats:   q.stats,
+				}
 				return true
 			} else {
 				// The iterator is still waiting for a result from a node so can't be considered done
 				progressing = true
 			}
 		case *StateNodeSucceeded:
-			q.successes++
+			successes++
 			// The iterator has attempted to contact all nodes closer than this one.
 			// If the iterator is not progressing then it doesn't expect any more nodes to be added to the list.
 			// If it has contacted at least NumResults nodes successfully then the iteration is done.
-			if !progressing && q.successes >= q.cfg.NumResults {
-				q.finished = true
+			if !progressing && successes >= q.cfg.NumResults {
+				q.markFinished()
 				returnState = &StateQueryFinished{
 					QueryID: q.id,
 					Stats:   q.stats,
@@ -257,7 +258,10 @@ func (q *Query[K, A]) Advance(ctx context.Context, ev QueryEvent) QueryState {
 				deadline := q.cfg.Clock.Now().Add(q.cfg.NodeTimeout)
 				ni.State = &StateNodeWaiting{Deadline: deadline}
 				q.inFlight++
-
+				q.stats.Requests++
+				if q.stats.Start.IsZero() {
+					q.stats.Start = q.cfg.Clock.Now()
+				}
 				returnState = &StateQueryWaitingMessage[K, A]{
 					NodeID:     ni.NodeID,
 					QueryID:    q.id,
@@ -268,7 +272,10 @@ func (q *Query[K, A]) Advance(ctx context.Context, ev QueryEvent) QueryState {
 				return true
 
 			}
-			returnState = &StateQueryWaitingAtCapacity{}
+			returnState = &StateQueryWaitingAtCapacity{
+				QueryID: q.id,
+				Stats:   q.stats,
+			}
 			return true
 		case *StateNodeUnresponsive:
 			// ignore
@@ -287,15 +294,25 @@ func (q *Query[K, A]) Advance(ctx context.Context, ev QueryEvent) QueryState {
 
 	if q.inFlight > 0 {
 		// The iterator is still waiting for results and not at capacity
-		return &StateQueryWaitingWithCapacity{}
+		return &StateQueryWaitingWithCapacity{
+			QueryID: q.id,
+			Stats:   q.stats,
+		}
 	}
 
 	// The iterator is finished because all available nodes have been contacted
 	// and the iterator is not waiting for any more results.
-	q.finished = true
+	q.markFinished()
 	return &StateQueryFinished{
 		QueryID: q.id,
 		Stats:   q.stats,
+	}
+}
+
+func (q *Query[K, A]) markFinished() {
+	q.finished = true
+	if q.stats.End.IsZero() {
+		q.stats.End = q.cfg.Clock.Now()
 	}
 }
 

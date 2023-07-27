@@ -54,7 +54,7 @@ func DefaultCoordinatorConfig() *Config {
 	}
 }
 
-func NewCoordinator[K kad.Key[K], A kad.Address[A]](ep endpoint.Endpoint[K, A], rt kad.RoutingTable[K], cfg *Config) *Coordinator[K, A] {
+func NewCoordinator[K kad.Key[K], A kad.Address[A]](ep endpoint.Endpoint[K, A], rt kad.RoutingTable[K], cfg *Config) (*Coordinator[K, A], error) {
 	if cfg == nil {
 		cfg = DefaultCoordinatorConfig()
 	}
@@ -62,7 +62,10 @@ func NewCoordinator[K kad.Key[K], A kad.Address[A]](ep endpoint.Endpoint[K, A], 
 	qpCfg := query.DefaultQueryPoolConfig()
 	qpCfg.Clock = cfg.Clock
 
-	qp := query.NewQueryPool[K, A](qpCfg)
+	qp, err := query.NewQueryPool[K, A](qpCfg)
+	if err != nil {
+		return nil, fmt.Errorf("query pool: %w", err)
+	}
 	return &Coordinator[K, A]{
 		clk:            cfg.Clock,
 		ep:             ep,
@@ -71,7 +74,7 @@ func NewCoordinator[K kad.Key[K], A kad.Address[A]](ep endpoint.Endpoint[K, A], 
 		notify:         make(chan struct{}, 20),
 		outboundEvents: make(chan KademliaEvent, 20),
 		inboundEvents:  make(chan coordinatorInternalEvent, 20),
-	}
+	}, nil
 }
 
 func (k *Coordinator[K, A]) Start(ctx context.Context) <-chan KademliaEvent {

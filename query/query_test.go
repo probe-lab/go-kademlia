@@ -85,10 +85,16 @@ func TestQueryMessagesNode(t *testing.T) {
 	require.Equal(t, a, st.NodeID)
 	require.Equal(t, protocolID, st.ProtocolID)
 	require.Equal(t, msg, st.Message)
+	require.Equal(t, clk.Now(), st.Stats.Start)
+	require.Equal(t, 1, st.Stats.Requests)
+	require.Equal(t, 0, st.Stats.Success)
 
 	// advancing now reports that the query is waiting for a response but its underlying query still has capacity
 	state = qry.Advance(ctx, nil)
 	require.IsType(t, &StateQueryWaitingWithCapacity{}, state)
+	stw := state.(*StateQueryWaitingWithCapacity)
+	require.Equal(t, 1, stw.Stats.Requests)
+	require.Equal(t, 0, st.Stats.Success)
 }
 
 func TestQueryMessagesNearest(t *testing.T) {
@@ -158,9 +164,23 @@ func TestQueryCancelFinishesQuery(t *testing.T) {
 	state := qry.Advance(ctx, nil)
 	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
 
+	clk.Add(time.Second)
+
 	// cancel the query
 	state = qry.Advance(ctx, &EventQueryCancel{})
 	require.IsType(t, &StateQueryFinished{}, state)
+
+	stf := state.(*StateQueryFinished)
+	require.Equal(t, 1, stf.Stats.Requests)
+
+	// no successful responses were received before query was cancelled
+	require.Equal(t, 0, stf.Stats.Success)
+
+	// no failed responses were received before query was cancelled
+	require.Equal(t, 0, stf.Stats.Failure)
+
+	// query should have an end time
+	require.Equal(t, clk.Now(), stf.Stats.End)
 }
 
 func TestQueryNoClosest(t *testing.T) {
@@ -189,9 +209,19 @@ func TestQueryNoClosest(t *testing.T) {
 	state := qry.Advance(ctx, nil)
 	require.IsType(t, &StateQueryFinished{}, state)
 
-	st := state.(*StateQueryFinished)
-	_ = st
-	// TODO: check query stats
+	stf := state.(*StateQueryFinished)
+
+	// no requests were made
+	require.Equal(t, 0, stf.Stats.Requests)
+
+	// no successful responses were received before query was cancelled
+	require.Equal(t, 0, stf.Stats.Success)
+
+	// no failed responses were received before query was cancelled
+	require.Equal(t, 0, stf.Stats.Failure)
+
+	// query should have an end time
+	require.Equal(t, clk.Now(), stf.Stats.End)
 }
 
 func TestQueryWaitsAtCapacity(t *testing.T) {
@@ -225,16 +255,21 @@ func TestQueryWaitsAtCapacity(t *testing.T) {
 	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, a, st.NodeID)
+	require.Equal(t, 1, st.Stats.Requests)
 
 	// advancing sends the message to the next node
 	state = qry.Advance(ctx, nil)
 	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, b, st.NodeID)
+	require.Equal(t, 2, st.Stats.Requests)
 
 	// advancing now reports that the query is waiting at capacity since there are 2 messages in flight
 	state = qry.Advance(ctx, nil)
 	require.IsType(t, &StateQueryWaitingAtCapacity{}, state)
+
+	stw := state.(*StateQueryWaitingAtCapacity)
+	require.Equal(t, 2, stw.Stats.Requests)
 }
 
 func TestQueryTimedOutNodeMakesCapacity(t *testing.T) {
@@ -275,6 +310,10 @@ func TestQueryTimedOutNodeMakesCapacity(t *testing.T) {
 	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, a, st.NodeID)
+	stwm := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, 1, stwm.Stats.Requests)
+	require.Equal(t, 0, stwm.Stats.Success)
+	require.Equal(t, 0, stwm.Stats.Failure)
 
 	// advance time by one minute
 	clk.Add(time.Minute)
@@ -284,6 +323,10 @@ func TestQueryTimedOutNodeMakesCapacity(t *testing.T) {
 	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, b, st.NodeID)
+	stwm = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, 2, stwm.Stats.Requests)
+	require.Equal(t, 0, stwm.Stats.Success)
+	require.Equal(t, 0, stwm.Stats.Failure)
 
 	// advance time by one minute
 	clk.Add(time.Minute)
@@ -293,6 +336,10 @@ func TestQueryTimedOutNodeMakesCapacity(t *testing.T) {
 	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, c, st.NodeID)
+	stwm = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, 3, stwm.Stats.Requests)
+	require.Equal(t, 0, stwm.Stats.Success)
+	require.Equal(t, 0, stwm.Stats.Failure)
 
 	// advance time by one minute
 	clk.Add(time.Minute)
@@ -300,6 +347,10 @@ func TestQueryTimedOutNodeMakesCapacity(t *testing.T) {
 	// the query should be at capacity
 	state = qry.Advance(ctx, nil)
 	require.IsType(t, &StateQueryWaitingAtCapacity{}, state)
+	stwa := state.(*StateQueryWaitingAtCapacity)
+	require.Equal(t, 3, stwa.Stats.Requests)
+	require.Equal(t, 0, stwa.Stats.Success)
+	require.Equal(t, 0, stwa.Stats.Failure)
 
 	// advance time by another minute, now at 4 minutes, first node connection attempt should now time out
 	clk.Add(time.Minute)
@@ -310,12 +361,22 @@ func TestQueryTimedOutNodeMakesCapacity(t *testing.T) {
 	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, d, st.NodeID)
 
+	stwm = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, 4, stwm.Stats.Requests)
+	require.Equal(t, 0, stwm.Stats.Success)
+	require.Equal(t, 1, stwm.Stats.Failure)
+
 	// advance time by another minute, now at 5 minutes, second node connection attempt should now time out
 	clk.Add(time.Minute)
 
 	// advancing now makes more capacity
 	state = qry.Advance(ctx, nil)
 	require.IsType(t, &StateQueryWaitingWithCapacity{}, state)
+
+	stww := state.(*StateQueryWaitingWithCapacity)
+	require.Equal(t, 4, stww.Stats.Requests)
+	require.Equal(t, 0, stww.Stats.Success)
+	require.Equal(t, 2, stww.Stats.Failure)
 }
 
 func TestQuerySuccessfulContactMakesCapacity(t *testing.T) {
@@ -355,18 +416,30 @@ func TestQuerySuccessfulContactMakesCapacity(t *testing.T) {
 	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, a, st.NodeID)
+	stwm := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, 1, stwm.Stats.Requests)
+	require.Equal(t, 0, stwm.Stats.Success)
+	require.Equal(t, 0, stwm.Stats.Failure)
 
 	// while the query has capacity the query should contact the next nearest node
 	state = qry.Advance(ctx, nil)
 	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, b, st.NodeID)
+	stwm = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, 2, stwm.Stats.Requests)
+	require.Equal(t, 0, stwm.Stats.Success)
+	require.Equal(t, 0, stwm.Stats.Failure)
 
 	// while the query has capacity the query should contact the second nearest node
 	state = qry.Advance(ctx, nil)
 	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, c, st.NodeID)
+	stwm = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, 3, stwm.Stats.Requests)
+	require.Equal(t, 0, stwm.Stats.Success)
+	require.Equal(t, 0, stwm.Stats.Failure)
 
 	// the query should be at capacity
 	state = qry.Advance(ctx, nil)
@@ -377,10 +450,18 @@ func TestQuerySuccessfulContactMakesCapacity(t *testing.T) {
 	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, d, st.NodeID)
+	stwm = state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, 4, stwm.Stats.Requests)
+	require.Equal(t, 1, stwm.Stats.Success)
+	require.Equal(t, 0, stwm.Stats.Failure)
 
 	// the query should be at capacity again
 	state = qry.Advance(ctx, nil)
 	require.IsType(t, &StateQueryWaitingAtCapacity{}, state)
+	stwa := state.(*StateQueryWaitingAtCapacity)
+	require.Equal(t, 4, stwa.Stats.Requests)
+	require.Equal(t, 1, stwa.Stats.Success)
+	require.Equal(t, 0, stwa.Stats.Failure)
 }
 
 func TestQueryCloserNodesAreAddedToIteration(t *testing.T) {
@@ -578,7 +659,9 @@ func TestQueryFinishedIgnoresLaterEvents(t *testing.T) {
 
 	// no successes
 	stf := state.(*StateQueryFinished)
+	require.Equal(t, 1, stf.Stats.Requests)
 	require.Equal(t, 0, stf.Stats.Success)
+	require.Equal(t, 0, stf.Stats.Failure)
 
 	// notify query that second node was contacted successfully, with closer nodes
 	state = qry.Advance(ctx, &EventQueryMessageResponse[key.Key8, kadtest.StrAddr]{
@@ -593,7 +676,9 @@ func TestQueryFinishedIgnoresLaterEvents(t *testing.T) {
 
 	// still no successes since contact message was after query had been cancelled
 	stf = state.(*StateQueryFinished)
+	require.Equal(t, 1, stf.Stats.Requests)
 	require.Equal(t, 0, stf.Stats.Success)
+	require.Equal(t, 0, stf.Stats.Failure)
 }
 
 func TestQueryWithCloserIterIgnoresMessagesFromUnknownNodes(t *testing.T) {
@@ -627,6 +712,10 @@ func TestQueryWithCloserIterIgnoresMessagesFromUnknownNodes(t *testing.T) {
 	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, c, st.NodeID)
+	stwm := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, 1, stwm.Stats.Requests)
+	require.Equal(t, 0, stwm.Stats.Success)
+	require.Equal(t, 0, stwm.Stats.Failure)
 
 	// notify query that second node was contacted successfully, with closer nodes
 	state = qry.Advance(ctx, &EventQueryMessageResponse[key.Key8, kadtest.StrAddr]{
@@ -638,6 +727,11 @@ func TestQueryWithCloserIterIgnoresMessagesFromUnknownNodes(t *testing.T) {
 
 	// query ignores message from unknown node
 	require.IsType(t, &StateQueryWaitingWithCapacity{}, state)
+
+	stwc := state.(*StateQueryWaitingWithCapacity)
+	require.Equal(t, 1, stwc.Stats.Requests)
+	require.Equal(t, 0, stwc.Stats.Success)
+	require.Equal(t, 0, stwc.Stats.Failure)
 }
 
 func TestQueryWithCloserIterFinishesWhenNumResultsReached(t *testing.T) {
