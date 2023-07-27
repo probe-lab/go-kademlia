@@ -22,7 +22,7 @@ import (
 type Coordinator[K kad.Key[K], A kad.Address[A]] struct {
 	clk clock.Clock
 
-	qp *query.QueryPool[K, A]
+	qp *query.Pool[K, A]
 
 	// rt is the routing table used to look up nodes by distance
 	rt kad.RoutingTable[K]
@@ -59,10 +59,10 @@ func NewCoordinator[K kad.Key[K], A kad.Address[A]](ep endpoint.Endpoint[K, A], 
 		cfg = DefaultCoordinatorConfig()
 	}
 
-	qpCfg := query.DefaultQueryPoolConfig()
+	qpCfg := query.DefaultPoolConfig()
 	qpCfg.Clock = cfg.Clock
 
-	qp, err := query.NewQueryPool[K, A](qpCfg)
+	qp, err := query.NewPool[K, A](qpCfg)
 	if err != nil {
 		return nil, fmt.Errorf("query pool: %w", err)
 	}
@@ -105,14 +105,14 @@ func (k *Coordinator[K, A]) mainloop(ctx context.Context) {
 
 			case *messageResponseEvent[K, A]:
 				k.onMessageSuccess(ctx, tev.QueryID, tev.NodeID, tev.Response)
-				qev := &query.QueryPoolEventMessageResponse[K, A]{
+				qev := &query.EventQueryPoolEventResponse[K, A]{
 					QueryID:  tev.QueryID,
 					NodeID:   tev.NodeID,
 					Response: tev.Response,
 				}
 				k.dispatchQueryPoolEvent(ctx, qev)
 			case *addQueryEvent[K, A]:
-				qev := &query.QueryPoolEventAdd[K, A]{
+				qev := &query.EventQueryPoolAdd[K, A]{
 					QueryID:           tev.QueryID,
 					Target:            tev.Target,
 					ProtocolID:        tev.ProtocolID,
@@ -121,7 +121,7 @@ func (k *Coordinator[K, A]) mainloop(ctx context.Context) {
 				}
 				k.dispatchQueryPoolEvent(ctx, qev)
 			case *stopQueryEvent[K]:
-				qev := &query.QueryPoolEventStop[K]{
+				qev := &query.EventQueryPoolStop[K]{
 					QueryID: tev.QueryID,
 				}
 				k.dispatchQueryPoolEvent(ctx, qev)
@@ -142,17 +142,17 @@ func (k *Coordinator[K, A]) dispatchQueryPoolEvent(ctx context.Context, ev query
 	// attempt to advance the query state machine
 	state := k.qp.Advance(ctx, ev)
 	switch st := state.(type) {
-	case *query.QueryPoolWaiting:
+	case *query.StatePoolWaiting:
 		// TODO
-	case *query.QueryPoolWaitingMessage[K, A]:
+	case *query.StatePoolQueryMessage[K, A]:
 		k.attemptSendMessage(ctx, st.ProtocolID, st.NodeID, st.Message, st.QueryID)
-	case *query.QueryPoolWaitingWithCapacity:
+	case *query.StatePoolWaitingWithCapacity:
 		// TODO
-	case *query.QueryPoolFinished:
+	case *query.StatePoolQueryFinished:
 		// TODO
-	case *query.QueryPoolTimeout:
+	case *query.StatePoolQueryTimeout:
 		// TODO
-	case *query.QueryPoolIdle:
+	case *query.StatePoolIdle:
 		// TODO
 	default:
 		panic(fmt.Sprintf("unexpected state: %T", st))
