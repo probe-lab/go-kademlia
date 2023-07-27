@@ -105,14 +105,14 @@ func (k *Coordinator[K, A]) mainloop(ctx context.Context) {
 
 			case *messageResponseEvent[K, A]:
 				k.onMessageSuccess(ctx, tev.QueryID, tev.NodeID, tev.Response)
-				qev := &query.EventQueryPoolEventResponse[K, A]{
+				qev := &query.EventPoolMessageResponse[K, A]{
 					QueryID:  tev.QueryID,
 					NodeID:   tev.NodeID,
 					Response: tev.Response,
 				}
 				k.dispatchQueryPoolEvent(ctx, qev)
 			case *addQueryEvent[K, A]:
-				qev := &query.EventQueryPoolAdd[K, A]{
+				qev := &query.EventPoolAdd[K, A]{
 					QueryID:           tev.QueryID,
 					Target:            tev.Target,
 					ProtocolID:        tev.ProtocolID,
@@ -121,7 +121,7 @@ func (k *Coordinator[K, A]) mainloop(ctx context.Context) {
 				}
 				k.dispatchQueryPoolEvent(ctx, qev)
 			case *stopQueryEvent[K]:
-				qev := &query.EventQueryPoolStop[K]{
+				qev := &query.EventPoolStop[K]{
 					QueryID: tev.QueryID,
 				}
 				k.dispatchQueryPoolEvent(ctx, qev)
@@ -136,7 +136,7 @@ func (k *Coordinator[K, A]) mainloop(ctx context.Context) {
 	}
 }
 
-func (k *Coordinator[K, A]) dispatchQueryPoolEvent(ctx context.Context, ev query.QueryPoolEvent) {
+func (k *Coordinator[K, A]) dispatchQueryPoolEvent(ctx context.Context, ev query.PoolEvent) {
 	ctx, span := util.StartSpan(ctx, "Coordinator.dispatchQueryPoolEvent")
 	defer span.End()
 	// attempt to advance the query state machine

@@ -78,21 +78,21 @@ func NewPool[K kad.Key[K], A kad.Address[A]](cfg *PoolConfig) (*Pool[K, A], erro
 }
 
 // Advance advances the state of the pool by attempting to advance one of its queries
-func (qp *Pool[K, A]) Advance(ctx context.Context, ev QueryPoolEvent) PoolState {
+func (qp *Pool[K, A]) Advance(ctx context.Context, ev PoolEvent) PoolState {
 	ctx, span := util.StartSpan(ctx, "Pool.Advance")
 	defer span.End()
 	switch tev := ev.(type) {
-	case *EventQueryPoolAdd[K, A]:
+	case *EventPoolAdd[K, A]:
 		qp.addQuery(ctx, tev.QueryID, tev.Target, tev.ProtocolID, tev.Message, tev.KnownClosestPeers)
 		// TODO: return error as state
-	case *EventQueryPoolStop[K]:
+	case *EventPoolStop[K]:
 		if qry, ok := qp.queries[tev.QueryID]; ok {
 			state, terminal := qp.advanceQuery(ctx, qry, &EventQueryCancel{})
 			if terminal {
 				return state
 			}
 		}
-	case *EventQueryPoolEventResponse[K, A]:
+	case *EventPoolMessageResponse[K, A]:
 		if qry, ok := qp.queries[tev.QueryID]; ok {
 			state, terminal := qp.advanceQuery(ctx, qry, &EventQueryMessageResponse[K, A]{
 				NodeID:   tev.NodeID,
@@ -230,13 +230,13 @@ func (*StatePoolWaitingWithCapacity) poolState() {}
 func (*StatePoolQueryFinished) poolState()       {}
 func (*StatePoolQueryTimeout) poolState()        {}
 
-// QueryPoolEvent is an event intended to advance the state of a query pool.
-type QueryPoolEvent interface {
-	queryPoolEvent()
+// PoolEvent is an event intended to advance the state of a pool.
+type PoolEvent interface {
+	poolEvent()
 }
 
-// EventQueryPoolAdd is an event that attempts to add a new query
-type EventQueryPoolAdd[K kad.Key[K], A kad.Address[A]] struct {
+// EventPoolAdd is an event that attempts to add a new query
+type EventPoolAdd[K kad.Key[K], A kad.Address[A]] struct {
 	QueryID           QueryID
 	Target            K
 	ProtocolID        address.ProtocolID
@@ -244,25 +244,25 @@ type EventQueryPoolAdd[K kad.Key[K], A kad.Address[A]] struct {
 	KnownClosestPeers []kad.NodeID[K]
 }
 
-// EventQueryPoolStop is an event that attempts to add a new query
-type EventQueryPoolStop[K kad.Key[K]] struct {
+// EventPoolStop is an event that attempts to add a new query
+type EventPoolStop[K kad.Key[K]] struct {
 	QueryID QueryID
 }
 
-// EventQueryPoolEventResponse is an event that notifies a query that a sent message has had a response.
-type EventQueryPoolEventResponse[K kad.Key[K], A kad.Address[A]] struct {
+// EventPoolMessageResponse is an event that notifies a query that a sent message has had a response.
+type EventPoolMessageResponse[K kad.Key[K], A kad.Address[A]] struct {
 	QueryID  QueryID
 	NodeID   kad.NodeID[K]
 	Response kad.Response[K, A]
 }
 
-type EventQueryPoolMessageFailure[K kad.Key[K]] struct {
+type EventPoolMessageFailure[K kad.Key[K]] struct {
 	QueryID QueryID
 	NodeID  kad.NodeID[K]
 }
 
-// queryPoolEvent() ensures that only QueryPool events can be assigned to a QueryPoolEvent.
-func (*EventQueryPoolAdd[K, A]) queryPoolEvent()           {}
-func (*EventQueryPoolStop[K]) queryPoolEvent()             {}
-func (*EventQueryPoolEventResponse[K, A]) queryPoolEvent() {}
-func (*EventQueryPoolMessageFailure[K]) queryPoolEvent()   {}
+// poolEvent() ensures that only Pool events can be assigned to the PoolEvent interface.
+func (*EventPoolAdd[K, A]) poolEvent()             {}
+func (*EventPoolStop[K]) poolEvent()               {}
+func (*EventPoolMessageResponse[K, A]) poolEvent() {}
+func (*EventPoolMessageFailure[K]) poolEvent()     {}
