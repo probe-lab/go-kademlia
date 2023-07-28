@@ -123,10 +123,17 @@ func (c *Coordinator[K, A]) mainloop(ctx context.Context) {
 		case ev := <-c.inboundEvents:
 			switch tev := ev.(type) {
 			case *eventUnroutablePeer[K]:
+				// TODO: remove from routing table
 				c.dispatchQueryPoolEvent(ctx, nil)
 
 			case *eventMessageFailed[K]:
-				c.dispatchQueryPoolEvent(ctx, nil)
+				qev := &query.EventPoolMessageFailure[K]{
+					QueryID: tev.QueryID,
+					NodeID:  tev.NodeID,
+					Error:   tev.Error,
+				}
+
+				c.dispatchQueryPoolEvent(ctx, qev)
 
 			case *eventMessageResponse[K, A]:
 				if tev.Response != nil {
@@ -157,7 +164,7 @@ func (c *Coordinator[K, A]) mainloop(ctx context.Context) {
 					Target:            tev.Target,
 					ProtocolID:        tev.ProtocolID,
 					Message:           tev.Message,
-					KnownClosestPeers: tev.KnownClosestPeers,
+					KnownClosestNodes: tev.KnownClosestPeers,
 				}
 				c.dispatchQueryPoolEvent(ctx, qev)
 			case *eventStopQuery[K]:
@@ -226,14 +233,26 @@ func (c *Coordinator[K, A]) attemptSendMessage(ctx context.Context, protoID addr
 		if err != nil {
 			if errors.Is(err, endpoint.ErrCannotConnect) {
 				// here we can notify that the peer is unroutable, which would feed into peerstore and routing table
-				c.inboundEvents <- &eventUnroutablePeer[K]{NodeID: to}
+				c.inboundEvents <- &eventUnroutablePeer[K]{
+					NodeID: to,
+				}
 				return
 			}
-			c.inboundEvents <- &eventMessageFailed[K]{NodeID: to, QueryID: queryID, Stats: stats}
+			c.inboundEvents <- &eventMessageFailed[K]{
+				NodeID:  to,
+				QueryID: queryID,
+				Stats:   stats,
+				Error:   err,
+			}
 			return
 		}
 
-		c.inboundEvents <- &eventMessageResponse[K, A]{NodeID: to, QueryID: queryID, Response: resp, Stats: stats}
+		c.inboundEvents <- &eventMessageResponse[K, A]{
+			NodeID:   to,
+			QueryID:  queryID,
+			Response: resp,
+			Stats:    stats,
+		}
 	}()
 }
 
@@ -332,16 +351,17 @@ type eventUnroutablePeer[K kad.Key[K]] struct {
 }
 
 type eventMessageFailed[K kad.Key[K]] struct {
-	NodeID  kad.NodeID[K]
-	QueryID query.QueryID
-	Stats   query.QueryStats
+	NodeID  kad.NodeID[K]    // the node the message was sent to
+	QueryID query.QueryID    // the id of the query that sent the message
+	Stats   query.QueryStats // stats for the query sending the message
+	Error   error            // the error that caused the failure, if any
 }
 
 type eventMessageResponse[K kad.Key[K], A kad.Address[A]] struct {
-	NodeID   kad.NodeID[K]
-	QueryID  query.QueryID
-	Response kad.Response[K, A]
-	Stats    query.QueryStats
+	NodeID   kad.NodeID[K]      // the node the message was sent to
+	QueryID  query.QueryID      // the id of the query that sent the message
+	Response kad.Response[K, A] // the message response sent by the node
+	Stats    query.QueryStats   // stats for the query sending the message
 }
 
 type eventAddQuery[K kad.Key[K], A kad.Address[A]] struct {

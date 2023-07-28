@@ -289,6 +289,6 @@ func TestRoutingUpdatedEventEmittedForCloserNodes(t *testing.T) {
 	require.Equal(t, nodes[3].ID(), tev.NodeInfo.ID())
 
 	// the query run by the coordinator should have completed
-	ev, err = expectEventType(ctx, events, &KademliaOutboundQueryFinishedEvent{})
+	_, err = expectEventType(ctx, events, &KademliaOutboundQueryFinishedEvent{})
 	require.NoError(t, err)
 }

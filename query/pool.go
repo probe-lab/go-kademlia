@@ -122,7 +122,7 @@ func (p *Pool[K, A]) Advance(ctx context.Context, ev PoolEvent) PoolState {
 
 	switch tev := ev.(type) {
 	case *EventPoolAddQuery[K, A]:
-		p.addQuery(ctx, tev.QueryID, tev.Target, tev.ProtocolID, tev.Message, tev.KnownClosestPeers)
+		p.addQuery(ctx, tev.QueryID, tev.Target, tev.ProtocolID, tev.Message, tev.KnownClosestNodes)
 		// TODO: return error as state
 	case *EventPoolStopQuery:
 		if qry, ok := p.queryIndex[tev.QueryID]; ok {
@@ -137,6 +137,17 @@ func (p *Pool[K, A]) Advance(ctx context.Context, ev PoolEvent) PoolState {
 			state, terminal := p.advanceQuery(ctx, qry, &EventQueryMessageResponse[K, A]{
 				NodeID:   tev.NodeID,
 				Response: tev.Response,
+			})
+			if terminal {
+				return state
+			}
+			eventQueryID = qry.id
+		}
+	case *EventPoolMessageFailure[K]:
+		if qry, ok := p.queryIndex[tev.QueryID]; ok {
+			state, terminal := p.advanceQuery(ctx, qry, &EventQueryMessageFailure[K]{
+				NodeID: tev.NodeID,
+				Error:  tev.Error,
 			})
 			if terminal {
 				return state
@@ -237,7 +248,7 @@ func (p *Pool[K, A]) removeQuery(queryID QueryID) {
 
 // addQuery adds a query to the pool, returning the new query id
 // TODO: remove target argument and use msg.Target
-func (p *Pool[K, A]) addQuery(ctx context.Context, queryID QueryID, target K, protocolID address.ProtocolID, msg kad.Request[K, A], knownClosestPeers []kad.NodeID[K]) error {
+func (p *Pool[K, A]) addQuery(ctx context.Context, queryID QueryID, target K, protocolID address.ProtocolID, msg kad.Request[K, A], knownClosestNodes []kad.NodeID[K]) error {
 	if _, exists := p.queryIndex[queryID]; exists {
 		return fmt.Errorf("query id already in use")
 	}
@@ -248,7 +259,7 @@ func (p *Pool[K, A]) addQuery(ctx context.Context, queryID QueryID, target K, pr
 	qryCfg.Concurrency = p.cfg.QueryConcurrency
 	qryCfg.RequestTimeout = p.cfg.RequestTimeout
 
-	qry, err := NewQuery[K](p.self, queryID, protocolID, msg, iter, knownClosestPeers, qryCfg)
+	qry, err := NewQuery[K](p.self, queryID, protocolID, msg, iter, knownClosestNodes, qryCfg)
 	if err != nil {
 		return fmt.Errorf("new query: %w", err)
 	}
@@ -274,7 +285,7 @@ type StatePoolWaiting struct {
 	Stats   QueryStats
 }
 
-// StatePoolQueryMessage indicates that at a query is waiting to message a peer.
+// StatePoolQueryMessage indicates that at a query is waiting to message a node.
 type StatePoolQueryMessage[K kad.Key[K], A kad.Address[A]] struct {
 	QueryID    QueryID
 	NodeID     kad.NodeID[K]
@@ -319,28 +330,30 @@ type PoolEvent interface {
 
 // EventPoolAddQuery is an event that attempts to add a new query
 type EventPoolAddQuery[K kad.Key[K], A kad.Address[A]] struct {
-	QueryID           QueryID
-	Target            K
-	ProtocolID        address.ProtocolID
-	Message           kad.Request[K, A]
-	KnownClosestPeers []kad.NodeID[K]
+	QueryID           QueryID            // the id to use for the new query
+	Target            K                  // the target key for the query
+	ProtocolID        address.ProtocolID // the protocol that defines how the message should be interpreted
+	Message           kad.Request[K, A]  // the message the query should send to each node it traverses
+	KnownClosestNodes []kad.NodeID[K]    // an initial set of close nodes the query should use
 }
 
-// EventPoolStopQuery is an event that attempts to stop a running query
+// EventPoolStopQuery notifies a pool to stop a query.
 type EventPoolStopQuery struct {
-	QueryID QueryID
+	QueryID QueryID // the id of the query that should be stopped
 }
 
-// EventPoolMessageResponse is an event that notifies a query that a sent message has had a response.
+// EventPoolMessageResponse notifies a pool that a query that a sent message has received a successful response.
 type EventPoolMessageResponse[K kad.Key[K], A kad.Address[A]] struct {
-	QueryID  QueryID
-	NodeID   kad.NodeID[K]
-	Response kad.Response[K, A]
+	QueryID  QueryID            // the id of the query that sent the message
+	NodeID   kad.NodeID[K]      // the node the message was sent to
+	Response kad.Response[K, A] // the message response sent by the node
 }
 
+// EventPoolMessageFailure notifies a pool that a query that an attempt to send a message has failed.
 type EventPoolMessageFailure[K kad.Key[K]] struct {
-	QueryID QueryID
-	NodeID  kad.NodeID[K]
+	QueryID QueryID       // the id of the query that sent the message
+	NodeID  kad.NodeID[K] // the node the message was sent to
+	Error   error         // the error that caused the failure, if any
 }
 
 // poolEvent() ensures that only Pool events can be assigned to the PoolEvent interface.

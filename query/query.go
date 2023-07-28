@@ -67,15 +67,19 @@ type QueryEvent interface {
 	queryEvent()
 }
 
+// EventQueryMessageResponse notifies a query to stop all work and enter the finished state.
 type EventQueryCancel struct{}
 
+// EventQueryMessageResponse notifies a query that an attempt to send a message has received a successful response.
 type EventQueryMessageResponse[K kad.Key[K], A kad.Address[A]] struct {
-	NodeID   kad.NodeID[K]
-	Response kad.Response[K, A]
+	NodeID   kad.NodeID[K]      // the node the message was sent to
+	Response kad.Response[K, A] // the message response sent by the node
 }
 
+// EventQueryMessageFailure notifies a query that an attempt to send a message has failed.
 type EventQueryMessageFailure[K kad.Key[K]] struct {
-	NodeID kad.NodeID[K]
+	NodeID kad.NodeID[K] // the node the message was sent to
+	Error  error         // the error that caused the failure, if any
 }
 
 // queryEvent() ensures that only Query events can be assigned to a QueryEvent.

@@ -117,7 +117,7 @@ func TestPoolAddQueryStartsIfCapacity(t *testing.T) {
 		Target:            target,
 		ProtocolID:        protocolID,
 		Message:           msg,
-		KnownClosestPeers: []kad.NodeID[key.Key8]{a},
+		KnownClosestNodes: []kad.NodeID[key.Key8]{a},
 	})
 	require.IsType(t, &StatePoolQueryMessage[key.Key8, kadtest.StrAddr]{}, state)
 
@@ -164,7 +164,7 @@ func TestPoolMessageResponse(t *testing.T) {
 		Target:            target,
 		ProtocolID:        protocolID,
 		Message:           msg,
-		KnownClosestPeers: []kad.NodeID[key.Key8]{a},
+		KnownClosestNodes: []kad.NodeID[key.Key8]{a},
 	})
 	require.IsType(t, &StatePoolQueryMessage[key.Key8, kadtest.StrAddr]{}, state)
 
@@ -216,7 +216,7 @@ func TestPoolPrefersRunningQueriesOverNewOnes(t *testing.T) {
 		Target:            target,
 		ProtocolID:        protocolID,
 		Message:           msg1,
-		KnownClosestPeers: []kad.NodeID[key.Key8]{a, b, c, d},
+		KnownClosestNodes: []kad.NodeID[key.Key8]{a, b, c, d},
 	})
 	require.IsType(t, &StatePoolQueryMessage[key.Key8, kadtest.StrAddr]{}, state)
 
@@ -234,7 +234,7 @@ func TestPoolPrefersRunningQueriesOverNewOnes(t *testing.T) {
 		Target:            target,
 		ProtocolID:        protocolID,
 		Message:           msg2,
-		KnownClosestPeers: []kad.NodeID[key.Key8]{a, b, c, d},
+		KnownClosestNodes: []kad.NodeID[key.Key8]{a, b, c, d},
 	})
 
 	// the first query should continue its operation in preference to starting the new query
@@ -308,7 +308,7 @@ func TestPoolRespectsConcurrency(t *testing.T) {
 		Target:            target,
 		ProtocolID:        protocolID,
 		Message:           msg1,
-		KnownClosestPeers: []kad.NodeID[key.Key8]{a},
+		KnownClosestNodes: []kad.NodeID[key.Key8]{a},
 	})
 	require.IsType(t, &StatePoolQueryMessage[key.Key8, kadtest.StrAddr]{}, state)
 
@@ -326,7 +326,7 @@ func TestPoolRespectsConcurrency(t *testing.T) {
 		Target:            target,
 		ProtocolID:        protocolID,
 		Message:           msg2,
-		KnownClosestPeers: []kad.NodeID[key.Key8]{a},
+		KnownClosestNodes: []kad.NodeID[key.Key8]{a},
 	})
 
 	// the second query should start since the first query has a request in flight
@@ -344,7 +344,7 @@ func TestPoolRespectsConcurrency(t *testing.T) {
 		Target:            target,
 		ProtocolID:        protocolID,
 		Message:           msg3,
-		KnownClosestPeers: []kad.NodeID[key.Key8]{a},
+		KnownClosestNodes: []kad.NodeID[key.Key8]{a},
 	})
 
 	// the third query should wait since the pool has reached maximum concurrency

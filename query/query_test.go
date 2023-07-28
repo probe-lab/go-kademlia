@@ -802,7 +802,7 @@ func TestQueryWithCloserIterFinishesWhenNumResultsReached(t *testing.T) {
 		NodeID: b,
 	})
 
-	// query has finished since it contacted the NumResults closest peers
+	// query has finished since it contacted the NumResults closest nodes
 	require.IsType(t, &StateQueryFinished{}, state)
 }
 
@@ -875,7 +875,7 @@ func TestQueryWithCloserIterContinuesUntilNumResultsReached(t *testing.T) {
 		NodeID: a,
 	})
 
-	// query has finished since it contacted the NumResults closest peers
+	// query has finished since it contacted the NumResults closest nodes
 	require.IsType(t, &StateQueryFinished{}, state)
 
 	stf := state.(*StateQueryFinished)
