@@ -185,7 +185,7 @@ func TestExhaustiveQuery(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("test deadline exceeded")
 	}
-	// the query run by the coordinator should have received a response from node[1]
+	// the query run by the coordinator should have received a response from nodes[1]
 	require.IsType(t, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{}, ev)
 	tev := ev.(*KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr])
 	require.Equal(t, nodes[1].ID(), tev.NodeID)
@@ -196,7 +196,7 @@ func TestExhaustiveQuery(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("test deadline exceeded")
 	}
-	// the query run by the coordinator should have received a response from node[2]
+	// the query run by the coordinator should have received a response from nodes[2]
 	require.IsType(t, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{}, ev)
 	tev = ev.(*KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr])
 	require.Equal(t, nodes[2].ID(), tev.NodeID)
@@ -207,7 +207,7 @@ func TestExhaustiveQuery(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("test deadline exceeded")
 	}
-	// the query run by the coordinator should have received a response from node[3]
+	// the query run by the coordinator should have received a response from nodes[3]
 	require.IsType(t, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{}, ev)
 	tev = ev.(*KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr])
 	require.Equal(t, nodes[3].ID(), tev.NodeID)

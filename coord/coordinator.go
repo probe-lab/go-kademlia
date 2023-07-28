@@ -128,7 +128,19 @@ func (c *Coordinator[K, A]) mainloop(ctx context.Context) {
 				c.dispatchQueryPoolEvent(ctx, nil)
 
 			case *eventMessageResponse[K, A]:
-				c.onMessageSuccess(ctx, tev.QueryID, tev.NodeID, tev.Response)
+				for _, addr := range tev.Response.CloserNodes() {
+					c.rt.AddNode(addr.ID())
+					c.ep.MaybeAddToPeerstore(ctx, addr, c.peerstoreTTL)
+				}
+
+				// notify caller so they have chance to stop query
+				c.outboundEvents <- &KademliaOutboundQueryProgressedEvent[K, A]{
+					NodeID:   tev.NodeID,
+					QueryID:  tev.QueryID,
+					Response: tev.Response,
+					Stats:    tev.Stats,
+				}
+
 				qev := &query.EventPoolMessageResponse[K, A]{
 					QueryID:  tev.QueryID,
 					NodeID:   tev.NodeID,
@@ -181,7 +193,7 @@ func (c *Coordinator[K, A]) dispatchQueryPoolEvent(ctx context.Context, ev query
 	case *query.StatePoolWaiting:
 		// TODO
 	case *query.StatePoolQueryMessage[K, A]:
-		c.attemptSendMessage(ctx, st.ProtocolID, st.NodeID, st.Message, st.QueryID)
+		c.attemptSendMessage(ctx, st.ProtocolID, st.NodeID, st.Message, st.QueryID, st.Stats)
 	case *query.StatePoolWaitingAtCapacity:
 		// TODO
 	case *query.StatePoolWaitingWithCapacity:
@@ -202,7 +214,7 @@ func (c *Coordinator[K, A]) dispatchQueryPoolEvent(ctx context.Context, ev query
 	}
 }
 
-func (c *Coordinator[K, A]) attemptSendMessage(ctx context.Context, protoID address.ProtocolID, to kad.NodeID[K], msg kad.Request[K, A], queryID query.QueryID) {
+func (c *Coordinator[K, A]) attemptSendMessage(ctx context.Context, protoID address.ProtocolID, to kad.NodeID[K], msg kad.Request[K, A], queryID query.QueryID, stats query.QueryStats) {
 	ctx, span := util.StartSpan(ctx, "Coordinator.attemptSendMessage")
 	defer span.End()
 	go func() {
@@ -210,39 +222,15 @@ func (c *Coordinator[K, A]) attemptSendMessage(ctx context.Context, protoID addr
 		if err != nil {
 			if errors.Is(err, endpoint.ErrCannotConnect) {
 				// here we can notify that the peer is unroutable, which would feed into peerstore and routing table
-				ev := &eventUnroutablePeer[K]{NodeID: to}
-				// c.queue.Enqueue(ctx, ev)
-				c.inboundEvents <- ev
+				c.inboundEvents <- &eventUnroutablePeer[K]{NodeID: to}
 				return
 			}
-			ev := &eventMessageFailed[K]{NodeID: to, QueryID: queryID}
-			// c.queue.Enqueue(ctx, ev)
-			c.inboundEvents <- ev
+			c.inboundEvents <- &eventMessageFailed[K]{NodeID: to, QueryID: queryID, Stats: stats}
 			return
 		}
 
-		ev := &eventMessageResponse[K, A]{NodeID: to, QueryID: queryID, Response: resp}
-		// c.queue.Enqueue(ctx, ev)
-		c.inboundEvents <- ev
+		c.inboundEvents <- &eventMessageResponse[K, A]{NodeID: to, QueryID: queryID, Response: resp, Stats: stats}
 	}()
-}
-
-func (c *Coordinator[K, A]) onMessageSuccess(ctx context.Context, queryID query.QueryID, node kad.NodeID[K], resp kad.Response[K, A]) {
-	ctx, span := util.StartSpan(ctx, "Coordinator.onMessageSuccess")
-	defer span.End()
-	// HACK: add closer nodes to peer store
-	// TODO: make this an inbound event
-	for _, addr := range resp.CloserNodes() {
-		c.rt.AddNode(addr.ID())
-		c.ep.MaybeAddToPeerstore(ctx, addr, c.peerstoreTTL)
-	}
-
-	// notify caller so they have chance to stop query
-	c.outboundEvents <- &KademliaOutboundQueryProgressedEvent[K, A]{
-		NodeID:   node,
-		QueryID:  queryID,
-		Response: resp,
-	}
 }
 
 func (c *Coordinator[K, A]) StartQuery(ctx context.Context, queryID query.QueryID, protocolID address.ProtocolID, msg kad.Request[K, A]) error {
@@ -279,18 +267,23 @@ type KademliaEvent interface {
 	kademliaEvent()
 }
 
-type KademliaRoutingUpdatedEvent[K kad.Key[K]] struct{}
-
+// KademliaOutboundQueryProgressedEvent is emitted by the coordinator when a query has received a
+// response from a node.
 type KademliaOutboundQueryProgressedEvent[K kad.Key[K], A kad.Address[A]] struct {
-	NodeID   kad.NodeID[K]
 	QueryID  query.QueryID
+	NodeID   kad.NodeID[K]
 	Response kad.Response[K, A]
+	Stats    query.QueryStats
 }
 
+// KademliaOutboundQueryFinishedEvent is emitted by the coordinator when a query has finished, either through
+// running to completion or by being canceled.
 type KademliaOutboundQueryFinishedEvent struct {
 	QueryID query.QueryID
 	Stats   query.QueryStats
 }
+
+type KademliaRoutingUpdatedEvent[K kad.Key[K]] struct{}
 
 type KademliaUnroutablePeerEvent[K kad.Key[K]] struct{}
 
@@ -316,12 +309,14 @@ type eventUnroutablePeer[K kad.Key[K]] struct {
 type eventMessageFailed[K kad.Key[K]] struct {
 	NodeID  kad.NodeID[K]
 	QueryID query.QueryID
+	Stats   query.QueryStats
 }
 
 type eventMessageResponse[K kad.Key[K], A kad.Address[A]] struct {
 	NodeID   kad.NodeID[K]
 	QueryID  query.QueryID
 	Response kad.Response[K, A]
+	Stats    query.QueryStats
 }
 
 type eventAddQuery[K kad.Key[K], A kad.Address[A]] struct {
