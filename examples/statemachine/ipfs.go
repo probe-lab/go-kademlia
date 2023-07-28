@@ -52,9 +52,6 @@ func (d *IpfsDht) mainloop(ctx context.Context) {
 
 				// notify the waiter
 				ch <- tev.Response
-
-			default:
-				panic(fmt.Sprintf("unexpected event: %T", tev))
 			}
 		}
 	}
