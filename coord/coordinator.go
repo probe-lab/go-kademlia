@@ -305,6 +305,7 @@ type KademliaOutboundQueryFinishedEvent struct {
 	Stats   query.QueryStats
 }
 
+// KademliaRoutingUpdatedEvent is emitted by the coordinator when a new node has been added to the routing table.
 type KademliaRoutingUpdatedEvent[K kad.Key[K], A kad.Address[A]] struct {
 	NodeInfo kad.NodeInfo[K, A]
 }
