@@ -72,7 +72,8 @@ func TestPoolStartsIdle(t *testing.T) {
 	cfg := DefaultPoolConfig()
 	cfg.Clock = clk
 
-	p, err := NewPool[key.Key8, kadtest.StrAddr](cfg)
+	self := kadtest.NewID(key.Key8(0))
+	p, err := NewPool[key.Key8, kadtest.StrAddr](self, cfg)
 	require.NoError(t, err)
 
 	state := p.Advance(ctx, nil)
@@ -85,7 +86,8 @@ func TestPoolStopWhenNoQueries(t *testing.T) {
 	cfg := DefaultPoolConfig()
 	cfg.Clock = clk
 
-	p, err := NewPool[key.Key8, kadtest.StrAddr](cfg)
+	self := kadtest.NewID(key.Key8(0))
+	p, err := NewPool[key.Key8, kadtest.StrAddr](self, cfg)
 	require.NoError(t, err)
 
 	state := p.Advance(ctx, &EventPoolStopQuery{})
@@ -98,7 +100,8 @@ func TestPoolAddQueryStartsIfCapacity(t *testing.T) {
 	cfg := DefaultPoolConfig()
 	cfg.Clock = clk
 
-	p, err := NewPool[key.Key8, kadtest.StrAddr](cfg)
+	self := kadtest.NewID(key.Key8(0))
+	p, err := NewPool[key.Key8, kadtest.StrAddr](self, cfg)
 	require.NoError(t, err)
 
 	target := key.Key8(0b00000001)
@@ -144,7 +147,8 @@ func TestPoolMessageResponse(t *testing.T) {
 	cfg := DefaultPoolConfig()
 	cfg.Clock = clk
 
-	p, err := NewPool[key.Key8, kadtest.StrAddr](cfg)
+	self := kadtest.NewID(key.Key8(0))
+	p, err := NewPool[key.Key8, kadtest.StrAddr](self, cfg)
 	require.NoError(t, err)
 
 	target := key.Key8(0b00000001)
@@ -191,7 +195,8 @@ func TestPoolPrefersRunningQueriesOverNewOnes(t *testing.T) {
 	cfg.Clock = clk
 	cfg.Concurrency = 2 // allow two queries to run concurrently
 
-	p, err := NewPool[key.Key8, kadtest.StrAddr](cfg)
+	self := kadtest.NewID(key.Key8(0))
+	p, err := NewPool[key.Key8, kadtest.StrAddr](self, cfg)
 	require.NoError(t, err)
 
 	target := key.Key8(0b00000001)
@@ -285,7 +290,8 @@ func TestPoolRespectsConcurrency(t *testing.T) {
 	cfg.Concurrency = 2      // allow two queries to run concurrently
 	cfg.QueryConcurrency = 1 // allow each query to have a single request in flight
 
-	p, err := NewPool[key.Key8, kadtest.StrAddr](cfg)
+	self := kadtest.NewID(key.Key8(0))
+	p, err := NewPool[key.Key8, kadtest.StrAddr](self, cfg)
 	require.NoError(t, err)
 
 	target := key.Key8(0b00000001)

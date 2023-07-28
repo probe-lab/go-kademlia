@@ -80,7 +80,7 @@ func NewCoordinator[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], ep endpo
 	qpCfg := query.DefaultPoolConfig()
 	qpCfg.Clock = cfg.Clock
 
-	qp, err := query.NewPool[K, A](qpCfg)
+	qp, err := query.NewPool[K, A](self, qpCfg)
 	if err != nil {
 		return nil, fmt.Errorf("query pool: %w", err)
 	}
@@ -187,6 +187,11 @@ func (c *Coordinator[K, A]) dispatchQueryPoolEvent(ctx context.Context, ev query
 	case *query.StatePoolWaitingWithCapacity:
 		// TODO
 	case *query.StatePoolQueryFinished:
+		c.outboundEvents <- &KademliaOutboundQueryFinishedEvent{
+			QueryID: st.QueryID,
+			Stats:   st.Stats,
+		}
+
 		// TODO
 	case *query.StatePoolQueryTimeout:
 		// TODO
@@ -282,6 +287,11 @@ type KademliaOutboundQueryProgressedEvent[K kad.Key[K], A kad.Address[A]] struct
 	Response kad.Response[K, A]
 }
 
+type KademliaOutboundQueryFinishedEvent struct {
+	QueryID query.QueryID
+	Stats   query.QueryStats
+}
+
 type KademliaUnroutablePeerEvent[K kad.Key[K]] struct{}
 
 type KademliaRoutablePeerEvent[K kad.Key[K]] struct{}
@@ -291,6 +301,7 @@ func (*KademliaRoutingUpdatedEvent[K]) kademliaEvent()             {}
 func (*KademliaOutboundQueryProgressedEvent[K, A]) kademliaEvent() {}
 func (*KademliaUnroutablePeerEvent[K]) kademliaEvent()             {}
 func (*KademliaRoutablePeerEvent[K]) kademliaEvent()               {}
+func (*KademliaOutboundQueryFinishedEvent) kademliaEvent()         {}
 
 // Internal events for the Coordiinator
 

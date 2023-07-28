@@ -63,7 +63,7 @@ func main() {
 	ccfg.Clock = siml.Clock()
 	ccfg.PeerstoreTTL = peerstoreTTL
 
-	kad, err := coord.NewCoordinator[key.Key256, net.IP](eps[0], rts[0], ccfg)
+	kad, err := coord.NewCoordinator[key.Key256, net.IP](nodes[0].ID(), eps[0], rts[0], ccfg)
 	if err != nil {
 		log.Fatal(err)
 	}

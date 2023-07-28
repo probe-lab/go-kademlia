@@ -14,6 +14,8 @@ import (
 )
 
 type Pool[K kad.Key[K], A kad.Address[A]] struct {
+	// self is the node id of the system the pool is running on
+	self       kad.NodeID[K]
 	queries    []*Query[K, A]
 	queryIndex map[QueryID]*Query[K, A]
 
@@ -91,7 +93,7 @@ func DefaultPoolConfig() *PoolConfig {
 	}
 }
 
-func NewPool[K kad.Key[K], A kad.Address[A]](cfg *PoolConfig) (*Pool[K, A], error) {
+func NewPool[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], cfg *PoolConfig) (*Pool[K, A], error) {
 	if cfg == nil {
 		cfg = DefaultPoolConfig()
 	} else if err := cfg.Validate(); err != nil {
@@ -99,6 +101,7 @@ func NewPool[K kad.Key[K], A kad.Address[A]](cfg *PoolConfig) (*Pool[K, A], erro
 	}
 
 	return &Pool[K, A]{
+		self:       self,
 		cfg:        *cfg,
 		queries:    make([]*Query[K, A], 0),
 		queryIndex: make(map[QueryID]*Query[K, A]),
@@ -240,12 +243,12 @@ func (p *Pool[K, A]) addQuery(ctx context.Context, queryID QueryID, target K, pr
 	}
 	iter := NewClosestNodesIter(target)
 
-	qryCfg := DefaultQueryConfig()
+	qryCfg := DefaultQueryConfig[K]()
 	qryCfg.Clock = p.cfg.Clock
 	qryCfg.Concurrency = p.cfg.QueryConcurrency
 	qryCfg.RequestTimeout = p.cfg.RequestTimeout
 
-	qry, err := NewQuery[K](queryID, protocolID, msg, iter, knownClosestPeers, qryCfg)
+	qry, err := NewQuery[K](p.self, queryID, protocolID, msg, iter, knownClosestPeers, qryCfg)
 	if err != nil {
 		return fmt.Errorf("new query: %w", err)
 	}

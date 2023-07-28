@@ -9,6 +9,7 @@ import (
 
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/kaderr"
+	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/util"
 )
@@ -83,7 +84,7 @@ func (*EventQueryMessageResponse[K, A]) queryEvent() {}
 func (*EventQueryMessageFailure[K]) queryEvent()     {}
 
 // QueryConfig specifies optional configuration for a Query
-type QueryConfig struct {
+type QueryConfig[K kad.Key[K]] struct {
 	Concurrency    int           // the maximum number of concurrent requests that may be in flight
 	NumResults     int           // the minimum number of nodes to successfully contact before considering iteration complete
 	RequestTimeout time.Duration // the timeout for contacting a single node
@@ -91,7 +92,7 @@ type QueryConfig struct {
 }
 
 // Validate checks the configuration options and returns an error if any have invalid values.
-func (cfg *QueryConfig) Validate() error {
+func (cfg *QueryConfig[K]) Validate() error {
 	if cfg.Clock == nil {
 		return &kaderr.ConfigurationError{
 			Component: "QueryConfig",
@@ -121,8 +122,8 @@ func (cfg *QueryConfig) Validate() error {
 
 // DefaultQueryConfig returns the default configuration options for a Query.
 // Options may be overridden before passing to NewQuery
-func DefaultQueryConfig() *QueryConfig {
-	return &QueryConfig{
+func DefaultQueryConfig[K kad.Key[K]]() *QueryConfig[K] {
+	return &QueryConfig[K]{
 		Concurrency:    3,
 		NumResults:     20,
 		RequestTimeout: time.Minute,
@@ -131,10 +132,11 @@ func DefaultQueryConfig() *QueryConfig {
 }
 
 type Query[K kad.Key[K], A kad.Address[A]] struct {
-	id QueryID
+	self kad.NodeID[K]
+	id   QueryID
 
 	// cfg is a copy of the optional configuration supplied to the query
-	cfg QueryConfig
+	cfg QueryConfig[K]
 
 	iter       NodeIter[K]
 	protocolID address.ProtocolID
@@ -148,14 +150,18 @@ type Query[K kad.Key[K], A kad.Address[A]] struct {
 	inFlight int
 }
 
-func NewQuery[K kad.Key[K], A kad.Address[A]](id QueryID, protocolID address.ProtocolID, msg kad.Request[K, A], iter NodeIter[K], knownClosestNodes []kad.NodeID[K], cfg *QueryConfig) (*Query[K, A], error) {
+func NewQuery[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], id QueryID, protocolID address.ProtocolID, msg kad.Request[K, A], iter NodeIter[K], knownClosestNodes []kad.NodeID[K], cfg *QueryConfig[K]) (*Query[K, A], error) {
 	if cfg == nil {
-		cfg = DefaultQueryConfig()
+		cfg = DefaultQueryConfig[K]()
 	} else if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
 	for _, node := range knownClosestNodes {
+		// exclude self from closest nodes
+		if key.Equal(node.Key(), self.Key()) {
+			continue
+		}
 		iter.Add(&NodeStatus[K]{
 			NodeID: node,
 			State:  &StateNodeNotContacted{},
@@ -163,6 +169,7 @@ func NewQuery[K kad.Key[K], A kad.Address[A]](id QueryID, protocolID address.Pro
 	}
 
 	return &Query[K, A]{
+		self:       self,
 		id:         id,
 		cfg:        *cfg,
 		iter:       iter,
@@ -339,6 +346,10 @@ func (q *Query[K, A]) onMessageResponse(ctx context.Context, node kad.NodeID[K],
 	if resp != nil {
 		// add closer nodes to list
 		for _, info := range resp.CloserNodes() {
+			// exclude self from closest nodes
+			if key.Equal(info.ID().Key(), q.self.Key()) {
+				continue
+			}
 			q.iter.Add(&NodeStatus[K]{
 				NodeID: info.ID(),
 				State:  &StateNodeNotContacted{},

@@ -16,18 +16,18 @@ import (
 
 func TestQueryConfigValidate(t *testing.T) {
 	t.Run("default is valid", func(t *testing.T) {
-		cfg := DefaultQueryConfig()
+		cfg := DefaultQueryConfig[key.Key8]()
 		require.NoError(t, cfg.Validate())
 	})
 
 	t.Run("clock is not nil", func(t *testing.T) {
-		cfg := DefaultQueryConfig()
+		cfg := DefaultQueryConfig[key.Key8]()
 		cfg.Clock = nil
 		require.Error(t, cfg.Validate())
 	})
 
 	t.Run("request timeout positive", func(t *testing.T) {
-		cfg := DefaultQueryConfig()
+		cfg := DefaultQueryConfig[key.Key8]()
 		cfg.RequestTimeout = 0
 		require.Error(t, cfg.Validate())
 		cfg.RequestTimeout = -1
@@ -35,7 +35,7 @@ func TestQueryConfigValidate(t *testing.T) {
 	})
 
 	t.Run("concurrency positive", func(t *testing.T) {
-		cfg := DefaultQueryConfig()
+		cfg := DefaultQueryConfig[key.Key8]()
 		cfg.Concurrency = 0
 		require.Error(t, cfg.Validate())
 		cfg.Concurrency = -1
@@ -43,7 +43,7 @@ func TestQueryConfigValidate(t *testing.T) {
 	})
 
 	t.Run("num results positive", func(t *testing.T) {
-		cfg := DefaultQueryConfig()
+		cfg := DefaultQueryConfig[key.Key8]()
 		cfg.NumResults = 0
 		require.Error(t, cfg.Validate())
 		cfg.NumResults = -1
@@ -64,7 +64,7 @@ func TestQueryMessagesNode(t *testing.T) {
 
 	iter := NewClosestNodesIter(target)
 
-	cfg := DefaultQueryConfig()
+	cfg := DefaultQueryConfig[key.Key8]()
 	cfg.Clock = clk
 
 	msg := kadtest.NewRequest("1", target)
@@ -72,7 +72,8 @@ func TestQueryMessagesNode(t *testing.T) {
 	queryID := QueryID("test")
 	protocolID := address.ProtocolID("testprotocol")
 
-	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, knownNodes, cfg)
+	self := kadtest.NewID(key.Key8(0))
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](self, queryID, protocolID, msg, iter, knownNodes, cfg)
 	require.NoError(t, err)
 
 	// first thing the new query should do is request to send a message to the node
@@ -116,7 +117,7 @@ func TestQueryMessagesNearest(t *testing.T) {
 
 	iter := NewClosestNodesIter(target)
 
-	cfg := DefaultQueryConfig()
+	cfg := DefaultQueryConfig[key.Key8]()
 	cfg.Clock = clk
 
 	msg := kadtest.NewRequest("1", target)
@@ -124,7 +125,8 @@ func TestQueryMessagesNearest(t *testing.T) {
 	queryID := QueryID("test")
 	protocolID := address.ProtocolID("testprotocol")
 
-	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, knownNodes, cfg)
+	self := kadtest.NewID(key.Key8(0))
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](self, queryID, protocolID, msg, iter, knownNodes, cfg)
 	require.NoError(t, err)
 
 	// first thing the new query should do is message the nearest node
@@ -149,7 +151,7 @@ func TestQueryCancelFinishesQuery(t *testing.T) {
 
 	iter := NewClosestNodesIter(target)
 
-	cfg := DefaultQueryConfig()
+	cfg := DefaultQueryConfig[key.Key8]()
 	cfg.Clock = clk
 
 	msg := kadtest.NewRequest("1", target)
@@ -157,7 +159,8 @@ func TestQueryCancelFinishesQuery(t *testing.T) {
 	queryID := QueryID("test")
 	protocolID := address.ProtocolID("testprotocol")
 
-	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, knownNodes, cfg)
+	self := kadtest.NewID(key.Key8(0))
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](self, queryID, protocolID, msg, iter, knownNodes, cfg)
 	require.NoError(t, err)
 
 	// first thing the new query should do is request to send a message to the node
@@ -194,7 +197,7 @@ func TestQueryNoClosest(t *testing.T) {
 	iter := NewClosestNodesIter(target)
 
 	clk := clock.NewMock()
-	cfg := DefaultQueryConfig()
+	cfg := DefaultQueryConfig[key.Key8]()
 	cfg.Clock = clk
 
 	msg := kadtest.NewRequest("1", target)
@@ -202,7 +205,8 @@ func TestQueryNoClosest(t *testing.T) {
 	queryID := QueryID("test")
 	protocolID := address.ProtocolID("testprotocol")
 
-	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, knownNodes, cfg)
+	self := kadtest.NewID(key.Key8(0))
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](self, queryID, protocolID, msg, iter, knownNodes, cfg)
 	require.NoError(t, err)
 
 	// query is finished because there were no nodes to contat
@@ -239,7 +243,7 @@ func TestQueryWaitsAtCapacity(t *testing.T) {
 
 	iter := NewClosestNodesIter(target)
 
-	cfg := DefaultQueryConfig()
+	cfg := DefaultQueryConfig[key.Key8]()
 	cfg.Clock = clk
 	cfg.Concurrency = 2
 
@@ -247,7 +251,8 @@ func TestQueryWaitsAtCapacity(t *testing.T) {
 	queryID := QueryID("test")
 	protocolID := address.ProtocolID("testprotocol")
 
-	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, knownNodes, cfg)
+	self := kadtest.NewID(key.Key8(0))
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](self, queryID, protocolID, msg, iter, knownNodes, cfg)
 	require.NoError(t, err)
 
 	// first thing the new query should do is request to send a message to the node
@@ -293,7 +298,7 @@ func TestQueryTimedOutNodeMakesCapacity(t *testing.T) {
 
 	iter := NewClosestNodesIter(target)
 
-	cfg := DefaultQueryConfig()
+	cfg := DefaultQueryConfig[key.Key8]()
 	cfg.Clock = clk
 	cfg.RequestTimeout = 3 * time.Minute
 	cfg.Concurrency = len(knownNodes) - 1 // one less than the number of initial nodes
@@ -302,7 +307,8 @@ func TestQueryTimedOutNodeMakesCapacity(t *testing.T) {
 	queryID := QueryID("test")
 	protocolID := address.ProtocolID("testprotocol")
 
-	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, knownNodes, cfg)
+	self := kadtest.NewID(key.Key8(0))
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](self, queryID, protocolID, msg, iter, knownNodes, cfg)
 	require.NoError(t, err)
 
 	// first thing the new query should do is contact the nearest node
@@ -400,7 +406,7 @@ func TestQueryMessageResponseMakesCapacity(t *testing.T) {
 
 	iter := NewClosestNodesIter(target)
 
-	cfg := DefaultQueryConfig()
+	cfg := DefaultQueryConfig[key.Key8]()
 	cfg.Clock = clk
 	cfg.Concurrency = len(knownNodes) - 1 // one less than the number of initial nodes
 
@@ -408,7 +414,8 @@ func TestQueryMessageResponseMakesCapacity(t *testing.T) {
 	queryID := QueryID("test")
 	protocolID := address.ProtocolID("testprotocol")
 
-	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, knownNodes, cfg)
+	self := kadtest.NewID(key.Key8(0))
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](self, queryID, protocolID, msg, iter, knownNodes, cfg)
 	require.NoError(t, err)
 
 	// first thing the new query should do is contact the nearest node
@@ -485,7 +492,7 @@ func TestQueryCloserNodesAreAddedToIteration(t *testing.T) {
 
 	iter := NewClosestNodesIter(target)
 
-	cfg := DefaultQueryConfig()
+	cfg := DefaultQueryConfig[key.Key8]()
 	cfg.Clock = clk
 	cfg.Concurrency = 2
 
@@ -493,7 +500,8 @@ func TestQueryCloserNodesAreAddedToIteration(t *testing.T) {
 	queryID := QueryID("test")
 	protocolID := address.ProtocolID("testprotocol")
 
-	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, knownNodes, cfg)
+	self := kadtest.NewID(key.Key8(0))
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](self, queryID, protocolID, msg, iter, knownNodes, cfg)
 	require.NoError(t, err)
 
 	// first thing the new query should do is contact the first node
@@ -542,7 +550,7 @@ func TestQueryCloserNodesIgnoresDuplicates(t *testing.T) {
 
 	iter := NewClosestNodesIter(target)
 
-	cfg := DefaultQueryConfig()
+	cfg := DefaultQueryConfig[key.Key8]()
 	cfg.Clock = clk
 	cfg.Concurrency = 2
 
@@ -550,7 +558,8 @@ func TestQueryCloserNodesIgnoresDuplicates(t *testing.T) {
 	queryID := QueryID("test")
 	protocolID := address.ProtocolID("testprotocol")
 
-	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, knownNodes, cfg)
+	self := kadtest.NewID(key.Key8(0))
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](self, queryID, protocolID, msg, iter, knownNodes, cfg)
 	require.NoError(t, err)
 
 	// first thing the new query should do is contact the first node
@@ -597,7 +606,7 @@ func TestQueryCancelFinishesIteration(t *testing.T) {
 
 	iter := NewClosestNodesIter(target)
 
-	cfg := DefaultQueryConfig()
+	cfg := DefaultQueryConfig[key.Key8]()
 	cfg.Clock = clk
 	cfg.Concurrency = 2
 
@@ -605,7 +614,8 @@ func TestQueryCancelFinishesIteration(t *testing.T) {
 	queryID := QueryID("test")
 	protocolID := address.ProtocolID("testprotocol")
 
-	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, knownNodes, cfg)
+	self := kadtest.NewID(key.Key8(0))
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](self, queryID, protocolID, msg, iter, knownNodes, cfg)
 	require.NoError(t, err)
 
 	// first thing the new query should do is contact the first node
@@ -636,7 +646,7 @@ func TestQueryFinishedIgnoresLaterEvents(t *testing.T) {
 
 	iter := NewClosestNodesIter(target)
 
-	cfg := DefaultQueryConfig()
+	cfg := DefaultQueryConfig[key.Key8]()
 	cfg.Clock = clk
 	cfg.Concurrency = 2
 
@@ -644,7 +654,8 @@ func TestQueryFinishedIgnoresLaterEvents(t *testing.T) {
 	queryID := QueryID("test")
 	protocolID := address.ProtocolID("testprotocol")
 
-	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, knownNodes, cfg)
+	self := kadtest.NewID(key.Key8(0))
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](self, queryID, protocolID, msg, iter, knownNodes, cfg)
 	require.NoError(t, err)
 
 	// first thing the new query should do is contact the first node
@@ -696,7 +707,7 @@ func TestQueryWithCloserIterIgnoresMessagesFromUnknownNodes(t *testing.T) {
 
 	iter := NewClosestNodesIter(target)
 
-	cfg := DefaultQueryConfig()
+	cfg := DefaultQueryConfig[key.Key8]()
 	cfg.Clock = clk
 	cfg.Concurrency = 2
 
@@ -704,7 +715,8 @@ func TestQueryWithCloserIterIgnoresMessagesFromUnknownNodes(t *testing.T) {
 	queryID := QueryID("test")
 	protocolID := address.ProtocolID("testprotocol")
 
-	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, knownNodes, cfg)
+	self := kadtest.NewID(key.Key8(0))
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](self, queryID, protocolID, msg, iter, knownNodes, cfg)
 	require.NoError(t, err)
 
 	// first thing the new query should do is contact the first node
@@ -750,7 +762,7 @@ func TestQueryWithCloserIterFinishesWhenNumResultsReached(t *testing.T) {
 
 	iter := NewClosestNodesIter(target)
 
-	cfg := DefaultQueryConfig()
+	cfg := DefaultQueryConfig[key.Key8]()
 	cfg.Clock = clk
 	cfg.Concurrency = 4
 	cfg.NumResults = 2
@@ -759,7 +771,8 @@ func TestQueryWithCloserIterFinishesWhenNumResultsReached(t *testing.T) {
 	queryID := QueryID("test")
 	protocolID := address.ProtocolID("testprotocol")
 
-	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, knownNodes, cfg)
+	self := kadtest.NewID(key.Key8(0))
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](self, queryID, protocolID, msg, iter, knownNodes, cfg)
 	require.NoError(t, err)
 
 	// contact first node
@@ -808,7 +821,7 @@ func TestQueryWithCloserIterContinuesUntilNumResultsReached(t *testing.T) {
 
 	iter := NewClosestNodesIter(target)
 
-	cfg := DefaultQueryConfig()
+	cfg := DefaultQueryConfig[key.Key8]()
 	cfg.Clock = clk
 	cfg.Concurrency = 4
 	cfg.NumResults = 2
@@ -817,7 +830,8 @@ func TestQueryWithCloserIterContinuesUntilNumResultsReached(t *testing.T) {
 	queryID := QueryID("test")
 	protocolID := address.ProtocolID("testprotocol")
 
-	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, knownNodes, cfg)
+	self := kadtest.NewID(key.Key8(0))
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](self, queryID, protocolID, msg, iter, knownNodes, cfg)
 	require.NoError(t, err)
 
 	// contact first node
@@ -886,7 +900,7 @@ func TestQueryNotContactedMakesCapacity(t *testing.T) {
 	iter := NewSequentialIter[key.Key8]()
 
 	clk := clock.NewMock()
-	cfg := DefaultQueryConfig()
+	cfg := DefaultQueryConfig[key.Key8]()
 	cfg.Clock = clk
 	cfg.Concurrency = len(knownNodes) - 1 // one less than the number of initial nodes
 
@@ -894,7 +908,8 @@ func TestQueryNotContactedMakesCapacity(t *testing.T) {
 	queryID := QueryID("test")
 	protocolID := address.ProtocolID("testprotocol")
 
-	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, knownNodes, cfg)
+	self := kadtest.NewID(key.Key8(0))
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](self, queryID, protocolID, msg, iter, knownNodes, cfg)
 	require.NoError(t, err)
 
 	// first thing the new query should do is contact the nearest node
@@ -945,7 +960,7 @@ func TestQueryAllNotContactedFinishes(t *testing.T) {
 
 	iter := NewSequentialIter[key.Key8]()
 
-	cfg := DefaultQueryConfig()
+	cfg := DefaultQueryConfig[key.Key8]()
 	cfg.Clock = clk
 	cfg.Concurrency = len(knownNodes) // allow all to be contacted at once
 
@@ -953,7 +968,8 @@ func TestQueryAllNotContactedFinishes(t *testing.T) {
 	queryID := QueryID("test")
 	protocolID := address.ProtocolID("testprotocol")
 
-	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, knownNodes, cfg)
+	self := kadtest.NewID(key.Key8(0))
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](self, queryID, protocolID, msg, iter, knownNodes, cfg)
 	require.NoError(t, err)
 
 	// first thing the new query should do is contact the nearest node
@@ -1004,7 +1020,7 @@ func TestQueryAllContactedFinishes(t *testing.T) {
 
 	iter := NewSequentialIter[key.Key8]()
 
-	cfg := DefaultQueryConfig()
+	cfg := DefaultQueryConfig[key.Key8]()
 	cfg.Clock = clk
 	cfg.Concurrency = len(knownNodes)    // allow all to be contacted at once
 	cfg.NumResults = len(knownNodes) + 1 // one more than the size of the network
@@ -1013,7 +1029,8 @@ func TestQueryAllContactedFinishes(t *testing.T) {
 	queryID := QueryID("test")
 	protocolID := address.ProtocolID("testprotocol")
 
-	qry, err := NewQuery[key.Key8, kadtest.StrAddr](queryID, protocolID, msg, iter, knownNodes, cfg)
+	self := kadtest.NewID(key.Key8(0))
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](self, queryID, protocolID, msg, iter, knownNodes, cfg)
 	require.NoError(t, err)
 
 	// first thing the new query should do is contact the nearest node
@@ -1049,4 +1066,54 @@ func TestQueryAllContactedFinishes(t *testing.T) {
 
 	stf := state.(*StateQueryFinished)
 	require.Equal(t, 3, stf.Stats.Success)
+}
+
+func TestQueryNeverMessagesSelf(t *testing.T) {
+	ctx := context.Background()
+
+	target := key.Key8(0b00000001)
+	a := kadtest.NewID(key.Key8(0b00000100)) // 4
+	b := kadtest.NewID(key.Key8(0b00001000)) // 8
+
+	// one known node to start with
+	knownNodes := []kad.NodeID[key.Key8]{b}
+
+	clk := clock.NewMock()
+
+	iter := NewClosestNodesIter(target)
+
+	cfg := DefaultQueryConfig[key.Key8]()
+	cfg.Clock = clk
+	cfg.Concurrency = 2
+
+	msg := kadtest.NewRequest("1", target)
+	queryID := QueryID("test")
+	protocolID := address.ProtocolID("testprotocol")
+
+	self := a
+	qry, err := NewQuery[key.Key8, kadtest.StrAddr](self, queryID, protocolID, msg, iter, knownNodes, cfg)
+	require.NoError(t, err)
+
+	// first thing the new query should do is contact the first node
+	state := qry.Advance(ctx, nil)
+	require.IsType(t, &StateQueryWaitingMessage[key.Key8, kadtest.StrAddr]{}, state)
+	st := state.(*StateQueryWaitingMessage[key.Key8, kadtest.StrAddr])
+	require.Equal(t, b, st.NodeID)
+
+	// notify query that first node was contacted successfully, with closer nodes
+	state = qry.Advance(ctx, &EventQueryMessageResponse[key.Key8, kadtest.StrAddr]{
+		NodeID: b,
+		Response: kadtest.NewResponse("resp_b", []kad.NodeInfo[key.Key8, kadtest.StrAddr]{
+			kadtest.NewInfo(a, []kadtest.StrAddr{"addr_a"}),
+		}),
+	})
+
+	// query is finished since it can't contact self
+	require.IsType(t, &StateQueryFinished{}, state)
+
+	// one successful message
+	stf := state.(*StateQueryFinished)
+	require.Equal(t, 1, stf.Stats.Requests)
+	require.Equal(t, 1, stf.Stats.Success)
+	require.Equal(t, 0, stf.Stats.Failure)
 }

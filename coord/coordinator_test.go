@@ -23,14 +23,14 @@ import (
 	"github.com/plprobelab/go-kademlia/sim"
 )
 
-func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key256, kadtest.StrAddr], []*sim.Endpoint[key.Key256, kadtest.StrAddr], []kad.RoutingTable[key.Key256], *litesimulator.LiteSimulator) {
+func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key8, kadtest.StrAddr], []*sim.Endpoint[key.Key8, kadtest.StrAddr], []kad.RoutingTable[key.Key8], *litesimulator.LiteSimulator) {
 	// create node identifiers
 	nodeCount := 4
-	ids := make([]*kadtest.ID[key.Key256], nodeCount)
-	ids[0] = kadtest.NewID(key.ZeroKey256())
-	ids[1] = kadtest.NewID(key.NewKey256(append(make([]byte, 31), 0x01)))
-	ids[2] = kadtest.NewID(key.NewKey256(append(make([]byte, 31), 0x02)))
-	ids[3] = kadtest.NewID(key.NewKey256(append(make([]byte, 31), 0x03)))
+	ids := make([]*kadtest.ID[key.Key8], nodeCount)
+	ids[0] = kadtest.NewID(key.Key8(0x00))
+	ids[1] = kadtest.NewID(key.Key8(0x01))
+	ids[2] = kadtest.NewID(key.Key8(0x02))
+	ids[3] = kadtest.NewID(key.Key8(0x03))
 
 	// Kademlia trie:
 	//     ^
@@ -38,7 +38,7 @@ func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key2
 	//   ^   ^
 	//  A B C D
 
-	addrs := make([]kad.NodeInfo[key.Key256, kadtest.StrAddr], nodeCount)
+	addrs := make([]kad.NodeInfo[key.Key8, kadtest.StrAddr], nodeCount)
 	for i := 0; i < nodeCount; i++ {
 		addrs[i] = kadtest.NewInfo(ids[i], []kadtest.StrAddr{})
 	}
@@ -47,12 +47,12 @@ func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key2
 	clk := clock.NewMock()
 
 	// create a fake router to virtually connect nodes
-	router := sim.NewRouter[key.Key256, kadtest.StrAddr]()
+	router := sim.NewRouter[key.Key8, kadtest.StrAddr]()
 
-	rts := make([]kad.RoutingTable[key.Key256], len(addrs))
-	eps := make([]*sim.Endpoint[key.Key256, kadtest.StrAddr], len(addrs))
+	rts := make([]kad.RoutingTable[key.Key8], len(addrs))
+	eps := make([]*sim.Endpoint[key.Key8, kadtest.StrAddr], len(addrs))
 	schedulers := make([]scheduler.AwareScheduler, len(addrs))
-	servers := make([]*sim.Server[key.Key256, kadtest.StrAddr], len(addrs))
+	servers := make([]*sim.Server[key.Key8, kadtest.StrAddr], len(addrs))
 
 	for i := 0; i < len(addrs); i++ {
 		i := i // :(
@@ -61,9 +61,9 @@ func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key2
 		// create a scheduler based on the mock clock
 		schedulers[i] = ss.NewSimpleScheduler(clk)
 		// create a fake endpoint for the node, communicating through the router
-		eps[i] = sim.NewEndpoint[key.Key256, kadtest.StrAddr](addrs[i].ID(), schedulers[i], router)
+		eps[i] = sim.NewEndpoint[key.Key8, kadtest.StrAddr](addrs[i].ID(), schedulers[i], router)
 		// create a server instance for the node
-		servers[i] = sim.NewServer[key.Key256, kadtest.StrAddr](rts[i], eps[i], sim.DefaultServerConfig())
+		servers[i] = sim.NewServer[key.Key8, kadtest.StrAddr](rts[i], eps[i], sim.DefaultServerConfig())
 		// add the server request handler for protoID to the endpoint
 		err := eps[i].AddRequestHandler(protoID, nil, servers[i].HandleFindNodeRequest)
 		if err != nil {
@@ -88,8 +88,8 @@ func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key2
 }
 
 // connectNodes adds nodes to each other's peerstores and routing tables
-func connectNodes(t *testing.T, n0, n1 kad.NodeInfo[key.Key256, kadtest.StrAddr], ep0, ep1 endpoint.Endpoint[key.Key256, kadtest.StrAddr],
-	rt0, rt1 kad.RoutingTable[key.Key256],
+func connectNodes(t *testing.T, n0, n1 kad.NodeInfo[key.Key8, kadtest.StrAddr], ep0, ep1 endpoint.Endpoint[key.Key8, kadtest.StrAddr],
+	rt0, rt1 kad.RoutingTable[key.Key8],
 ) {
 	t.Helper()
 
@@ -164,8 +164,8 @@ func TestExhaustiveQuery(t *testing.T) {
 	// A (ids[0]) is looking for D (ids[3])
 	// A will first ask B, B will reply with C's address (and A's address)
 	// A will then ask C, C will reply with D's address (and B's address)
-
-	c, err := NewCoordinator[key.Key256, kadtest.StrAddr](nodes[3].ID(), eps[0], rts[0], ccfg)
+	self := nodes[0].ID()
+	c, err := NewCoordinator[key.Key8, kadtest.StrAddr](self, eps[0], rts[0], ccfg)
 	if err != nil {
 		log.Fatalf("unexpected error creating coordinator: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestExhaustiveQuery(t *testing.T) {
 
 	queryID := query.QueryID("query1")
 
-	err = c.StartQuery(ctx, queryID, protoID, sim.NewRequest[key.Key256, kadtest.StrAddr](nodes[3].ID().Key()))
+	err = c.StartQuery(ctx, queryID, protoID, sim.NewRequest[key.Key8, kadtest.StrAddr](nodes[3].ID().Key()))
 	if err != nil {
 		t.Fatalf("failed to start query: %v", err)
 	}
@@ -186,8 +186,8 @@ func TestExhaustiveQuery(t *testing.T) {
 		t.Fatalf("test deadline exceeded")
 	}
 	// the query run by the coordinator should have received a response from node[1]
-	require.IsType(t, &KademliaOutboundQueryProgressedEvent[key.Key256, kadtest.StrAddr]{}, ev)
-	tev := ev.(*KademliaOutboundQueryProgressedEvent[key.Key256, kadtest.StrAddr])
+	require.IsType(t, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{}, ev)
+	tev := ev.(*KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr])
 	require.Equal(t, nodes[1].ID(), tev.NodeID)
 	require.Equal(t, queryID, tev.QueryID)
 
@@ -197,8 +197,8 @@ func TestExhaustiveQuery(t *testing.T) {
 		t.Fatalf("test deadline exceeded")
 	}
 	// the query run by the coordinator should have received a response from node[2]
-	require.IsType(t, &KademliaOutboundQueryProgressedEvent[key.Key256, kadtest.StrAddr]{}, ev)
-	tev = ev.(*KademliaOutboundQueryProgressedEvent[key.Key256, kadtest.StrAddr])
+	require.IsType(t, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{}, ev)
+	tev = ev.(*KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr])
 	require.Equal(t, nodes[2].ID(), tev.NodeID)
 	require.Equal(t, queryID, tev.QueryID)
 
@@ -208,8 +208,8 @@ func TestExhaustiveQuery(t *testing.T) {
 		t.Fatalf("test deadline exceeded")
 	}
 	// the query run by the coordinator should have received a response from node[3]
-	require.IsType(t, &KademliaOutboundQueryProgressedEvent[key.Key256, kadtest.StrAddr]{}, ev)
-	tev = ev.(*KademliaOutboundQueryProgressedEvent[key.Key256, kadtest.StrAddr])
+	require.IsType(t, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{}, ev)
+	tev = ev.(*KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr])
 	require.Equal(t, nodes[3].ID(), tev.NodeID)
 	require.Equal(t, queryID, tev.QueryID)
 
@@ -218,9 +218,11 @@ func TestExhaustiveQuery(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("test deadline exceeded")
 	}
-	// the query run by the coordinator should have received a response from node[3]
-	require.IsType(t, &KademliaOutboundQueryProgressedEvent[key.Key256, kadtest.StrAddr]{}, ev)
-	tev = ev.(*KademliaOutboundQueryProgressedEvent[key.Key256, kadtest.StrAddr])
-	require.Equal(t, nodes[0].ID(), tev.NodeID)
-	require.Equal(t, queryID, tev.QueryID)
+	// the query run by the coordinator should have completed
+	require.IsType(t, &KademliaOutboundQueryFinishedEvent{}, ev)
+	tevf := ev.(*KademliaOutboundQueryFinishedEvent)
+	require.Equal(t, queryID, tevf.QueryID)
+	require.Equal(t, 3, tevf.Stats.Requests)
+	require.Equal(t, 3, tevf.Stats.Success)
+	require.Equal(t, 0, tevf.Stats.Failure)
 }
