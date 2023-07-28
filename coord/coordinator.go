@@ -11,6 +11,7 @@ import (
 
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/kaderr"
+	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"github.com/plprobelab/go-kademlia/query"
@@ -128,9 +129,12 @@ func (c *Coordinator[K, A]) mainloop(ctx context.Context) {
 				c.dispatchQueryPoolEvent(ctx, nil)
 
 			case *eventMessageResponse[K, A]:
-				for _, addr := range tev.Response.CloserNodes() {
-					c.rt.AddNode(addr.ID())
-					c.ep.MaybeAddToPeerstore(ctx, addr, c.peerstoreTTL)
+				if tev.Response != nil {
+					candidates := tev.Response.CloserNodes()
+					if len(candidates) > 0 {
+						// ignore error here
+						c.AddNodes(ctx, candidates)
+					}
 				}
 
 				// notify caller so they have chance to stop query
@@ -255,9 +259,27 @@ func (c *Coordinator[K, A]) StopQuery(ctx context.Context, queryID query.QueryID
 		QueryID: queryID,
 	}
 
-	// c.queue.Enqueue(ctx, ev)
-
 	c.inboundEvents <- ev
+	return nil
+}
+
+// AddNodes suggests new DHT nodes and their associated addresses to be added to the routing table.
+// If the routing table is been updated as a result of this operation a KademliaRoutingUpdatedEvent event is emitted.
+func (c *Coordinator[K, A]) AddNodes(ctx context.Context, infos []kad.NodeInfo[K, A]) error {
+	for _, info := range infos {
+		if key.Equal(info.ID().Key(), c.self.Key()) {
+			continue
+		}
+		isNew := c.rt.AddNode(info.ID())
+		c.ep.MaybeAddToPeerstore(ctx, info, c.peerstoreTTL)
+
+		if isNew {
+			c.outboundEvents <- &KademliaRoutingUpdatedEvent[K, A]{
+				NodeInfo: info,
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -283,14 +305,16 @@ type KademliaOutboundQueryFinishedEvent struct {
 	Stats   query.QueryStats
 }
 
-type KademliaRoutingUpdatedEvent[K kad.Key[K]] struct{}
+type KademliaRoutingUpdatedEvent[K kad.Key[K], A kad.Address[A]] struct {
+	NodeInfo kad.NodeInfo[K, A]
+}
 
 type KademliaUnroutablePeerEvent[K kad.Key[K]] struct{}
 
 type KademliaRoutablePeerEvent[K kad.Key[K]] struct{}
 
 // kademliaEvent() ensures that only Kademlia events can be assigned to a KademliaEvent.
-func (*KademliaRoutingUpdatedEvent[K]) kademliaEvent()             {}
+func (*KademliaRoutingUpdatedEvent[K, A]) kademliaEvent()          {}
 func (*KademliaOutboundQueryProgressedEvent[K, A]) kademliaEvent() {}
 func (*KademliaUnroutablePeerEvent[K]) kademliaEvent()             {}
 func (*KademliaRoutablePeerEvent[K]) kademliaEvent()               {}

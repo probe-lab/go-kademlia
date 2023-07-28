@@ -2,7 +2,9 @@ package coord
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"reflect"
 	"testing"
 	"time"
 
@@ -108,17 +110,18 @@ const peerstoreTTL = 10 * time.Minute
 
 var protoID = address.ProtocolID("/statemachine/1.0.0") // protocol ID for the test
 
-func TestConfigValidate(t *testing.T) {
-	t.Run("default is valid", func(t *testing.T) {
-		cfg := DefaultConfig()
-		require.NoError(t, cfg.Validate())
-	})
-
-	t.Run("clock is not nil", func(t *testing.T) {
-		cfg := DefaultConfig()
-		cfg.Clock = nil
-		require.Error(t, cfg.Validate())
-	})
+// expectEventType selects on the event channel until an event of the expected type is sent.
+func expectEventType(ctx context.Context, events <-chan KademliaEvent, expected KademliaEvent) (KademliaEvent, error) {
+	for {
+		select {
+		case ev := <-events:
+			if reflect.TypeOf(ev) == reflect.TypeOf(expected) {
+				return ev, nil
+			}
+		case <-ctx.Done():
+			return nil, fmt.Errorf("test deadline exceeded")
+		}
+	}
 }
 
 // Ctx returns a Context and a CancelFunc. The context will be
@@ -136,6 +139,19 @@ func Ctx(t *testing.T) (context.Context, context.CancelFunc) {
 		deadline = deadline.Add(-time.Second)
 	}
 	return context.WithDeadline(context.Background(), deadline)
+}
+
+func TestConfigValidate(t *testing.T) {
+	t.Run("default is valid", func(t *testing.T) {
+		cfg := DefaultConfig()
+		require.NoError(t, cfg.Validate())
+	})
+
+	t.Run("clock is not nil", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.Clock = nil
+		require.Error(t, cfg.Validate())
+	})
 }
 
 func TestExhaustiveQuery(t *testing.T) {
@@ -178,51 +194,101 @@ func TestExhaustiveQuery(t *testing.T) {
 		t.Fatalf("failed to start query: %v", err)
 	}
 
-	var ev KademliaEvent
-
-	select {
-	case ev = <-events:
-	case <-ctx.Done():
-		t.Fatalf("test deadline exceeded")
-	}
 	// the query run by the coordinator should have received a response from nodes[1]
-	require.IsType(t, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{}, ev)
+	ev, err := expectEventType(ctx, events, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{})
+	require.NoError(t, err)
+
 	tev := ev.(*KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr])
 	require.Equal(t, nodes[1].ID(), tev.NodeID)
 	require.Equal(t, queryID, tev.QueryID)
 
-	select {
-	case ev = <-events:
-	case <-ctx.Done():
-		t.Fatalf("test deadline exceeded")
-	}
 	// the query run by the coordinator should have received a response from nodes[2]
-	require.IsType(t, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{}, ev)
+	ev, err = expectEventType(ctx, events, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{})
+	require.NoError(t, err)
+
 	tev = ev.(*KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr])
 	require.Equal(t, nodes[2].ID(), tev.NodeID)
 	require.Equal(t, queryID, tev.QueryID)
 
-	select {
-	case ev = <-events:
-	case <-ctx.Done():
-		t.Fatalf("test deadline exceeded")
-	}
 	// the query run by the coordinator should have received a response from nodes[3]
-	require.IsType(t, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{}, ev)
+	ev, err = expectEventType(ctx, events, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{})
+	require.NoError(t, err)
+
 	tev = ev.(*KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr])
 	require.Equal(t, nodes[3].ID(), tev.NodeID)
 	require.Equal(t, queryID, tev.QueryID)
 
-	select {
-	case ev = <-events:
-	case <-ctx.Done():
-		t.Fatalf("test deadline exceeded")
-	}
 	// the query run by the coordinator should have completed
+	ev, err = expectEventType(ctx, events, &KademliaOutboundQueryFinishedEvent{})
+	require.NoError(t, err)
+
 	require.IsType(t, &KademliaOutboundQueryFinishedEvent{}, ev)
 	tevf := ev.(*KademliaOutboundQueryFinishedEvent)
 	require.Equal(t, queryID, tevf.QueryID)
 	require.Equal(t, 3, tevf.Stats.Requests)
 	require.Equal(t, 3, tevf.Stats.Success)
 	require.Equal(t, 0, tevf.Stats.Failure)
+}
+
+func TestRoutingUpdatedEventEmittedForCloserNodes(t *testing.T) {
+	ctx, cancel := Ctx(t)
+	defer cancel()
+
+	nodes, eps, rts, siml := setupSimulation(t, ctx)
+
+	clk := siml.Clock()
+
+	ccfg := DefaultConfig()
+	ccfg.Clock = clk
+	ccfg.PeerstoreTTL = peerstoreTTL
+
+	go func(ctx context.Context) {
+		for {
+			select {
+			case <-time.After(10 * time.Millisecond):
+				siml.Run(ctx)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}(ctx)
+
+	// A (ids[0]) is looking for D (ids[3])
+	// A will first ask B, B will reply with C's address (and A's address)
+	// A will then ask C, C will reply with D's address (and B's address)
+	self := nodes[0].ID()
+	c, err := NewCoordinator[key.Key8, kadtest.StrAddr](self, eps[0], rts[0], ccfg)
+	if err != nil {
+		log.Fatalf("unexpected error creating coordinator: %v", err)
+	}
+	events := c.Start(ctx)
+
+	queryID := query.QueryID("query1")
+
+	err = c.StartQuery(ctx, queryID, protoID, sim.NewRequest[key.Key8, kadtest.StrAddr](nodes[3].ID().Key()))
+	if err != nil {
+		t.Fatalf("failed to start query: %v", err)
+	}
+
+	// the query run by the coordinator should have received a response from nodes[1] with closer nodes
+	// nodes[0] and nodes[2] which should trigger a routing table update
+	ev, err := expectEventType(ctx, events, &KademliaRoutingUpdatedEvent[key.Key8, kadtest.StrAddr]{})
+	require.NoError(t, err)
+
+	tev := ev.(*KademliaRoutingUpdatedEvent[key.Key8, kadtest.StrAddr])
+	require.Equal(t, nodes[2].ID(), tev.NodeInfo.ID())
+
+	// no KademliaRoutingUpdatedEvent is sent for the self node
+
+	// the query continues and should have received a response from nodes[2] with closer nodes
+	// nodes[1] and nodes[3] which should trigger a routing table update
+	ev, err = expectEventType(ctx, events, &KademliaRoutingUpdatedEvent[key.Key8, kadtest.StrAddr]{})
+	require.NoError(t, err)
+
+	tev = ev.(*KademliaRoutingUpdatedEvent[key.Key8, kadtest.StrAddr])
+	require.Equal(t, nodes[3].ID(), tev.NodeInfo.ID())
+
+	// the query run by the coordinator should have completed
+	ev, err = expectEventType(ctx, events, &KademliaOutboundQueryFinishedEvent{})
+	require.NoError(t, err)
 }

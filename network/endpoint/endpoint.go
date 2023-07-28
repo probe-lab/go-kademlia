@@ -39,8 +39,7 @@ type ResponseHandlerFn[K kad.Key[K], A kad.Address[A]] func(context.Context, kad
 type Endpoint[K kad.Key[K], A kad.Address[A]] interface {
 	// MaybeAddToPeerstore adds the given address to the peerstore if it is
 	// valid and if it is not already there.
-
-	// TODO: candidate for removal, used only in tests and examples
+	// TODO: consider returning a status of whether the nodeinfo is a new node or contains a new address
 	MaybeAddToPeerstore(context.Context, kad.NodeInfo[K, A], time.Duration) error
 
 	// SendRequestHandleResponse sends a request to the given peer and handles
