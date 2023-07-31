@@ -201,8 +201,6 @@ func (c *Coordinator[K, A]) dispatchQueryPoolEvent(ctx context.Context, ev query
 	// attempt to advance the query state machine
 	state := c.qp.Advance(ctx, ev)
 	switch st := state.(type) {
-	case *query.StatePoolWaiting:
-		// TODO
 	case *query.StatePoolQueryMessage[K, A]:
 		c.attemptSendMessage(ctx, st.ProtocolID, st.NodeID, st.Message, st.QueryID, st.Stats)
 	case *query.StatePoolWaitingAtCapacity:

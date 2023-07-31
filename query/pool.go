@@ -279,12 +279,6 @@ type PoolState interface {
 // StatePoolIdle indicates that the pool is idle, i.e. there are no queries to process.
 type StatePoolIdle struct{}
 
-// StatePoolWaiting indicates that at least one query is waiting for results.
-type StatePoolWaiting struct {
-	QueryID QueryID
-	Stats   QueryStats
-}
-
 // StatePoolQueryMessage indicates that at a query is waiting to message a node.
 type StatePoolQueryMessage[K kad.Key[K], A kad.Address[A]] struct {
 	QueryID    QueryID
@@ -316,7 +310,6 @@ type StatePoolQueryTimeout struct {
 
 // poolState() ensures that only Pool states can be assigned to the PoolState interface.
 func (*StatePoolIdle) poolState()                {}
-func (*StatePoolWaiting) poolState()             {}
 func (*StatePoolQueryMessage[K, A]) poolState()  {}
 func (*StatePoolWaitingAtCapacity) poolState()   {}
 func (*StatePoolWaitingWithCapacity) poolState() {}
