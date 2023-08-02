@@ -38,9 +38,9 @@ type Coordinator[K kad.Key[K], A kad.Address[A]] struct {
 
 	peerstoreTTL time.Duration
 
-	outboundEvents chan KademliaEvent
-	inboundEvents  chan internalEvent
-	startOnce      sync.Once
+	out       chan KademliaEvent
+	in        chan internalEvent
+	startOnce sync.Once
 }
 
 const DefaultChanqueueCapacity = 1024
@@ -86,13 +86,13 @@ func NewCoordinator[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], ep endpo
 		return nil, fmt.Errorf("query pool: %w", err)
 	}
 	return &Coordinator[K, A]{
-		self:           self,
-		cfg:            *cfg,
-		ep:             ep,
-		rt:             rt,
-		qp:             qp,
-		outboundEvents: make(chan KademliaEvent, 20),
-		inboundEvents:  make(chan internalEvent, 20),
+		self: self,
+		cfg:  *cfg,
+		ep:   ep,
+		rt:   rt,
+		qp:   qp,
+		out:  make(chan KademliaEvent, 20),
+		in:   make(chan internalEvent, 20),
 	}, nil
 }
 
@@ -104,7 +104,7 @@ func (c *Coordinator[K, A]) Start(ctx context.Context) <-chan KademliaEvent {
 		go c.mainloop(ctx)
 		go c.heartbeat(ctx)
 	})
-	return c.outboundEvents
+	return c.out
 }
 
 func (c *Coordinator[K, A]) mainloop(ctx context.Context) {
@@ -113,14 +113,14 @@ func (c *Coordinator[K, A]) mainloop(ctx context.Context) {
 
 	// once the main loop exits no further events will be sent so clients waiting
 	// on the event channel should be notified
-	defer close(c.outboundEvents)
+	defer close(c.out)
 
 	for {
 		// wait for inbound events to trigger state changes
 		select {
 		case <-ctx.Done():
 			return
-		case ev := <-c.inboundEvents:
+		case ev := <-c.in:
 			switch tev := ev.(type) {
 			case *eventUnroutablePeer[K]:
 				// TODO: remove from routing table
@@ -145,7 +145,7 @@ func (c *Coordinator[K, A]) mainloop(ctx context.Context) {
 				}
 
 				// notify caller so they have chance to stop query
-				c.outboundEvents <- &KademliaOutboundQueryProgressedEvent[K, A]{
+				c.out <- &KademliaOutboundQueryProgressedEvent[K, A]{
 					NodeID:   tev.NodeID,
 					QueryID:  tev.QueryID,
 					Response: tev.Response,
@@ -190,7 +190,7 @@ func (c *Coordinator[K, A]) heartbeat(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			c.inboundEvents <- &eventPoll{}
+			c.in <- &eventPoll{}
 		}
 	}
 }
@@ -208,7 +208,7 @@ func (c *Coordinator[K, A]) dispatchQueryPoolEvent(ctx context.Context, ev query
 	case *query.StatePoolWaitingWithCapacity:
 		// TODO
 	case *query.StatePoolQueryFinished:
-		c.outboundEvents <- &KademliaOutboundQueryFinishedEvent{
+		c.out <- &KademliaOutboundQueryFinishedEvent{
 			QueryID: st.QueryID,
 			Stats:   st.Stats,
 		}
@@ -231,12 +231,12 @@ func (c *Coordinator[K, A]) attemptSendMessage(ctx context.Context, protoID addr
 		if err != nil {
 			if errors.Is(err, endpoint.ErrCannotConnect) {
 				// here we can notify that the peer is unroutable, which would feed into peerstore and routing table
-				c.inboundEvents <- &eventUnroutablePeer[K]{
+				c.in <- &eventUnroutablePeer[K]{
 					NodeID: to,
 				}
 				return
 			}
-			c.inboundEvents <- &eventMessageFailed[K]{
+			c.in <- &eventMessageFailed[K]{
 				NodeID:  to,
 				QueryID: queryID,
 				Stats:   stats,
@@ -245,7 +245,7 @@ func (c *Coordinator[K, A]) attemptSendMessage(ctx context.Context, protoID addr
 			return
 		}
 
-		c.inboundEvents <- &eventMessageResponse[K, A]{
+		c.in <- &eventMessageResponse[K, A]{
 			NodeID:   to,
 			QueryID:  queryID,
 			Response: resp,
@@ -266,7 +266,7 @@ func (c *Coordinator[K, A]) StartQuery(ctx context.Context, queryID query.QueryI
 	}
 
 	// c.queue.Enqueue(ctx, ev)
-	c.inboundEvents <- ev
+	c.in <- ev
 
 	return nil
 }
@@ -276,7 +276,7 @@ func (c *Coordinator[K, A]) StopQuery(ctx context.Context, queryID query.QueryID
 		QueryID: queryID,
 	}
 
-	c.inboundEvents <- ev
+	c.in <- ev
 	return nil
 }
 
@@ -291,7 +291,7 @@ func (c *Coordinator[K, A]) AddNodes(ctx context.Context, infos []kad.NodeInfo[K
 		c.ep.MaybeAddToPeerstore(ctx, info, c.peerstoreTTL)
 
 		if isNew {
-			c.outboundEvents <- &KademliaRoutingUpdatedEvent[K, A]{
+			c.out <- &KademliaRoutingUpdatedEvent[K, A]{
 				NodeInfo: info,
 			}
 		}
