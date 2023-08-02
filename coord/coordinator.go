@@ -120,24 +120,24 @@ func (c *Coordinator[K, A]) mainloop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case ev := <-c.in:
-			switch tev := ev.(type) {
+		case evt := <-c.in:
+			switch evt := evt.(type) {
 			case *eventUnroutablePeer[K]:
 				// TODO: remove from routing table
 				c.dispatchQueryPoolEvent(ctx, nil)
 
 			case *eventMessageFailed[K]:
 				qev := &query.EventPoolMessageFailure[K]{
-					QueryID: tev.QueryID,
-					NodeID:  tev.NodeID,
-					Error:   tev.Error,
+					QueryID: evt.QueryID,
+					NodeID:  evt.NodeID,
+					Error:   evt.Error,
 				}
 
 				c.dispatchQueryPoolEvent(ctx, qev)
 
 			case *eventMessageResponse[K, A]:
-				if tev.Response != nil {
-					candidates := tev.Response.CloserNodes()
+				if evt.Response != nil {
+					candidates := evt.Response.CloserNodes()
 					if len(candidates) > 0 {
 						// ignore error here
 						c.AddNodes(ctx, candidates)
@@ -146,36 +146,36 @@ func (c *Coordinator[K, A]) mainloop(ctx context.Context) {
 
 				// notify caller so they have chance to stop query
 				c.out <- &KademliaOutboundQueryProgressedEvent[K, A]{
-					NodeID:   tev.NodeID,
-					QueryID:  tev.QueryID,
-					Response: tev.Response,
-					Stats:    tev.Stats,
+					NodeID:   evt.NodeID,
+					QueryID:  evt.QueryID,
+					Response: evt.Response,
+					Stats:    evt.Stats,
 				}
 
 				qev := &query.EventPoolMessageResponse[K, A]{
-					QueryID:  tev.QueryID,
-					NodeID:   tev.NodeID,
-					Response: tev.Response,
+					QueryID:  evt.QueryID,
+					NodeID:   evt.NodeID,
+					Response: evt.Response,
 				}
 				c.dispatchQueryPoolEvent(ctx, qev)
 			case *eventAddQuery[K, A]:
 				qev := &query.EventPoolAddQuery[K, A]{
-					QueryID:           tev.QueryID,
-					Target:            tev.Target,
-					ProtocolID:        tev.ProtocolID,
-					Message:           tev.Message,
-					KnownClosestNodes: tev.KnownClosestPeers,
+					QueryID:           evt.QueryID,
+					Target:            evt.Target,
+					ProtocolID:        evt.ProtocolID,
+					Message:           evt.Message,
+					KnownClosestNodes: evt.KnownClosestPeers,
 				}
 				c.dispatchQueryPoolEvent(ctx, qev)
 			case *eventStopQuery[K]:
 				qev := &query.EventPoolStopQuery{
-					QueryID: tev.QueryID,
+					QueryID: evt.QueryID,
 				}
 				c.dispatchQueryPoolEvent(ctx, qev)
 			case *eventPoll:
 				c.dispatchQueryPoolEvent(ctx, nil)
 			default:
-				panic(fmt.Sprintf("unexpected event: %T", tev))
+				panic(fmt.Sprintf("unexpected event: %T", evt))
 			}
 		}
 	}
