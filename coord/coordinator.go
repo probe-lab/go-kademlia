@@ -39,7 +39,7 @@ type Coordinator[K kad.Key[K], A kad.Address[A]] struct {
 	peerstoreTTL time.Duration
 
 	outboundEvents chan KademliaEvent
-	inboundEvents  chan coordinatorInternalEvent
+	inboundEvents  chan internalEvent
 	startOnce      sync.Once
 }
 
@@ -92,7 +92,7 @@ func NewCoordinator[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], ep endpo
 		rt:             rt,
 		qp:             qp,
 		outboundEvents: make(chan KademliaEvent, 20),
-		inboundEvents:  make(chan coordinatorInternalEvent, 20),
+		inboundEvents:  make(chan internalEvent, 20),
 	}, nil
 }
 
@@ -340,8 +340,8 @@ func (*KademliaOutboundQueryFinishedEvent) kademliaEvent()         {}
 
 // Internal events for the Coordiinator
 
-type coordinatorInternalEvent interface {
-	coordinatorInternalEvent()
+type internalEvent interface {
+	internalEvent()
 }
 
 type eventUnroutablePeer[K kad.Key[K]] struct {
@@ -376,10 +376,10 @@ type eventStopQuery[K kad.Key[K]] struct {
 
 type eventPoll struct{}
 
-// coordinatorInternalEvent() ensures that only an internal coordinator event can be assigned to the coordinatorInternalEvent interface.
-func (*eventUnroutablePeer[K]) coordinatorInternalEvent()     {}
-func (*eventMessageFailed[K]) coordinatorInternalEvent()      {}
-func (*eventMessageResponse[K, A]) coordinatorInternalEvent() {}
-func (*eventAddQuery[K, A]) coordinatorInternalEvent()        {}
-func (*eventStopQuery[K]) coordinatorInternalEvent()          {}
-func (*eventPoll) coordinatorInternalEvent()                  {}
+// internalEvent() ensures that only an internal coordinator event can be assigned to the internalEvent interface.
+func (*eventUnroutablePeer[K]) internalEvent()     {}
+func (*eventMessageFailed[K]) internalEvent()      {}
+func (*eventMessageResponse[K, A]) internalEvent() {}
+func (*eventAddQuery[K, A]) internalEvent()        {}
+func (*eventStopQuery[K]) internalEvent()          {}
+func (*eventPoll) internalEvent()                  {}
