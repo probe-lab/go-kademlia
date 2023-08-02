@@ -302,10 +302,6 @@ func (c *Coordinator[K, A]) AddNodes(ctx context.Context, infos []kad.NodeInfo[K
 
 // Kademlia events emitted by the Coordinator, intended for consumption by clients of the package
 
-type KademliaEvent interface {
-	kademliaEvent()
-}
-
 // KademliaOutboundQueryProgressedEvent is emitted by the coordinator when a query has received a
 // response from a node.
 type KademliaOutboundQueryProgressedEvent[K kad.Key[K], A kad.Address[A]] struct {
@@ -331,7 +327,12 @@ type KademliaUnroutablePeerEvent[K kad.Key[K]] struct{}
 
 type KademliaRoutablePeerEvent[K kad.Key[K]] struct{}
 
-// kademliaEvent() ensures that only Kademlia events can be assigned to a KademliaEvent.
+// The KademliaEvent interface ensures that only any event that implements the
+// unexported kademliaEvent method can be assigned to a KademliaEvent.
+type KademliaEvent interface {
+	kademliaEvent()
+}
+
 func (*KademliaRoutingUpdatedEvent[K, A]) kademliaEvent()          {}
 func (*KademliaOutboundQueryProgressedEvent[K, A]) kademliaEvent() {}
 func (*KademliaUnroutablePeerEvent[K]) kademliaEvent()             {}
@@ -339,10 +340,6 @@ func (*KademliaRoutablePeerEvent[K]) kademliaEvent()               {}
 func (*KademliaOutboundQueryFinishedEvent) kademliaEvent()         {}
 
 // Internal events for the Coordiinator
-
-type internalEvent interface {
-	internalEvent()
-}
 
 type eventUnroutablePeer[K kad.Key[K]] struct {
 	NodeID kad.NodeID[K]
@@ -376,7 +373,11 @@ type eventStopQuery[K kad.Key[K]] struct {
 
 type eventPoll struct{}
 
-// internalEvent() ensures that only an internal coordinator event can be assigned to the internalEvent interface.
+// The internalEvent interface ensures that only an internal coordinator event can be assigned to the internalEvent interface.
+type internalEvent interface {
+	internalEvent()
+}
+
 func (*eventUnroutablePeer[K]) internalEvent()     {}
 func (*eventMessageFailed[K]) internalEvent()      {}
 func (*eventMessageResponse[K, A]) internalEvent() {}
