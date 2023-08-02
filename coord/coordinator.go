@@ -111,7 +111,7 @@ func (c *Coordinator[K, A]) mainloop(ctx context.Context) {
 	ctx, span := util.StartSpan(ctx, "Coordinator.mainloop")
 	defer span.End()
 
-	// once the main loop exits no further events will be sent so clients waiting
+	// once the main loop exits, no further events will be sent so clients waiting
 	// on the event channel should be notified
 	defer close(c.out)
 
@@ -339,7 +339,7 @@ func (*KademliaUnroutablePeerEvent[K]) kademliaEvent()             {}
 func (*KademliaRoutablePeerEvent[K]) kademliaEvent()               {}
 func (*KademliaOutboundQueryFinishedEvent) kademliaEvent()         {}
 
-// Internal events for the Coordiinator
+// Internal events for the Coordinator
 
 type eventUnroutablePeer[K kad.Key[K]] struct {
 	NodeID kad.NodeID[K]
