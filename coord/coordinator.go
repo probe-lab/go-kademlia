@@ -122,6 +122,15 @@ func (c *Coordinator[K, A]) mainloop(ctx context.Context) {
 			return
 		case evt := <-c.in:
 			switch evt := evt.(type) {
+			case *eventAddQuery[K, A]:
+				qev := &query.EventPoolAddQuery[K, A]{
+					QueryID:           evt.QueryID,
+					Target:            evt.Target,
+					ProtocolID:        evt.ProtocolID,
+					Message:           evt.Message,
+					KnownClosestNodes: evt.KnownClosestPeers,
+				}
+				c.dispatchQueryPoolEvent(ctx, qev)
 			case *eventUnroutablePeer[K]:
 				// TODO: remove from routing table
 				c.dispatchQueryPoolEvent(ctx, nil)
@@ -156,15 +165,6 @@ func (c *Coordinator[K, A]) mainloop(ctx context.Context) {
 					QueryID:  evt.QueryID,
 					NodeID:   evt.NodeID,
 					Response: evt.Response,
-				}
-				c.dispatchQueryPoolEvent(ctx, qev)
-			case *eventAddQuery[K, A]:
-				qev := &query.EventPoolAddQuery[K, A]{
-					QueryID:           evt.QueryID,
-					Target:            evt.Target,
-					ProtocolID:        evt.ProtocolID,
-					Message:           evt.Message,
-					KnownClosestNodes: evt.KnownClosestPeers,
 				}
 				c.dispatchQueryPoolEvent(ctx, qev)
 			case *eventStopQuery[K]:
