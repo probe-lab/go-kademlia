@@ -9,7 +9,6 @@ import (
 
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/kaderr"
-	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/util"
 )
 
@@ -122,7 +121,7 @@ func (p *Pool[K, A]) Advance(ctx context.Context, ev PoolEvent) PoolState {
 
 	switch tev := ev.(type) {
 	case *EventPoolAddQuery[K, A]:
-		p.addQuery(ctx, tev.QueryID, tev.Target, tev.ProtocolID, tev.Message, tev.KnownClosestNodes)
+		p.addQuery(ctx, tev.QueryID, tev.Target, tev.Protocol, tev.Seed)
 		// TODO: return error as state
 	case *EventPoolStopQuery:
 		if qry, ok := p.queryIndex[tev.QueryID]; ok {
@@ -196,17 +195,17 @@ func (p *Pool[K, A]) advanceQuery(ctx context.Context, qry *Query[K, A], qev Que
 	case *StateQueryWaitingMessage[K, A]:
 		p.queriesInFlight++
 		return &StatePoolQueryMessage[K, A]{
-			QueryID:    st.QueryID,
-			Stats:      st.Stats,
-			NodeID:     st.NodeID,
-			ProtocolID: st.ProtocolID,
-			Message:    st.Message,
+			QueryID:  st.QueryID,
+			Stats:    st.Stats,
+			NodeID:   st.NodeID,
+			Protocol: st.Protocol,
 		}, true
-	case *StateQueryFinished:
+	case *StateQueryFinished[K, A]:
 		p.removeQuery(qry.id)
-		return &StatePoolQueryFinished{
+		return &StatePoolQueryFinished[K, A]{
 			QueryID: st.QueryID,
 			Stats:   st.Stats,
+			Node:    st.Node,
 		}, true
 	case *StateQueryWaitingAtCapacity:
 		elapsed := p.cfg.Clock.Since(qry.stats.Start)
@@ -248,7 +247,7 @@ func (p *Pool[K, A]) removeQuery(queryID QueryID) {
 
 // addQuery adds a query to the pool, returning the new query id
 // TODO: remove target argument and use msg.Target
-func (p *Pool[K, A]) addQuery(ctx context.Context, queryID QueryID, target K, protocolID address.ProtocolID, msg kad.Request[K, A], knownClosestNodes []kad.NodeID[K]) error {
+func (p *Pool[K, A]) addQuery(ctx context.Context, queryID QueryID, target K, protocol kad.Protocol[K, A], seed []kad.NodeID[K]) error {
 	if _, exists := p.queryIndex[queryID]; exists {
 		return fmt.Errorf("query id already in use")
 	}
@@ -259,7 +258,7 @@ func (p *Pool[K, A]) addQuery(ctx context.Context, queryID QueryID, target K, pr
 	qryCfg.Concurrency = p.cfg.QueryConcurrency
 	qryCfg.RequestTimeout = p.cfg.RequestTimeout
 
-	qry, err := NewQuery[K](p.self, queryID, protocolID, msg, iter, knownClosestNodes, qryCfg)
+	qry, err := NewQuery[K](p.self, queryID, protocol, iter, seed, qryCfg)
 	if err != nil {
 		return fmt.Errorf("new query: %w", err)
 	}
@@ -281,11 +280,10 @@ type StatePoolIdle struct{}
 
 // StatePoolQueryMessage indicates that at a query is waiting to message a node.
 type StatePoolQueryMessage[K kad.Key[K], A kad.Address[A]] struct {
-	QueryID    QueryID
-	NodeID     kad.NodeID[K]
-	ProtocolID address.ProtocolID
-	Message    kad.Request[K, A]
-	Stats      QueryStats
+	QueryID  QueryID
+	NodeID   kad.NodeID[K]
+	Protocol kad.Protocol[K, A]
+	Stats    QueryStats
 }
 
 // StatePoolWaitingAtCapacity indicates that at least one query is waiting for results and the pool has reached
@@ -297,9 +295,10 @@ type StatePoolWaitingAtCapacity struct{}
 type StatePoolWaitingWithCapacity struct{}
 
 // StatePoolQueryFinished indicates that a query has finished.
-type StatePoolQueryFinished struct {
+type StatePoolQueryFinished[K kad.Key[K], A kad.Address[A]] struct {
 	QueryID QueryID
 	Stats   QueryStats
+	Node    kad.NodeInfo[K, A]
 }
 
 // StatePoolQueryTimeout indicates that at a query has timed out.
@@ -313,7 +312,7 @@ func (*StatePoolIdle) poolState()                {}
 func (*StatePoolQueryMessage[K, A]) poolState()  {}
 func (*StatePoolWaitingAtCapacity) poolState()   {}
 func (*StatePoolWaitingWithCapacity) poolState() {}
-func (*StatePoolQueryFinished) poolState()       {}
+func (*StatePoolQueryFinished[K, A]) poolState() {}
 func (*StatePoolQueryTimeout) poolState()        {}
 
 // PoolEvent is an event intended to advance the state of a pool.
@@ -323,11 +322,11 @@ type PoolEvent interface {
 
 // EventPoolAddQuery is an event that attempts to add a new query
 type EventPoolAddQuery[K kad.Key[K], A kad.Address[A]] struct {
-	QueryID           QueryID            // the id to use for the new query
-	Target            K                  // the target key for the query
-	ProtocolID        address.ProtocolID // the protocol that defines how the message should be interpreted
-	Message           kad.Request[K, A]  // the message the query should send to each node it traverses
-	KnownClosestNodes []kad.NodeID[K]    // an initial set of close nodes the query should use
+	QueryID  QueryID // the id to use for the new query
+	Target   K       // the target key for the query
+	Protocol kad.Protocol[K, A]
+	Seed     []kad.NodeID[K] // an initial set of close nodes the query should use
+	Policy   Policy[K, A]
 }
 
 // EventPoolStopQuery notifies a pool to stop a query.

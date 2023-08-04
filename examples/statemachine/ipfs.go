@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net"
 
 	"github.com/plprobelab/go-kademlia/coord"
@@ -60,53 +59,6 @@ func (d *IpfsDht) mainloop(ctx context.Context) {
 func (d *IpfsDht) registerQueryWaiter(queryID query.QueryID, ch chan<- kad.Response[key.Key256, net.IP]) {
 	// TODO: locking
 	d.queryWaiters[queryID] = ch
-}
-
-// Initiates an iterative query for the the address of the given peer.
-// FindNode is a fundamental Kademlia operation so this logic should be on KademliaHandler
-func (d *IpfsDht) FindNode(ctx context.Context, node kad.NodeID[key.Key256]) (kad.NodeInfo[key.Key256, net.IP], error) {
-	// TODO: look in local peer store first
-
-	var queryID query.QueryID = "testquery" // TODO: randomize to support multiple queries
-
-	// If not in peer store then query the Kademlia dht
-	err := d.coordinator.StartQuery(ctx, queryID, protoID, &FindNodeRequest[key.Key256, net.IP]{NodeID: node})
-	if err != nil {
-		return nil, fmt.Errorf("failed to start query: %w", err)
-	}
-
-	ch := make(chan kad.Response[key.Key256, net.IP])
-	d.registerQueryWaiter(queryID, ch)
-
-	// wait for query to finish
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case resp, ok := <-ch:
-			if !ok {
-				// channel was closed, so query can't progress
-				d.coordinator.StopQuery(ctx, queryID)
-				return nil, fmt.Errorf("query was unexpectedly stopped")
-			}
-			// we got a response from a message sent by query
-			switch tresp := resp.(type) {
-			case *FindNodeResponse[key.Key256, net.IP]:
-				// interpret the response
-				println("IpfsHandler.FindNode: got FindNode response")
-				for _, found := range tresp.CloserPeers {
-					if key.Equal(found.ID().Key(), node.Key()) {
-						// found the node we were looking for
-						d.coordinator.StopQuery(ctx, queryID)
-						return found, nil
-					}
-				}
-				debug("IpfsHandler.FindNode: desired node not found yet")
-			default:
-				return nil, fmt.Errorf("unknown response: %v", resp)
-			}
-		}
-	}
 }
 
 // Initiates an iterative query for the closest peers to the given key.

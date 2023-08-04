@@ -7,6 +7,9 @@ import (
 	"net"
 	"time"
 
+	ma "github.com/multiformats/go-multiaddr"
+	"github.com/plprobelab/go-kademlia/libp2p"
+
 	"github.com/benbjohnson/clock"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -35,7 +38,7 @@ func main() {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	nodes, eps, rts, siml := setupSimulation(ctx)
+	nodes, _, rts, siml := setupSimulation(ctx)
 
 	tp, err := tracerProvider("http://localhost:14268/api/traces")
 	if err != nil {
@@ -63,33 +66,39 @@ func main() {
 	ccfg.Clock = siml.Clock()
 	ccfg.PeerstoreTTL = peerstoreTTL
 
-	kad, err := coord.NewCoordinator[key.Key256, net.IP](nodes[0].ID(), eps[0], rts[0], ccfg)
+	f := &libp2p.FindNode{}
+
+	kad, err := coord.NewCoordinator[key.Key256, ma.Multiaddr](nodes[0].ID(), f, rts[0], ccfg)
 	if err != nil {
 		log.Fatal(err)
 	}
 	kad.Start(ctx)
-
-	ih := NewIpfsDht(kad)
-	ih.Start(ctx)
-
-	go func(ctx context.Context) {
-		for {
-			select {
-			case <-time.After(100 * time.Millisecond):
-				debug("Running simulator")
-				siml.Run(ctx)
-			case <-ctx.Done():
-				debug("Exiting simulator")
-				return
-			}
-		}
-	}(ctx)
+	//
+	//go func(ctx context.Context) {
+	//	for {
+	//		select {
+	//		case <-time.After(100 * time.Millisecond):
+	//			debug("Running simulator")
+	//			siml.Run(ctx)
+	//		case <-ctx.Done():
+	//			debug("Exiting simulator")
+	//			return
+	//		}
+	//	}
+	//}(ctx)
 
 	// A (ids[0]) is looking for D (ids[3])
 	// A will first ask B, B will reply with C's address (and A's address)
 	// A will then ask C, C will reply with D's address (and B's address)
 
-	addr, err := ih.FindNode(ctx, nodes[3].ID())
+	//addr, err := ih.FindNode(ctx, nodes[3].ID())
+	//if err != nil {
+	//	fmt.Printf("FindNode failed with error: %v\n", err)
+	//	return
+	//}
+	//fmt.Printf("FindNode found address for: %s\n", addr.ID().String())
+
+	addr, err := kad.FindNode(ctx, nodes[3].ID())
 	if err != nil {
 		fmt.Printf("FindNode failed with error: %v\n", err)
 		return

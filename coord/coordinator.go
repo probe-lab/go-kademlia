@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/benbjohnson/clock"
@@ -12,7 +13,6 @@ import (
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/kaderr"
 	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"github.com/plprobelab/go-kademlia/query"
 	"github.com/plprobelab/go-kademlia/util"
@@ -33,8 +33,11 @@ type Coordinator[K kad.Key[K], A kad.Address[A]] struct {
 	// rt is the routing table used to look up nodes by distance
 	rt kad.RoutingTable[K]
 
-	// ep is the message endpoint used to send requests
-	ep endpoint.Endpoint[K, A]
+	queryCounter atomic.Uint64
+	querySubs    map[query.QueryID]chan<- KademliaEvent
+
+	// ndp is the node discovery protocol
+	ndp kad.Protocol[K, A]
 
 	peerstoreTTL time.Duration
 
@@ -71,7 +74,7 @@ func DefaultConfig() *Config {
 	}
 }
 
-func NewCoordinator[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], ep endpoint.Endpoint[K, A], rt kad.RoutingTable[K], cfg *Config) (*Coordinator[K, A], error) {
+func NewCoordinator[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], ndp kad.Protocol[K, A], rt kad.RoutingTable[K], cfg *Config) (*Coordinator[K, A], error) {
 	if cfg == nil {
 		cfg = DefaultConfig()
 	} else if err := cfg.Validate(); err != nil {
@@ -86,13 +89,13 @@ func NewCoordinator[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], ep endpo
 		return nil, fmt.Errorf("query pool: %w", err)
 	}
 	return &Coordinator[K, A]{
-		self:           self,
-		cfg:            *cfg,
-		ep:             ep,
-		rt:             rt,
-		qp:             qp,
-		outboundEvents: make(chan KademliaEvent, 20),
-		inboundEvents:  make(chan coordinatorInternalEvent, 20),
+		self:          self,
+		cfg:           *cfg,
+		rt:            rt,
+		qp:            qp,
+		ndp:           ndp,
+		querySubs:     map[query.QueryID]chan<- KademliaEvent{},
+		inboundEvents: make(chan coordinatorInternalEvent, 20),
 	}, nil
 }
 
@@ -122,6 +125,14 @@ func (c *Coordinator[K, A]) mainloop(ctx context.Context) {
 			return
 		case ev := <-c.inboundEvents:
 			switch tev := ev.(type) {
+			case *eventAddQuery[K, A]:
+				qev := &query.EventPoolAddQuery[K, A]{
+					QueryID:  tev.QueryID,
+					Target:   tev.Target,
+					Protocol: tev.Protocol,
+					Seed:     tev.Seed,
+				}
+				c.dispatchQueryPoolEvent(ctx, qev)
 			case *eventUnroutablePeer[K]:
 				// TODO: remove from routing table
 				c.dispatchQueryPoolEvent(ctx, nil)
@@ -137,15 +148,11 @@ func (c *Coordinator[K, A]) mainloop(ctx context.Context) {
 
 			case *eventMessageResponse[K, A]:
 				if tev.Response != nil {
-					candidates := tev.Response.CloserNodes()
-					if len(candidates) > 0 {
-						// ignore error here
-						c.AddNodes(ctx, candidates)
-					}
+					c.AddNodes(ctx, tev.Response.CloserNodes())
 				}
 
-				// notify caller so they have chance to stop query
-				c.outboundEvents <- &KademliaOutboundQueryProgressedEvent[K, A]{
+				// notify caller
+				c.querySubs[tev.QueryID] <- &KademliaOutboundQueryProgressedEvent[K, A]{
 					NodeID:   tev.NodeID,
 					QueryID:  tev.QueryID,
 					Response: tev.Response,
@@ -156,15 +163,6 @@ func (c *Coordinator[K, A]) mainloop(ctx context.Context) {
 					QueryID:  tev.QueryID,
 					NodeID:   tev.NodeID,
 					Response: tev.Response,
-				}
-				c.dispatchQueryPoolEvent(ctx, qev)
-			case *eventAddQuery[K, A]:
-				qev := &query.EventPoolAddQuery[K, A]{
-					QueryID:           tev.QueryID,
-					Target:            tev.Target,
-					ProtocolID:        tev.ProtocolID,
-					Message:           tev.Message,
-					KnownClosestNodes: tev.KnownClosestPeers,
 				}
 				c.dispatchQueryPoolEvent(ctx, qev)
 			case *eventStopQuery[K]:
@@ -202,17 +200,17 @@ func (c *Coordinator[K, A]) dispatchQueryPoolEvent(ctx context.Context, ev query
 	state := c.qp.Advance(ctx, ev)
 	switch st := state.(type) {
 	case *query.StatePoolQueryMessage[K, A]:
-		c.attemptSendMessage(ctx, st.ProtocolID, st.NodeID, st.Message, st.QueryID, st.Stats)
+		c.attemptSendMessage(ctx, st.Protocol, st.NodeID, st.QueryID, st.Stats)
 	case *query.StatePoolWaitingAtCapacity:
 		// TODO
 	case *query.StatePoolWaitingWithCapacity:
 		// TODO
-	case *query.StatePoolQueryFinished:
-		c.outboundEvents <- &KademliaOutboundQueryFinishedEvent{
+	case *query.StatePoolQueryFinished[K, A]:
+		c.querySubs[st.QueryID] <- &KademliaOutboundQueryFinishedEvent[K, A]{
 			QueryID: st.QueryID,
 			Stats:   st.Stats,
 		}
-
+		delete(c.querySubs, st.QueryID)
 		// TODO
 	case *query.StatePoolQueryTimeout:
 		// TODO
@@ -223,11 +221,11 @@ func (c *Coordinator[K, A]) dispatchQueryPoolEvent(ctx context.Context, ev query
 	}
 }
 
-func (c *Coordinator[K, A]) attemptSendMessage(ctx context.Context, protoID address.ProtocolID, to kad.NodeID[K], msg kad.Request[K, A], queryID query.QueryID, stats query.QueryStats) {
+func (c *Coordinator[K, A]) attemptSendMessage(ctx context.Context, protocol kad.Protocol[K, A], to kad.NodeID[K], queryID query.QueryID, stats query.QueryStats) {
 	ctx, span := util.StartSpan(ctx, "Coordinator.attemptSendMessage")
 	defer span.End()
 	go func() {
-		resp, err := c.ep.SendMessage(ctx, protoID, to, msg)
+		resp, err := protocol.Get(ctx, to, to.Key())
 		if err != nil {
 			if errors.Is(err, endpoint.ErrCannotConnect) {
 				// here we can notify that the peer is unroutable, which would feed into peerstore and routing table
@@ -254,22 +252,22 @@ func (c *Coordinator[K, A]) attemptSendMessage(ctx context.Context, protoID addr
 	}()
 }
 
-func (c *Coordinator[K, A]) StartQuery(ctx context.Context, queryID query.QueryID, protocolID address.ProtocolID, msg kad.Request[K, A]) error {
-	knownClosestPeers := c.rt.NearestNodes(msg.Target(), 20)
-
-	ev := &eventAddQuery[K, A]{
-		QueryID:           queryID,
-		Target:            msg.Target(),
-		ProtocolID:        protocolID,
-		Message:           msg,
-		KnownClosestPeers: knownClosestPeers,
-	}
-
-	// c.queue.Enqueue(ctx, ev)
-	c.inboundEvents <- ev
-
-	return nil
-}
+//func (c *Coordinator[K, A]) StartQuery(ctx context.Context, queryID query.QueryID, protocolID address.ProtocolID, msg kad.Request[K, A]) error {
+//	knownClosestPeers := c.rt.NearestNodes(msg.Target(), 20)
+//
+//	ev := &eventAddQuery[K, A]{
+//		QueryID:           queryID,
+//		Target:            msg.Target(),
+//		ProtocolID:        protocolID,
+//		Message:           msg,
+//		Seed: knownClosestPeers,
+//	}
+//
+//	// c.queue.Enqueue(ctx, ev)
+//	c.inboundEvents <- ev
+//
+//	return nil
+//}
 
 func (c *Coordinator[K, A]) StopQuery(ctx context.Context, queryID query.QueryID) error {
 	ev := &eventStopQuery[K]{
@@ -282,13 +280,13 @@ func (c *Coordinator[K, A]) StopQuery(ctx context.Context, queryID query.QueryID
 
 // AddNodes suggests new DHT nodes and their associated addresses to be added to the routing table.
 // If the routing table is been updated as a result of this operation a KademliaRoutingUpdatedEvent event is emitted.
-func (c *Coordinator[K, A]) AddNodes(ctx context.Context, infos []kad.NodeInfo[K, A]) error {
+func (c *Coordinator[K, A]) AddNodes(ctx context.Context, infos []kad.NodeInfo[K, A]) {
 	for _, info := range infos {
 		if key.Equal(info.ID().Key(), c.self.Key()) {
 			continue
 		}
 		isNew := c.rt.AddNode(info.ID())
-		c.ep.MaybeAddToPeerstore(ctx, info, c.peerstoreTTL)
+		// c.ep.MaybeAddToPeerstore(ctx, info, c.peerstoreTTL)
 
 		if isNew {
 			c.outboundEvents <- &KademliaRoutingUpdatedEvent[K, A]{
@@ -296,8 +294,6 @@ func (c *Coordinator[K, A]) AddNodes(ctx context.Context, infos []kad.NodeInfo[K
 			}
 		}
 	}
-
-	return nil
 }
 
 // Kademlia events emitted by the Coordinator, intended for consumption by clients of the package
@@ -317,9 +313,10 @@ type KademliaOutboundQueryProgressedEvent[K kad.Key[K], A kad.Address[A]] struct
 
 // KademliaOutboundQueryFinishedEvent is emitted by the coordinator when a query has finished, either through
 // running to completion or by being canceled.
-type KademliaOutboundQueryFinishedEvent struct {
+type KademliaOutboundQueryFinishedEvent[K kad.Key[K], A kad.Address[A]] struct {
 	QueryID query.QueryID
 	Stats   query.QueryStats
+	Node    kad.NodeInfo[K, A]
 }
 
 // KademliaRoutingUpdatedEvent is emitted by the coordinator when a new node has been added to the routing table.
@@ -336,7 +333,7 @@ func (*KademliaRoutingUpdatedEvent[K, A]) kademliaEvent()          {}
 func (*KademliaOutboundQueryProgressedEvent[K, A]) kademliaEvent() {}
 func (*KademliaUnroutablePeerEvent[K]) kademliaEvent()             {}
 func (*KademliaRoutablePeerEvent[K]) kademliaEvent()               {}
-func (*KademliaOutboundQueryFinishedEvent) kademliaEvent()         {}
+func (*KademliaOutboundQueryFinishedEvent[K, A]) kademliaEvent()   {}
 
 // Internal events for the Coordiinator
 
@@ -363,11 +360,11 @@ type eventMessageResponse[K kad.Key[K], A kad.Address[A]] struct {
 }
 
 type eventAddQuery[K kad.Key[K], A kad.Address[A]] struct {
-	QueryID           query.QueryID
-	Target            K
-	ProtocolID        address.ProtocolID
-	Message           kad.Request[K, A]
-	KnownClosestPeers []kad.NodeID[K]
+	QueryID  query.QueryID
+	Target   K
+	Protocol kad.Protocol[K, A]
+	Seed     []kad.NodeID[K]
+	Out      chan<- KademliaEvent
 }
 
 type eventStopQuery[K kad.Key[K]] struct {
@@ -383,3 +380,35 @@ func (*eventMessageResponse[K, A]) coordinatorInternalEvent() {}
 func (*eventAddQuery[K, A]) coordinatorInternalEvent()        {}
 func (*eventStopQuery[K]) coordinatorInternalEvent()          {}
 func (*eventPoll) coordinatorInternalEvent()                  {}
+
+func (c *Coordinator[K, A]) FindNode(ctx context.Context, node kad.NodeID[K]) (kad.NodeInfo[K, A], error) {
+	evts := make(chan KademliaEvent)
+	ev := &eventAddQuery[K, A]{
+		QueryID:  query.QueryID(c.queryCounter.Add(1)),
+		Target:   node.Key(),
+		Protocol: c.ndp,
+		Seed:     c.rt.NearestNodes(node.Key(), 20),
+		Out:      evts,
+	}
+
+	// c.queue.Enqueue(ctx, ev)
+	c.inboundEvents <- ev
+
+	for {
+		select {
+		case <-ctx.Done():
+			c.StopQuery(ctx, ev.QueryID)
+			return nil, ctx.Err()
+		case evt, ok := <-evts:
+			if !ok {
+				return nil, fmt.Errorf("query was stopped unexpectedly")
+			}
+			switch evt := evt.(type) {
+			case *KademliaOutboundQueryProgressedEvent[K, A]:
+				// query progressed
+			case *KademliaOutboundQueryFinishedEvent[K, A]:
+				return evt.Node, nil
+			}
+		}
+	}
+}

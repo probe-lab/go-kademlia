@@ -1,5 +1,7 @@
 package kad
 
+import "context"
+
 // Key is the interface all Kademlia key types support.
 //
 // A Kademlia key is defined as a bit string of arbitrary size. In practice, different Kademlia implementations use
@@ -128,4 +130,9 @@ type Response[K Key[K], A Address[A]] interface {
 	Message
 
 	CloserNodes() []NodeInfo[K, A]
+}
+
+type Protocol[K Key[K], A Address[A]] interface {
+	Get(ctx context.Context, to NodeID[K], target K) (Response[K, A], error)
+	Put(ctx context.Context, to NodeID[K], record []byte) error
 }
