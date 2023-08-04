@@ -2,7 +2,6 @@ package chanqueue
 
 import (
 	"context"
-	"errors"
 
 	"github.com/plprobelab/go-kademlia/events/action"
 	"github.com/plprobelab/go-kademlia/events/queue"
@@ -28,11 +27,12 @@ func (q *ChanQueue) Enqueue(ctx context.Context, e action.Action) {
 	_, span := util.StartSpan(ctx, "ChanQueue.Enqueue")
 	defer span.End()
 
-	select {
-	case q.queue <- e:
-	default:
-		span.RecordError(errors.New("cannot write to queue"))
-	}
+	q.queue <- e
+	//select {
+	//case q.queue <- e:
+	//default:
+	//	span.RecordError(errors.New("cannot write to queue"))
+	//}
 }
 
 // Dequeue reads the next element from the queue, note that this operation is blocking

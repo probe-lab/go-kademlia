@@ -67,23 +67,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	kad.Start(ctx)
+	// kad.Start(ctx)
 
 	ih := NewIpfsDht(kad)
 	ih.Start(ctx)
 
-	go func(ctx context.Context) {
-		for {
-			select {
-			case <-time.After(100 * time.Millisecond):
-				debug("Running simulator")
-				siml.Run(ctx)
-			case <-ctx.Done():
-				debug("Exiting simulator")
-				return
-			}
-		}
-	}(ctx)
+	siml.AddPeer(kad)
+
+	go func() {
+		time.Sleep(time.Millisecond * 100)
+		siml.Run(ctx)
+	}()
 
 	// A (ids[0]) is looking for D (ids[3])
 	// A will first ask B, B will reply with C's address (and A's address)
