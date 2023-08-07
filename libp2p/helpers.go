@@ -1,6 +1,7 @@
 package libp2p
 
 import (
+	"bytes"
 	"errors"
 
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -21,7 +22,7 @@ func FindPeerRequest(p *PeerID) *Message {
 	}
 }
 
-func FindPeerResponse(peers []kad.NodeID[key.Key256], e endpoint.NetworkedEndpoint[key.Key256, multiaddr.Multiaddr]) *Message {
+func FindPeerResponse(peers []kad.NodeID[key.Key256], e endpoint.NetworkedEndpoint[key.Key256, PeerID, multiaddr.Multiaddr]) *Message {
 	return &Message{
 		Type:        Message_FIND_NODE,
 		CloserPeers: NodeIDsToPbPeers(peers, e),
@@ -36,16 +37,55 @@ func (msg *Message) Target() key.Key256 {
 	return PeerID{ID: p}.Key()
 }
 
-func (msg *Message) EmptyResponse() kad.Response[key.Key256, multiaddr.Multiaddr] {
-	return &Message{}
+type FindNodeMessage struct {
+	msg *Message
 }
 
-func (msg *Message) CloserNodes() []kad.NodeInfo[key.Key256, multiaddr.Multiaddr] {
-	closerPeers := msg.GetCloserPeers()
+func (f *FindNodeMessage) CloserNodes() []kad.NodeInfo[key.Key256, PeerID, multiaddr.Multiaddr] {
+	closerPeers := f.msg.GetCloserPeers()
 	if closerPeers == nil {
-		return []kad.NodeInfo[key.Key256, multiaddr.Multiaddr]{}
+		return []kad.NodeInfo[key.Key256, PeerID, multiaddr.Multiaddr]{}
 	}
 	return ParsePeers(closerPeers)
+}
+
+func (f *FindNodeMessage) Records() []PeerRecord {
+	for _, cp := range f.msg.GetCloserPeers() {
+		if bytes.Equal(f.msg.Key, cp.Id) {
+			a, err := PBPeerToPeerInfo(cp)
+			if err != nil {
+				continue
+			}
+			return []PeerRecord{{
+				AddrInfo: a.AddrInfo,
+			}}
+		}
+	}
+	return []PeerRecord{}
+}
+
+type GetProvidersMessage struct {
+	msg *Message
+}
+
+func (g *GetProvidersMessage) CloserNodes() []kad.NodeInfo[key.Key256, PeerID, multiaddr.Multiaddr] {
+	closerPeers := g.msg.GetCloserPeers()
+	if closerPeers == nil {
+		return []kad.NodeInfo[key.Key256, PeerID, multiaddr.Multiaddr]{}
+	}
+	return ParsePeers(closerPeers)
+}
+
+func (g *GetProvidersMessage) Records() []PeerRecord {
+	var providers []PeerRecord
+	for _, pp := range g.msg.GetProviderPeers() {
+		a, err := PBPeerToPeerInfo(pp)
+		if err != nil {
+			continue
+		}
+		providers = append(providers, PeerRecord{AddrInfo: a.AddrInfo})
+	}
+	return providers
 }
 
 func PBPeerToPeerInfo(pbp *Message_Peer) (*AddrInfo, error) {
@@ -66,8 +106,8 @@ func PBPeerToPeerInfo(pbp *Message_Peer) (*AddrInfo, error) {
 	}), nil
 }
 
-func ParsePeers(pbps []*Message_Peer) []kad.NodeInfo[key.Key256, multiaddr.Multiaddr] {
-	peers := make([]kad.NodeInfo[key.Key256, multiaddr.Multiaddr], 0, len(pbps))
+func ParsePeers(pbps []*Message_Peer) []kad.NodeInfo[key.Key256, PeerID, multiaddr.Multiaddr] {
+	peers := make([]kad.NodeInfo[key.Key256, PeerID, multiaddr.Multiaddr], 0, len(pbps))
 	for _, p := range pbps {
 		pi, err := PBPeerToPeerInfo(p)
 		if err == nil {
@@ -77,7 +117,7 @@ func ParsePeers(pbps []*Message_Peer) []kad.NodeInfo[key.Key256, multiaddr.Multi
 	return peers
 }
 
-func NodeIDsToPbPeers(peers []kad.NodeID[key.Key256], e endpoint.NetworkedEndpoint[key.Key256, multiaddr.Multiaddr]) []*Message_Peer {
+func NodeIDsToPbPeers(peers []kad.NodeID[key.Key256], e endpoint.NetworkedEndpoint[key.Key256, PeerID, multiaddr.Multiaddr]) []*Message_Peer {
 	if len(peers) == 0 || e == nil {
 		return nil
 	}

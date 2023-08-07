@@ -14,8 +14,8 @@ type PeerID struct {
 
 var _ kad.NodeID[key.Key256] = (*PeerID)(nil)
 
-func NewPeerID(p peer.ID) *PeerID {
-	return &PeerID{p}
+func NewPeerID(p peer.ID) PeerID {
+	return PeerID{p}
 }
 
 func (id PeerID) Key() key.Key256 {

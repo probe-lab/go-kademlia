@@ -9,10 +9,10 @@ import (
 
 type AddrInfo struct {
 	peer.AddrInfo
-	id *PeerID
+	id PeerID
 }
 
-var _ kad.NodeInfo[key.Key256, multiaddr.Multiaddr] = (*AddrInfo)(nil)
+var _ kad.NodeInfo[key.Key256, PeerID, multiaddr.Multiaddr] = (*AddrInfo)(nil)
 
 func NewAddrInfo(ai peer.AddrInfo) *AddrInfo {
 	return &AddrInfo{
@@ -29,11 +29,11 @@ func (ai AddrInfo) String() string {
 	return ai.id.String()
 }
 
-func (ai AddrInfo) PeerID() *PeerID {
+func (ai AddrInfo) PeerID() PeerID {
 	return ai.id
 }
 
-func (ai AddrInfo) ID() kad.NodeID[key.Key256] {
+func (ai AddrInfo) ID() PeerID {
 	return ai.id
 }
 

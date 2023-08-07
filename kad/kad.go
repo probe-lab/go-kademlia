@@ -1,5 +1,7 @@
 package kad
 
+import "context"
+
 // Key is the interface all Kademlia key types support.
 //
 // A Kademlia key is defined as a bit string of arbitrary size. In practice, different Kademlia implementations use
@@ -32,6 +34,8 @@ type Key[K any] interface {
 	// It returns -1 if the key is numerically less than other, +1 if it is greater
 	// and 0 if both keys are equal.
 	Compare(other K) int
+
+	Bytes() []byte
 }
 
 // RoutingTable is the interface all Kademlia Routing Tables types support.
@@ -89,9 +93,9 @@ type NodeID[K Key[K]] interface {
 
 // NodeInfo is a container type that combines node identification information
 // and network addresses at which the node is reachable.
-type NodeInfo[K Key[K], A Address[A]] interface {
+type NodeInfo[K Key[K], N NodeID[K], A Address[A]] interface {
 	// ID returns the node identifier.
-	ID() NodeID[K]
+	ID() N
 
 	// Addresses returns the network addresses associated with the given node.
 	Addresses() []A
@@ -111,21 +115,16 @@ func Equal[K Key[K]](this, that NodeID[K]) bool {
 	return this.Key().Compare(that.Key()) == 0
 }
 
-type Message interface{}
+type Record interface{}
 
-type Request[K Key[K], A Address[A]] interface {
-	Message
-
-	// Target returns the target key and true, or false if no target key has been specfied.
-	Target() K
-
-	// EmptyResponse returns an empty response struct for this request message
-	// TODO: this is a weird patter, let's try to remove this.
-	EmptyResponse() Response[K, A]
+type Protocol[K Key[K], N NodeID[K], A Address[A], R Record] interface {
+	Get(ctx context.Context, to N, target K) (Response[K, N, A, R], error)
+	Put(ctx context.Context, to N, record R) error
 }
 
-type Response[K Key[K], A Address[A]] interface {
-	Message
-
-	CloserNodes() []NodeInfo[K, A]
+type Response[K Key[K], N NodeID[K], A Address[A], R Record] interface {
+	Records() []R
+	CloserNodes() []NodeInfo[K, N, A]
 }
+
+type Message interface{} // Obsolete
