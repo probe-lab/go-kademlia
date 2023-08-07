@@ -2,6 +2,9 @@ package libp2p
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/libp2p/go-libp2p/core/peerstore"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -11,25 +14,35 @@ import (
 	"github.com/plprobelab/go-kademlia/key"
 )
 
-type FindNode struct {
-	host host.Host
+type ProtocolFindNode struct {
+	Host host.Host
 }
 
-var _ kad.Protocol[key.Key256, ma.Multiaddr] = FindNode{}
+var _ kad.Protocol[key.Key256, PeerID, ma.Multiaddr] = ProtocolFindNode{}
 
-func (f FindNode) Get(ctx context.Context, to kad.NodeID[key.Key256], target key.Key256) (kad.Response[key.Key256, ma.Multiaddr], error) {
-	pi, _ := getPeerID(to)
-	if err := f.host.Connect(ctx, peer.AddrInfo{ID: pi.ID}); err != nil {
+func (p ProtocolFindNode) Get(ctx context.Context, to PeerID, target key.Key256) (kad.Response[key.Key256, PeerID, ma.Multiaddr], error) {
+	if err := p.Host.Connect(ctx, peer.AddrInfo{ID: to.ID}); err != nil {
 		return nil, err
 	}
 
-	s, err := f.host.NewStream(ctx, pi.ID, nil /*TODO*/)
+	s, err := p.Host.NewStream(ctx, to.ID, "/ipfs/kad/1.0.0")
 	if err != nil {
 		return nil, err
 	}
 	defer s.Close()
 
-	req := FindPeerRequest(pi)
+	t, err := peer.Decode("QmSKVUFAyCddg2wDUdZVCfvqG5YCwwJTWY1HRmorebXcKG")
+	if err != nil {
+		panic(err)
+	}
+	tid := NewPeerID(t)
+
+	fmt.Println("Find peer request to:", to.ID, "for key", tid.Key().HexString())
+	marshalledPeerid, _ := tid.MarshalBinary()
+	req := &Message{
+		Type: Message_FIND_NODE,
+		Key:  marshalledPeerid,
+	}
 	err = WriteMsg(s, req)
 	if err != nil {
 		return nil, err
@@ -40,8 +53,28 @@ func (f FindNode) Get(ctx context.Context, to kad.NodeID[key.Key256], target key
 		return nil, err
 	}
 
+	for _, cp := range resp.CloserPeers {
+		ai, err := PBPeerToPeerInfo(cp)
+		if err != nil {
+			continue
+		}
+		for _, a := range ai.Addrs {
+			p.Host.Peerstore().AddAddr(ai.PeerID().ID, a, peerstore.AddressTTL)
+		}
+	}
+
+	fmt.Println("Find peer response from:", to.ID, "closer", len(resp.CloserPeers))
 	return resp, nil
 }
 
-func (f FindNode) Put(ctx context.Context, to kad.NodeID[key.Key256], record []byte) error {
+func (p ProtocolFindNode) Put(ctx context.Context, to PeerID, record []byte) error {
+	return nil
+}
+
+type ProtocolProviderRecords struct {
+	host host.Host
+}
+
+type ProtocolIPNS struct {
+	host host.Host
 }

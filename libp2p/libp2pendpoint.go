@@ -43,8 +43,8 @@ type Libp2pEndpoint struct {
 }
 
 var (
-	_ endpoint.NetworkedEndpoint[key.Key256, multiaddr.Multiaddr] = (*Libp2pEndpoint)(nil)
-	_ endpoint.ServerEndpoint[key.Key256, multiaddr.Multiaddr]    = (*Libp2pEndpoint)(nil)
+	_ endpoint.NetworkedEndpoint[key.Key256, PeerID, multiaddr.Multiaddr] = (*Libp2pEndpoint)(nil)
+	_ endpoint.ServerEndpoint[key.Key256, PeerID, multiaddr.Multiaddr]    = (*Libp2pEndpoint)(nil)
 )
 
 func NewLibp2pEndpoint(ctx context.Context, host host.Host,
@@ -133,7 +133,7 @@ func (e *Libp2pEndpoint) DialPeer(ctx context.Context, id kad.NodeID[key.Key256]
 }
 
 func (e *Libp2pEndpoint) MaybeAddToPeerstore(ctx context.Context,
-	id kad.NodeInfo[key.Key256, multiaddr.Multiaddr], ttl time.Duration,
+	id kad.NodeInfo[key.Key256, PeerID, multiaddr.Multiaddr], ttl time.Duration,
 ) error {
 	_, span := util.StartSpan(ctx, "Libp2pEndpoint.MaybeAddToPeerstore",
 		trace.WithAttributes(attribute.String("PeerID", id.ID().String())))
@@ -153,11 +153,11 @@ func (e *Libp2pEndpoint) MaybeAddToPeerstore(ctx context.Context,
 	return nil
 }
 
-func (e *Libp2pEndpoint) SendMessage(ctx context.Context, protoID address.ProtocolID, id kad.NodeID[key.Key256], req kad.Request[key.Key256, multiaddr.Multiaddr]) (kad.Response[key.Key256, multiaddr.Multiaddr], error) {
-	respCh := make(chan kad.Response[key.Key256, multiaddr.Multiaddr], 1)
+func (e *Libp2pEndpoint) SendMessage(ctx context.Context, protoID address.ProtocolID, id kad.NodeID[key.Key256], req kad.Request[key.Key256, PeerID, multiaddr.Multiaddr]) (kad.Response[key.Key256, PeerID, multiaddr.Multiaddr], error) {
+	respCh := make(chan kad.Response[key.Key256, PeerID, multiaddr.Multiaddr], 1)
 	errCh := make(chan error, 1)
 
-	handleResp := func(ctx context.Context, resp kad.Response[key.Key256, multiaddr.Multiaddr], err error) {
+	handleResp := func(ctx context.Context, resp kad.Response[key.Key256, PeerID, multiaddr.Multiaddr], err error) {
 		if err != nil {
 			errCh <- err
 			return
@@ -183,7 +183,7 @@ func (e *Libp2pEndpoint) SendMessage(ctx context.Context, protoID address.Protoc
 func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 	protoID address.ProtocolID, n kad.NodeID[key.Key256], req kad.Message,
 	resp kad.Message, timeout time.Duration,
-	responseHandlerFn endpoint.ResponseHandlerFn[key.Key256, multiaddr.Multiaddr],
+	responseHandlerFn endpoint.ResponseHandlerFn[key.Key256, PeerID, multiaddr.Multiaddr],
 ) error {
 	_, span := util.StartSpan(ctx,
 		"Libp2pEndpoint.SendRequestHandleResponse", trace.WithAttributes(
@@ -191,7 +191,7 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 		))
 	defer span.End()
 
-	protoResp, ok := resp.(ProtoKadResponseMessage[key.Key256, multiaddr.Multiaddr])
+	protoResp, ok := resp.(ProtoKadResponseMessage[key.Key256, PeerID, multiaddr.Multiaddr])
 	if !ok {
 		span.RecordError(ErrRequireProtoKadResponse)
 		return ErrRequireProtoKadResponse
@@ -325,7 +325,7 @@ func (e *Libp2pEndpoint) Key() key.Key256 {
 	return PeerID{ID: e.host.ID()}.Key()
 }
 
-func (e *Libp2pEndpoint) NetworkAddress(n kad.NodeID[key.Key256]) (kad.NodeInfo[key.Key256, multiaddr.Multiaddr], error) {
+func (e *Libp2pEndpoint) NetworkAddress(n kad.NodeID[key.Key256]) (kad.NodeInfo[key.Key256, PeerID, multiaddr.Multiaddr], error) {
 	ai, err := e.PeerInfo(n)
 	if err != nil {
 		return nil, err

@@ -21,7 +21,7 @@ func FindPeerRequest(p *PeerID) *Message {
 	}
 }
 
-func FindPeerResponse(peers []kad.NodeID[key.Key256], e endpoint.NetworkedEndpoint[key.Key256, multiaddr.Multiaddr]) *Message {
+func FindPeerResponse(peers []kad.NodeID[key.Key256], e endpoint.NetworkedEndpoint[key.Key256, PeerID, multiaddr.Multiaddr]) *Message {
 	return &Message{
 		Type:        Message_FIND_NODE,
 		CloserPeers: NodeIDsToPbPeers(peers, e),
@@ -36,14 +36,14 @@ func (msg *Message) Target() key.Key256 {
 	return PeerID{ID: p}.Key()
 }
 
-func (msg *Message) EmptyResponse() kad.Response[key.Key256, multiaddr.Multiaddr] {
+func (msg *Message) EmptyResponse() kad.Response[key.Key256, PeerID, multiaddr.Multiaddr] {
 	return &Message{}
 }
 
-func (msg *Message) CloserNodes() []kad.NodeInfo[key.Key256, multiaddr.Multiaddr] {
+func (msg *Message) CloserNodes() []kad.NodeInfo[key.Key256, PeerID, multiaddr.Multiaddr] {
 	closerPeers := msg.GetCloserPeers()
 	if closerPeers == nil {
-		return []kad.NodeInfo[key.Key256, multiaddr.Multiaddr]{}
+		return []kad.NodeInfo[key.Key256, PeerID, multiaddr.Multiaddr]{}
 	}
 	return ParsePeers(closerPeers)
 }
@@ -66,8 +66,8 @@ func PBPeerToPeerInfo(pbp *Message_Peer) (*AddrInfo, error) {
 	}), nil
 }
 
-func ParsePeers(pbps []*Message_Peer) []kad.NodeInfo[key.Key256, multiaddr.Multiaddr] {
-	peers := make([]kad.NodeInfo[key.Key256, multiaddr.Multiaddr], 0, len(pbps))
+func ParsePeers(pbps []*Message_Peer) []kad.NodeInfo[key.Key256, PeerID, multiaddr.Multiaddr] {
+	peers := make([]kad.NodeInfo[key.Key256, PeerID, multiaddr.Multiaddr], 0, len(pbps))
 	for _, p := range pbps {
 		pi, err := PBPeerToPeerInfo(p)
 		if err == nil {
@@ -77,7 +77,7 @@ func ParsePeers(pbps []*Message_Peer) []kad.NodeInfo[key.Key256, multiaddr.Multi
 	return peers
 }
 
-func NodeIDsToPbPeers(peers []kad.NodeID[key.Key256], e endpoint.NetworkedEndpoint[key.Key256, multiaddr.Multiaddr]) []*Message_Peer {
+func NodeIDsToPbPeers(peers []kad.NodeID[key.Key256], e endpoint.NetworkedEndpoint[key.Key256, PeerID, multiaddr.Multiaddr]) []*Message_Peer {
 	if len(peers) == 0 || e == nil {
 		return nil
 	}
