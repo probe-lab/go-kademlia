@@ -11,10 +11,10 @@ type ProtoKadMessage interface {
 
 type ProtoKadRequestMessage[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] interface {
 	ProtoKadMessage
-	kad.Request[K, N, A]
+	// kad.Request[K, N, A]
 }
 
 type ProtoKadResponseMessage[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] interface {
 	ProtoKadMessage
-	kad.Response[K, N, A]
+	// kad.Response[K, N, A]
 }

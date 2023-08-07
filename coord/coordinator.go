@@ -21,14 +21,14 @@ import (
 // A Coordinator coordinates the state machines that comprise a Kademlia DHT
 // Currently this is only queries but will expand to include other state machines such as routing table refresh,
 // and reproviding.
-type Coordinator[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
+type Coordinator[K kad.Key[K], N kad.NodeID[K], A kad.Address[A], R kad.Record] struct {
 	// self is the node id of the system the coordinator is running on
 	self N
 
 	// cfg is a copy of the optional configuration supplied to the coordinator
 	cfg Config
 
-	qp *query.Pool[K, N, A]
+	qp *query.Pool[K, N, A, R]
 
 	// rt is the routing table used to look up nodes by distance
 	rt kad.RoutingTable[K]
@@ -37,7 +37,7 @@ type Coordinator[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
 	querySubs    map[query.QueryID]chan<- KademliaEvent
 
 	// ndp is the node discovery protocol
-	ndp kad.Protocol[K, N, A]
+	ndp kad.Protocol[K, N, A, R]
 
 	peerstoreTTL time.Duration
 
@@ -74,7 +74,7 @@ func DefaultConfig() *Config {
 	}
 }
 
-func NewCoordinator[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]](self N, ndp kad.Protocol[K, N, A], rt kad.RoutingTable[K], cfg *Config) (*Coordinator[K, N, A], error) {
+func NewCoordinator[K kad.Key[K], N kad.NodeID[K], A kad.Address[A], R kad.Record](self N, ndp kad.Protocol[K, N, A, R], rt kad.RoutingTable[K], cfg *Config) (*Coordinator[K, N, A, R], error) {
 	if cfg == nil {
 		cfg = DefaultConfig()
 	} else if err := cfg.Validate(); err != nil {
@@ -84,11 +84,11 @@ func NewCoordinator[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]](self N, ndp
 	qpCfg := query.DefaultPoolConfig()
 	qpCfg.Clock = cfg.Clock
 
-	qp, err := query.NewPool[K, N, A](self, qpCfg)
+	qp, err := query.NewPool[K, N, A, R](self, qpCfg)
 	if err != nil {
 		return nil, fmt.Errorf("query pool: %w", err)
 	}
-	return &Coordinator[K, N, A]{
+	return &Coordinator[K, N, A, R]{
 		self:          self,
 		cfg:           *cfg,
 		rt:            rt,
@@ -99,7 +99,7 @@ func NewCoordinator[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]](self N, ndp
 	}, nil
 }
 
-func (c *Coordinator[K, N, A]) Start(ctx context.Context) <-chan KademliaEvent {
+func (c *Coordinator[K, N, A, R]) Start(ctx context.Context) <-chan KademliaEvent {
 	ctx, span := util.StartSpan(ctx, "Coordinator.Start")
 	defer span.End()
 	// ensure there is only ever one mainloop
@@ -110,7 +110,7 @@ func (c *Coordinator[K, N, A]) Start(ctx context.Context) <-chan KademliaEvent {
 	return c.outboundEvents
 }
 
-func (c *Coordinator[K, N, A]) mainloop(ctx context.Context) {
+func (c *Coordinator[K, N, A, R]) mainloop(ctx context.Context) {
 	ctx, span := util.StartSpan(ctx, "Coordinator.mainloop")
 	defer span.End()
 
@@ -125,8 +125,8 @@ func (c *Coordinator[K, N, A]) mainloop(ctx context.Context) {
 			return
 		case ev := <-c.inboundEvents:
 			switch tev := ev.(type) {
-			case *eventAddQuery[K, N, A]:
-				qev := &query.EventPoolAddQuery[K, N, A]{
+			case *eventAddQuery[K, N, A, R]:
+				qev := &query.EventPoolAddQuery[K, N, A, R]{
 					QueryID:  tev.QueryID,
 					Target:   tev.Target,
 					Protocol: tev.Protocol,
@@ -147,7 +147,7 @@ func (c *Coordinator[K, N, A]) mainloop(ctx context.Context) {
 
 				c.dispatchQueryPoolEvent(ctx, qev)
 
-			case *eventMessageResponse[K, N, A]:
+			case *eventMessageResponse[K, N, A, R]:
 				if tev.Response != nil {
 					for _, info := range tev.Response.CloserNodes() {
 						if key.Equal(info.ID().Key(), c.self.Key()) {
@@ -165,14 +165,14 @@ func (c *Coordinator[K, N, A]) mainloop(ctx context.Context) {
 				}
 
 				// notify caller
-				c.querySubs[tev.QueryID] <- &KademliaOutboundQueryProgressedEvent[K, N, A]{
+				c.querySubs[tev.QueryID] <- &KademliaOutboundQueryProgressedEvent[K, N, A, R]{
 					NodeID:   tev.NodeID,
 					QueryID:  tev.QueryID,
 					Response: tev.Response,
 					Stats:    tev.Stats,
 				}
 
-				qev := &query.EventPoolMessageResponse[K, N, A]{
+				qev := &query.EventPoolMessageResponse[K, N, A, R]{
 					QueryID:  tev.QueryID,
 					NodeID:   tev.NodeID,
 					Response: tev.Response,
@@ -192,7 +192,7 @@ func (c *Coordinator[K, N, A]) mainloop(ctx context.Context) {
 	}
 }
 
-func (c *Coordinator[K, N, A]) heartbeat(ctx context.Context) {
+func (c *Coordinator[K, N, A, R]) heartbeat(ctx context.Context) {
 	ticker := c.cfg.Clock.Ticker(5 * time.Millisecond)
 
 	for {
@@ -206,23 +206,23 @@ func (c *Coordinator[K, N, A]) heartbeat(ctx context.Context) {
 	}
 }
 
-func (c *Coordinator[K, N, A]) dispatchQueryPoolEvent(ctx context.Context, ev query.PoolEvent) {
+func (c *Coordinator[K, N, A, R]) dispatchQueryPoolEvent(ctx context.Context, ev query.PoolEvent) {
 	ctx, span := util.StartSpan(ctx, "Coordinator.dispatchQueryPoolEvent")
 	defer span.End()
 	// attempt to advance the query state machine
 	state := c.qp.Advance(ctx, ev)
 	switch st := state.(type) {
-	case *query.StatePoolQueryMessage[K, N, A]:
+	case *query.StatePoolQueryMessage[K, N, A, R]:
 		c.attemptSendMessage(ctx, st.Protocol, st.NodeID, st.Target, st.QueryID, st.Stats)
 	case *query.StatePoolWaitingAtCapacity:
 		// TODO
 	case *query.StatePoolWaitingWithCapacity:
 		// TODO
-	case *query.StatePoolQueryFinished[K, N, A]:
-		c.querySubs[st.QueryID] <- &KademliaOutboundQueryFinishedEvent[K, N, A]{
+	case *query.StatePoolQueryFinished[K, N, A, R]:
+		c.querySubs[st.QueryID] <- &KademliaOutboundQueryFinishedEvent[K, N, A, R]{
 			QueryID: st.QueryID,
 			Stats:   st.Stats,
-			Node:    st.Node,
+			Records: st.Records,
 		}
 		delete(c.querySubs, st.QueryID)
 		// TODO
@@ -235,7 +235,7 @@ func (c *Coordinator[K, N, A]) dispatchQueryPoolEvent(ctx context.Context, ev qu
 	}
 }
 
-func (c *Coordinator[K, N, A]) attemptSendMessage(ctx context.Context, protocol kad.Protocol[K, N, A], to N, target K, queryID query.QueryID, stats query.QueryStats) {
+func (c *Coordinator[K, N, A, R]) attemptSendMessage(ctx context.Context, protocol kad.Protocol[K, N, A, R], to N, target K, queryID query.QueryID, stats query.QueryStats) {
 	ctx, span := util.StartSpan(ctx, "Coordinator.attemptSendMessage")
 	defer span.End()
 	go func() {
@@ -257,7 +257,7 @@ func (c *Coordinator[K, N, A]) attemptSendMessage(ctx context.Context, protocol 
 			return
 		}
 
-		c.inboundEvents <- &eventMessageResponse[K, N, A]{
+		c.inboundEvents <- &eventMessageResponse[K, N, A, R]{
 			NodeID:   to,
 			QueryID:  queryID,
 			Response: resp,
@@ -266,24 +266,7 @@ func (c *Coordinator[K, N, A]) attemptSendMessage(ctx context.Context, protocol 
 	}()
 }
 
-//func (c *Coordinator[K, N, A]) StartQuery(ctx context.Context, queryID query.QueryID, protocolID address.ProtocolID, msg kad.Request[K, A]) error {
-//	knownClosestPeers := c.rt.NearestNodes(msg.Target(), 20)
-//
-//	ev := &eventAddQuery[K, N, A]{
-//		QueryID:           queryID,
-//		Target:            msg.Target(),
-//		ProtocolID:        protocolID,
-//		Message:           msg,
-//		Seed: knownClosestPeers,
-//	}
-//
-//	// c.queue.Enqueue(ctx, ev)
-//	c.inboundEvents <- ev
-//
-//	return nil
-//}
-
-func (c *Coordinator[K, N, A]) StopQuery(ctx context.Context, queryID query.QueryID) error {
+func (c *Coordinator[K, N, A, R]) StopQuery(ctx context.Context, queryID query.QueryID) error {
 	ev := &eventStopQuery[K]{
 		QueryID: queryID,
 	}
@@ -291,25 +274,6 @@ func (c *Coordinator[K, N, A]) StopQuery(ctx context.Context, queryID query.Quer
 	c.inboundEvents <- ev
 	return nil
 }
-
-//
-//// AddNodes suggests new DHT nodes and their associated addresses to be added to the routing table.
-//// If the routing table is been updated as a result of this operation a KademliaRoutingUpdatedEvent event is emitted.
-//func (c *Coordinator[K, N, A]) AddNodes(ctx context.Context, infos []kad.NodeInfo[K, N, A]) {
-//	for _, info := range infos {
-//		if key.Equal(info.ID().Key(), c.self.Key()) {
-//			continue
-//		}
-//		isNew := c.rt.AddNode(info.ID())
-//		// c.ep.MaybeAddToPeerstore(ctx, info, c.peerstoreTTL)
-//
-//		if isNew {
-//			c.outboundEvents <- &KademliaRoutingUpdatedEvent[K, N, A]{
-//				NodeInfo: info,
-//			}
-//		}
-//	}
-//}
 
 // Kademlia events emitted by the Coordinator, intended for consumption by clients of the package
 
@@ -319,19 +283,19 @@ type KademliaEvent interface {
 
 // KademliaOutboundQueryProgressedEvent is emitted by the coordinator when a query has received a
 // response from a node.
-type KademliaOutboundQueryProgressedEvent[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
+type KademliaOutboundQueryProgressedEvent[K kad.Key[K], N kad.NodeID[K], A kad.Address[A], R kad.Record] struct {
 	QueryID  query.QueryID
 	NodeID   kad.NodeID[K]
-	Response kad.Response[K, N, A]
+	Response kad.Response[K, N, A, R]
 	Stats    query.QueryStats
 }
 
 // KademliaOutboundQueryFinishedEvent is emitted by the coordinator when a query has finished, either through
 // running to completion or by being canceled.
-type KademliaOutboundQueryFinishedEvent[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
+type KademliaOutboundQueryFinishedEvent[K kad.Key[K], N kad.NodeID[K], A kad.Address[A], R kad.Record] struct {
 	QueryID query.QueryID
 	Stats   query.QueryStats
-	Node    kad.NodeInfo[K, N, A]
+	Records []R
 }
 
 // KademliaRoutingUpdatedEvent is emitted by the coordinator when a new node has been added to the routing table.
@@ -344,11 +308,11 @@ type KademliaUnroutablePeerEvent[K kad.Key[K]] struct{}
 type KademliaRoutablePeerEvent[K kad.Key[K]] struct{}
 
 // kademliaEvent() ensures that only Kademlia events can be assigned to a KademliaEvent.
-func (*KademliaRoutingUpdatedEvent[K, N, A]) kademliaEvent()          {}
-func (*KademliaOutboundQueryProgressedEvent[K, N, A]) kademliaEvent() {}
-func (*KademliaUnroutablePeerEvent[K]) kademliaEvent()                {}
-func (*KademliaRoutablePeerEvent[K]) kademliaEvent()                  {}
-func (*KademliaOutboundQueryFinishedEvent[K, N, A]) kademliaEvent()   {}
+func (*KademliaRoutingUpdatedEvent[K, N, A]) kademliaEvent()             {}
+func (*KademliaOutboundQueryProgressedEvent[K, N, A, R]) kademliaEvent() {}
+func (*KademliaUnroutablePeerEvent[K]) kademliaEvent()                   {}
+func (*KademliaRoutablePeerEvent[K]) kademliaEvent()                     {}
+func (*KademliaOutboundQueryFinishedEvent[K, N, A, R]) kademliaEvent()   {}
 
 // Internal events for the Coordiinator
 
@@ -367,17 +331,17 @@ type eventMessageFailed[K kad.Key[K]] struct {
 	Error   error            // the error that caused the failure, if any
 }
 
-type eventMessageResponse[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
-	NodeID   kad.NodeID[K]         // the node the message was sent to
-	QueryID  query.QueryID         // the id of the query that sent the message
-	Response kad.Response[K, N, A] // the message response sent by the node
-	Stats    query.QueryStats      // stats for the query sending the message
+type eventMessageResponse[K kad.Key[K], N kad.NodeID[K], A kad.Address[A], R kad.Record] struct {
+	NodeID   kad.NodeID[K]            // the node the message was sent to
+	QueryID  query.QueryID            // the id of the query that sent the message
+	Response kad.Response[K, N, A, R] // the message response sent by the node
+	Stats    query.QueryStats         // stats for the query sending the message
 }
 
-type eventAddQuery[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
+type eventAddQuery[K kad.Key[K], N kad.NodeID[K], A kad.Address[A], R kad.Record] struct {
 	QueryID  query.QueryID
 	Target   K
-	Protocol kad.Protocol[K, N, A]
+	Protocol kad.Protocol[K, N, A, R]
 	Seed     []N
 	Out      chan<- KademliaEvent
 }
@@ -389,14 +353,14 @@ type eventStopQuery[K kad.Key[K]] struct {
 type eventPoll struct{}
 
 // coordinatorInternalEvent() ensures that only an internal coordinator event can be assigned to the coordinatorInternalEvent interface.
-func (*eventUnroutablePeer[K]) coordinatorInternalEvent()        {}
-func (*eventMessageFailed[K]) coordinatorInternalEvent()         {}
-func (*eventMessageResponse[K, N, A]) coordinatorInternalEvent() {}
-func (*eventAddQuery[K, N, A]) coordinatorInternalEvent()        {}
-func (*eventStopQuery[K]) coordinatorInternalEvent()             {}
-func (*eventPoll) coordinatorInternalEvent()                     {}
+func (*eventUnroutablePeer[K]) coordinatorInternalEvent()           {}
+func (*eventMessageFailed[K]) coordinatorInternalEvent()            {}
+func (*eventMessageResponse[K, N, A, R]) coordinatorInternalEvent() {}
+func (*eventAddQuery[K, N, A, R]) coordinatorInternalEvent()        {}
+func (*eventStopQuery[K]) coordinatorInternalEvent()                {}
+func (*eventPoll) coordinatorInternalEvent()                        {}
 
-func (c *Coordinator[K, N, A]) FindNode(ctx context.Context, node N) (kad.NodeInfo[K, N, A], error) {
+func (c *Coordinator[K, N, A, R]) FindNode(ctx context.Context, node N) (*R, error) {
 	evts := make(chan KademliaEvent)
 
 	var seed []N
@@ -404,7 +368,7 @@ func (c *Coordinator[K, N, A]) FindNode(ctx context.Context, node N) (kad.NodeIn
 		seed = append(seed, nn.(N)) // TODO: bad
 	}
 
-	ev := &eventAddQuery[K, N, A]{
+	ev := &eventAddQuery[K, N, A, R]{
 		QueryID:  query.QueryID(c.queryCounter.Add(1)),
 		Target:   node.Key(),
 		Protocol: c.ndp,
@@ -425,11 +389,70 @@ func (c *Coordinator[K, N, A]) FindNode(ctx context.Context, node N) (kad.NodeIn
 				return nil, fmt.Errorf("query was stopped unexpectedly")
 			}
 			switch evt := evt.(type) {
-			case *KademliaOutboundQueryProgressedEvent[K, N, A]:
+			case *KademliaOutboundQueryProgressedEvent[K, N, A, R]:
 				// query progressed
-			case *KademliaOutboundQueryFinishedEvent[K, N, A]:
-				return evt.Node, nil
+			case *KademliaOutboundQueryFinishedEvent[K, N, A, R]:
+				if len(evt.Records) > 0 {
+					return &evt.Records[0], nil
+				}
+				return nil, fmt.Errorf("no result")
 			}
 		}
 	}
+}
+
+type RecordCoordinator[K kad.Key[K], N kad.NodeID[K], A kad.Address[A], R1 kad.Record, R2 kad.Record] struct {
+	*Coordinator[K, N, A, R1]
+	protocol kad.Protocol[K, N, A, R2]
+}
+
+func Specialize[R2 kad.Record, K kad.Key[K], N kad.NodeID[K], A kad.Address[A], R1 kad.Record](c *Coordinator[K, N, A, R1], p kad.Protocol[K, N, A, R2]) RecordCoordinator[K, N, A, R1, R2] {
+	return RecordCoordinator[K, N, A, R1, R2]{
+		Coordinator: c,
+		protocol:    p,
+	}
+}
+
+func (r RecordCoordinator[K, N, A, R1, R2]) GetRecords(ctx context.Context, key K) ([]R2, error) {
+	evts := make(chan KademliaEvent)
+
+	var seed []N
+	for _, nn := range r.rt.NearestNodes(key, 20) {
+		seed = append(seed, nn.(N)) // TODO: bad
+	}
+
+	ev := &eventAddQuery[K, N, A, R2]{
+		QueryID:  query.QueryID(r.queryCounter.Add(1)),
+		Target:   key,
+		Protocol: r.protocol,
+		Seed:     seed,
+		Out:      evts,
+	}
+
+	// c.queue.Enqueue(ctx, ev)
+	r.inboundEvents <- ev
+
+	for {
+		select {
+		case <-ctx.Done():
+			r.StopQuery(ctx, ev.QueryID)
+			return nil, ctx.Err()
+		case evt, ok := <-evts:
+			if !ok {
+				return nil, fmt.Errorf("query was stopped unexpectedly")
+			}
+			switch evt := evt.(type) {
+			case *KademliaOutboundQueryProgressedEvent[K, N, A, R2]:
+				// query progressed
+			case *KademliaOutboundQueryFinishedEvent[K, N, A, R2]:
+				return evt.Records, nil
+			}
+		}
+	}
+	return nil, nil
+}
+
+func (r RecordCoordinator[K, N, A, R1, R2]) PutRecord(ctx context.Context, to N, record R2) error {
+	// uses r.Coordinator to find closest nodes to record key
+	return nil
 }

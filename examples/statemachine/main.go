@@ -5,18 +5,15 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/libp2p/go-libp2p/core/peer"
-
-	"github.com/plprobelab/go-kademlia/routing/triert"
+	"github.com/ipfs/go-cid"
 
 	"github.com/libp2p/go-libp2p"
-	kadp2p "github.com/plprobelab/go-kademlia/libp2p"
-
+	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
-	//"github.com/plprobelab/go-kademlia/libp2p"
-
 	"github.com/plprobelab/go-kademlia/coord"
 	"github.com/plprobelab/go-kademlia/key"
+	kadp2p "github.com/plprobelab/go-kademlia/libp2p"
+	"github.com/plprobelab/go-kademlia/routing/triert"
 )
 
 func main() {
@@ -54,6 +51,10 @@ func main() {
 		Host: h,
 	}
 
+	p := &kadp2p.ProtocolProviderRecords{
+		Host: h,
+	}
+
 	// target is the peer we want to find QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb
 	target, err := peer.Decode("QmSKVUFAyCddg2wDUdZVCfvqG5YCwwJTWY1HRmorebXcKG")
 	if err != nil {
@@ -72,35 +73,14 @@ func main() {
 	}
 
 	fmt.Println("new coordinator", h.ID())
-	kad, err := coord.NewCoordinator[key.Key256, kadp2p.PeerID, ma.Multiaddr](kadp2p.NewPeerID(h.ID()), f, rt, ccfg)
+	kad, err := coord.NewCoordinator[key.Key256, kadp2p.PeerID, ma.Multiaddr, kadp2p.PeerRecord](kadp2p.NewPeerID(h.ID()), f, rt, ccfg)
 	if err != nil {
 		log.Fatal(err)
 	}
 	kad.Start(ctx)
-	//
-	//go func(ctx context.Context) {
-	//	for {
-	//		select {
-	//		case <-time.After(100 * time.Millisecond):
-	//			debug("Running simulator")
-	//			siml.Run(ctx)
-	//		case <-ctx.Done():
-	//			debug("Exiting simulator")
-	//			return
-	//		}
-	//	}
-	//}(ctx)
 
-	// A (ids[0]) is looking for D (ids[3])
-	// A will first ask B, B will reply with C's address (and A's address)
-	// A will then ask C, C will reply with D's address (and B's address)
-
-	//addr, err := ih.FindNode(ctx, nodes[3].ID())
-	//if err != nil {
-	//	fmt.Printf("FindNode failed with error: %v\n", err)
-	//	return
-	//}
-	//fmt.Printf("FindNode found address for: %s\n", addr.ID().String())
+	// provider record kademlia
+	providerRecordKad := coord.Specialize[kadp2p.PeerRecord](kad, p)
 
 	fmt.Println("FindNode", targetID, targetID.Key().HexString())
 	node, err := kad.FindNode(ctx, targetID)
@@ -108,10 +88,24 @@ func main() {
 		fmt.Printf("FindNode failed with error: %v\n", err)
 		return
 	}
-	fmt.Printf("FindNode found address for: %s\n", node.ID())
-	for _, a := range node.Addresses() {
+
+	fmt.Printf("FindNode found address for: %s %T\n", node.ID, node)
+	for _, a := range node.Addrs {
 		fmt.Println("  -", a.String())
 	}
+
+	fmt.Println("Searching for provider records")
+
+	c, err := cid.Decode("")
+	if err != nil {
+		panic(err)
+	}
+
+	providerRecords, err := providerRecordKad.GetRecords(ctx, key.NewKey256(c.Bytes()))
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(providerRecords)
 }
 
 //const peerstoreTTL = 10 * time.Minute

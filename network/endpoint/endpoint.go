@@ -33,7 +33,7 @@ type RequestHandlerFn[K kad.Key[K]] func(context.Context, kad.NodeID[K],
 
 // ResponseHandlerFn defines a function that deals with the response to a
 // request previously sent to a remote peer.
-type ResponseHandlerFn[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] func(context.Context, kad.Response[K, N, A], error)
+type ResponseHandlerFn[K kad.Key[K], N kad.NodeID[K], A kad.Address[A], R kad.Record] func(context.Context, kad.Response[K, N, A, R], error)
 
 // Endpoint defines how Kademlia nodes interacts with each other.
 type Endpoint[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] interface {
@@ -45,12 +45,12 @@ type Endpoint[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] interface {
 	// SendRequestHandleResponse sends a request to the given peer and handles
 	// the response with the given handler.
 	// TODO: replace by SendMessage
-	SendRequestHandleResponse(context.Context, address.ProtocolID, kad.NodeID[K],
-		kad.Message, kad.Message, time.Duration,
-		ResponseHandlerFn[K, N, A]) error
+	// SendRequestHandleResponse(context.Context, address.ProtocolID, kad.NodeID[K],
+	//	kad.Message, kad.Message, time.Duration,
+	//	ResponseHandlerFn[K, N, A]) error
 
 	// SendMessage sends a message to the given peer and returns the response.
-	SendMessage(context.Context, address.ProtocolID, kad.NodeID[K], kad.Request[K, N, A]) (kad.Response[K, N, A], error)
+	// SendMessage(context.Context, address.ProtocolID, kad.NodeID[K], kad.Request[K, N, A]) (kad.Response[K, N, A], error)
 
 	// NetworkAddress returns the network address of the given peer (if known).
 	NetworkAddress(kad.NodeID[K]) (kad.NodeInfo[K, N, A], error)

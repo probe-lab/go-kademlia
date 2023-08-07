@@ -30,18 +30,18 @@ type QueryState interface {
 }
 
 // StateQueryFinished indicates that the Query has finished.
-type StateQueryFinished[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
+type StateQueryFinished[K kad.Key[K], N kad.NodeID[K], A kad.Address[A], R kad.Record] struct {
 	QueryID QueryID
 	Stats   QueryStats
-	Node    kad.NodeInfo[K, N, A]
+	Records []R
 }
 
 // StateQueryWaitingMessage indicates that the Query is waiting to send a message to a node.
-type StateQueryWaitingMessage[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
+type StateQueryWaitingMessage[K kad.Key[K], N kad.NodeID[K], A kad.Address[A], R kad.Record] struct {
 	QueryID  QueryID
 	Stats    QueryStats
 	NodeID   N
-	Protocol kad.Protocol[K, N, A]
+	Protocol kad.Protocol[K, N, A, R]
 	Target   K
 }
 
@@ -58,10 +58,10 @@ type StateQueryWaitingWithCapacity struct {
 }
 
 // queryState() ensures that only Query states can be assigned to a QueryState.
-func (*StateQueryFinished[K, N, A]) queryState()       {}
-func (*StateQueryWaitingMessage[K, N, A]) queryState() {}
-func (*StateQueryWaitingAtCapacity) queryState()       {}
-func (*StateQueryWaitingWithCapacity) queryState()     {}
+func (*StateQueryFinished[K, N, A, R]) queryState()       {}
+func (*StateQueryWaitingMessage[K, N, A, R]) queryState() {}
+func (*StateQueryWaitingAtCapacity) queryState()          {}
+func (*StateQueryWaitingWithCapacity) queryState()        {}
 
 type QueryEvent interface {
 	queryEvent()
@@ -71,9 +71,9 @@ type QueryEvent interface {
 type EventQueryCancel struct{}
 
 // EventQueryMessageResponse notifies a query that an attempt to send a message has received a successful response.
-type EventQueryMessageResponse[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
-	NodeID   kad.NodeID[K]         // the node the message was sent to
-	Response kad.Response[K, N, A] // the message response sent by the node
+type EventQueryMessageResponse[K kad.Key[K], N kad.NodeID[K], A kad.Address[A], R kad.Record] struct {
+	NodeID   kad.NodeID[K]            // the node the message was sent to
+	Response kad.Response[K, N, A, R] // the message response sent by the node
 }
 
 // EventQueryMessageFailure notifies a query that an attempt to send a message has failed.
@@ -83,9 +83,9 @@ type EventQueryMessageFailure[K kad.Key[K]] struct {
 }
 
 // queryEvent() ensures that only Query events can be assigned to a QueryEvent.
-func (*EventQueryCancel) queryEvent()                   {}
-func (*EventQueryMessageResponse[K, N, A]) queryEvent() {}
-func (*EventQueryMessageFailure[K]) queryEvent()        {}
+func (*EventQueryCancel) queryEvent()                      {}
+func (*EventQueryMessageResponse[K, N, A, R]) queryEvent() {}
+func (*EventQueryMessageFailure[K]) queryEvent()           {}
 
 // QueryConfig specifies optional configuration for a Query
 type QueryConfig[K kad.Key[K]] struct {
@@ -135,7 +135,7 @@ func DefaultQueryConfig[K kad.Key[K]]() *QueryConfig[K] {
 	}
 }
 
-type Query[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
+type Query[K kad.Key[K], N kad.NodeID[K], A kad.Address[A], R kad.Record] struct {
 	self kad.NodeID[K]
 	id   QueryID
 
@@ -143,9 +143,9 @@ type Query[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
 	cfg QueryConfig[K]
 
 	iter     NodeIter[K, N]
-	protocol kad.Protocol[K, N, A]
+	protocol kad.Protocol[K, N, A, R]
 	stats    QueryStats
-	policy   Policy[K, N, A]
+	policy   Policy[K, N, A, R]
 
 	// finished indicates that the query has completed its work or has been stopped.
 	finished bool
@@ -155,7 +155,7 @@ type Query[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
 	target   K
 }
 
-func NewQuery[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]](self N, id QueryID, protocol kad.Protocol[K, N, A], iter NodeIter[K, N], knownClosestNodes []N, target K, cfg *QueryConfig[K]) (*Query[K, N, A], error) {
+func NewQuery[K kad.Key[K], N kad.NodeID[K], A kad.Address[A], R kad.Record](self N, id QueryID, protocol kad.Protocol[K, N, A, R], iter NodeIter[K, N], knownClosestNodes []N, target K, cfg *QueryConfig[K]) (*Query[K, N, A, R], error) {
 	if cfg == nil {
 		cfg = DefaultQueryConfig[K]()
 	} else if err := cfg.Validate(); err != nil {
@@ -173,8 +173,8 @@ func NewQuery[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]](self N, id QueryI
 		})
 	}
 
-	policy := PolicyImmediate[K, N, A]{}
-	return &Query[K, N, A]{
+	policy := PolicyImmediate[K, N, A, R]{}
+	return &Query[K, N, A, R]{
 		self:     self,
 		id:       id,
 		target:   target,
@@ -185,49 +185,45 @@ func NewQuery[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]](self N, id QueryI
 	}, nil
 }
 
-type Policy[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] interface {
-	ShouldTerminate(ctx context.Context, target K, r *EventQueryMessageResponse[K, N, A]) kad.NodeInfo[K, N, A]
+type Policy[K kad.Key[K], N kad.NodeID[K], A kad.Address[A], R kad.Record] interface {
+	ShouldTerminate(ctx context.Context, target K, r *EventQueryMessageResponse[K, N, A, R]) bool
 }
 
-type PolicyImmediate[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct{}
+type PolicyImmediate[K kad.Key[K], N kad.NodeID[K], A kad.Address[A], R kad.Record] struct{}
 
 // var _ Policy[key.Key256, any, kadtest.StrAddr] = (*PolicyImmediate[key.Key256, any, kadtest.StrAddr])(nil)
-func (p PolicyImmediate[K, N, A]) ShouldTerminate(ctx context.Context, target K, r *EventQueryMessageResponse[K, N, A]) kad.NodeInfo[K, N, A] {
-	for _, n := range r.Response.CloserNodes() {
-		if n.ID().Key().Compare(target) == 0 {
-			return n
-		}
-	}
-	return nil
+
+func (p PolicyImmediate[K, N, A, R]) ShouldTerminate(ctx context.Context, target K, r *EventQueryMessageResponse[K, N, A, R]) bool {
+	return len(r.Response.Records()) != 0
 }
 
-func (q *Query[K, N, A]) Advance(ctx context.Context, ev QueryEvent) QueryState {
+func (q *Query[K, N, A, R]) Advance(ctx context.Context, ev QueryEvent) QueryState {
 	ctx, span := util.StartSpan(ctx, "Query.Advance")
 	defer span.End()
 	if q.finished {
-		return &StateQueryFinished[K, N, A]{
+		return &StateQueryFinished[K, N, A, R]{
 			QueryID: q.id,
 			Stats:   q.stats,
-			Node:    nil,
+			// Record:  R{},
 		}
 	}
 
 	switch tev := ev.(type) {
 	case *EventQueryCancel:
 		q.markFinished()
-		return &StateQueryFinished[K, N, A]{
+		return &StateQueryFinished[K, N, A, R]{
 			QueryID: q.id,
 			Stats:   q.stats,
-			Node:    nil,
+			// Node:    nil,
 		}
-	case *EventQueryMessageResponse[K, N, A]:
+	case *EventQueryMessageResponse[K, N, A, R]:
 		q.onMessageResponse(ctx, tev.NodeID, tev.Response)
-		if n := q.policy.ShouldTerminate(ctx, q.target, tev); n != nil {
+		if q.policy.ShouldTerminate(ctx, q.target, tev) {
 			q.markFinished()
-			return &StateQueryFinished[K, N, A]{
+			return &StateQueryFinished[K, N, A, R]{
 				QueryID: q.id,
 				Stats:   q.stats,
-				Node:    n,
+				Records: tev.Response.Records(),
 			}
 		}
 	case *EventQueryMessageFailure[K]:
@@ -279,10 +275,10 @@ func (q *Query[K, N, A]) Advance(ctx context.Context, ev QueryEvent) QueryState 
 			// If it has contacted at least NumResults nodes successfully then the iteration is done.
 			if !progressing && successes >= q.cfg.NumResults {
 				q.markFinished()
-				returnState = &StateQueryFinished[K, N, A]{
+				returnState = &StateQueryFinished[K, N, A, R]{
 					QueryID: q.id,
 					Stats:   q.stats,
-					Node:    nil,
+					// Node:    nil,
 				}
 				return true
 			}
@@ -296,7 +292,7 @@ func (q *Query[K, N, A]) Advance(ctx context.Context, ev QueryEvent) QueryState 
 				if q.stats.Start.IsZero() {
 					q.stats.Start = q.cfg.Clock.Now()
 				}
-				returnState = &StateQueryWaitingMessage[K, N, A]{
+				returnState = &StateQueryWaitingMessage[K, N, A, R]{
 					NodeID:   ni.NodeID,
 					QueryID:  q.id,
 					Stats:    q.stats,
@@ -337,13 +333,13 @@ func (q *Query[K, N, A]) Advance(ctx context.Context, ev QueryEvent) QueryState 
 	// The iterator is finished because all available nodes have been contacted
 	// and the iterator is not waiting for any more results.
 	q.markFinished()
-	return &StateQueryFinished[K, N, A]{
+	return &StateQueryFinished[K, N, A, R]{
 		QueryID: q.id,
 		Stats:   q.stats,
 	}
 }
 
-func (q *Query[K, N, A]) markFinished() {
+func (q *Query[K, N, A, R]) markFinished() {
 	q.finished = true
 	if q.stats.End.IsZero() {
 		q.stats.End = q.cfg.Clock.Now()
@@ -351,7 +347,7 @@ func (q *Query[K, N, A]) markFinished() {
 }
 
 // onMessageResponse processes the result of a successful response received from a node.
-func (q *Query[K, N, A]) onMessageResponse(ctx context.Context, node kad.NodeID[K], resp kad.Response[K, N, A]) {
+func (q *Query[K, N, A, R]) onMessageResponse(ctx context.Context, node kad.NodeID[K], resp kad.Response[K, N, A, R]) {
 	ni, found := q.iter.Find(node.Key())
 	if !found {
 		// got a rogue message
@@ -394,7 +390,7 @@ func (q *Query[K, N, A]) onMessageResponse(ctx context.Context, node kad.NodeID[
 }
 
 // onMessageFailure processes the result of a failed attempt to contact a node.
-func (q *Query[K, N, A]) onMessageFailure(ctx context.Context, node kad.NodeID[K]) {
+func (q *Query[K, N, A, R]) onMessageFailure(ctx context.Context, node kad.NodeID[K]) {
 	ni, found := q.iter.Find(node.Key())
 	if !found {
 		// got a rogue message

@@ -2,6 +2,7 @@ package key
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"math"
@@ -97,6 +98,10 @@ func (k Key256) HexString() string {
 	return hex.EncodeToString(k.b[:])
 }
 
+func (k Key256) Bytes() []byte {
+	return k.b[:]
+}
+
 // Key32 is a 32-bit Kademlia key, suitable for testing and simulation of small networks.
 type Key32 uint32
 
@@ -158,6 +163,12 @@ func (k Key32) String() string {
 	return k.HexString()
 }
 
+func (k Key32) Bytes() []byte {
+	buffer := make([]byte, 4)
+	binary.BigEndian.PutUint32(buffer, uint32(k))
+	return buffer
+}
+
 // Key8 is an 8-bit Kademlia key, suitable for testing and simulation of very small networks.
 type Key8 uint8
 
@@ -217,6 +228,10 @@ func (k Key8) String() string {
 // HexString returns a string containing the binary representation of the key.
 func (k Key8) BitString() string {
 	return fmt.Sprintf("%08b", uint8(k))
+}
+
+func (k Key8) Bytes() []byte {
+	return []byte{uint8(k)}
 }
 
 // KeyList is a list of Kademlia keys. It implements sort.Interface.
