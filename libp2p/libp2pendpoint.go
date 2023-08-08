@@ -153,33 +153,6 @@ func (e *Libp2pEndpoint) MaybeAddToPeerstore(ctx context.Context,
 	return nil
 }
 
-func (e *Libp2pEndpoint) SendMessage(ctx context.Context, protoID address.ProtocolID, id kad.NodeID[key.Key256], req kad.Request[key.Key256, multiaddr.Multiaddr]) (kad.Response[key.Key256, multiaddr.Multiaddr], error) {
-	respCh := make(chan kad.Response[key.Key256, multiaddr.Multiaddr], 1)
-	errCh := make(chan error, 1)
-
-	handleResp := func(ctx context.Context, resp kad.Response[key.Key256, multiaddr.Multiaddr], err error) {
-		if err != nil {
-			errCh <- err
-			return
-		}
-		respCh <- resp
-	}
-
-	err := e.SendRequestHandleResponse(ctx, protoID, id, req, req.EmptyResponse(), 0, handleResp)
-	if err != nil {
-		return nil, fmt.Errorf("send request: %w", err)
-	}
-
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case err = <-errCh:
-		return nil, fmt.Errorf("handler error: %w", err)
-	case resp := <-respCh:
-		return resp, nil
-	}
-}
-
 func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 	protoID address.ProtocolID, n kad.NodeID[key.Key256], req kad.Message,
 	resp kad.Message, timeout time.Duration,

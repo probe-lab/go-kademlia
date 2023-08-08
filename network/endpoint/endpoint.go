@@ -42,15 +42,13 @@ type Endpoint[K kad.Key[K], A kad.Address[A]] interface {
 	// TODO: consider returning a status of whether the nodeinfo is a new node or contains a new address
 	MaybeAddToPeerstore(context.Context, kad.NodeInfo[K, A], time.Duration) error
 
-	// SendRequestHandleResponse sends a request to the given peer and handles
+	// SendRequestHandleResponse attempts to sends a request to the given peer and handles
 	// the response with the given handler.
-	// TODO: replace by SendMessage
+	// An error is returned if the endpoint is unable to initiate sending the message for
+	// any reason. The handler will not be called if an error is returned.
 	SendRequestHandleResponse(context.Context, address.ProtocolID, kad.NodeID[K],
 		kad.Message, kad.Message, time.Duration,
 		ResponseHandlerFn[K, A]) error
-
-	// SendMessage sends a message to the given peer and returns the response.
-	SendMessage(context.Context, address.ProtocolID, kad.NodeID[K], kad.Request[K, A]) (kad.Response[K, A], error)
 
 	// NetworkAddress returns the network address of the given peer (if known).
 	NetworkAddress(kad.NodeID[K]) (kad.NodeInfo[K, A], error)

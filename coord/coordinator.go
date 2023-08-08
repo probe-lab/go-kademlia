@@ -226,32 +226,40 @@ func (c *Coordinator[K, A]) dispatchQueryPoolEvent(ctx context.Context, ev query
 func (c *Coordinator[K, A]) attemptSendMessage(ctx context.Context, protoID address.ProtocolID, to kad.NodeID[K], msg kad.Request[K, A], queryID query.QueryID, stats query.QueryStats) {
 	ctx, span := util.StartSpan(ctx, "Coordinator.attemptSendMessage")
 	defer span.End()
-	go func() {
-		resp, err := c.ep.SendMessage(ctx, protoID, to, msg)
-		if err != nil {
-			if errors.Is(err, endpoint.ErrCannotConnect) {
-				// here we can notify that the peer is unroutable, which would feed into peerstore and routing table
-				c.inboundEvents <- &eventUnroutablePeer[K]{
-					NodeID: to,
-				}
-				return
-			}
-			c.inboundEvents <- &eventMessageFailed[K]{
-				NodeID:  to,
-				QueryID: queryID,
-				Stats:   stats,
-				Error:   err,
+
+	onSendError := func(ctx context.Context, err error) {
+		if errors.Is(err, endpoint.ErrCannotConnect) {
+			// here we can notify that the peer is unroutable, which would feed into peerstore and routing table
+			c.inboundEvents <- &eventUnroutablePeer[K]{
+				NodeID: to,
 			}
 			return
 		}
+		c.inboundEvents <- &eventMessageFailed[K]{
+			NodeID:  to,
+			QueryID: queryID,
+			Stats:   stats,
+			Error:   err,
+		}
+	}
 
+	onMessageResponse := func(ctx context.Context, resp kad.Response[K, A], err error) {
+		if err != nil {
+			onSendError(ctx, err)
+			return
+		}
 		c.inboundEvents <- &eventMessageResponse[K, A]{
 			NodeID:   to,
 			QueryID:  queryID,
 			Response: resp,
 			Stats:    stats,
 		}
-	}()
+	}
+
+	err := c.ep.SendRequestHandleResponse(ctx, protoID, to, msg, msg.EmptyResponse(), 0, onMessageResponse)
+	if err != nil {
+		onSendError(ctx, err)
+	}
 }
 
 func (c *Coordinator[K, A]) StartQuery(ctx context.Context, queryID query.QueryID, protocolID address.ProtocolID, msg kad.Request[K, A]) error {
