@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/benbjohnson/clock"
@@ -46,8 +45,7 @@ type Coordinator[K kad.Key[K], A kad.Address[A]] struct {
 	queue   queue.EventQueue
 	planner planner.AwareActionPlanner
 
-	outboundEvents     chan KademliaEvent
-	startHeartbeatOnce sync.Once
+	outboundEvents chan KademliaEvent
 }
 
 const DefaultChanqueueCapacity = 1024

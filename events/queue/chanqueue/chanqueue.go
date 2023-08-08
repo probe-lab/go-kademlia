@@ -26,10 +26,7 @@ func NewChanQueue(capacity int) *ChanQueue {
 func (q *ChanQueue) Enqueue(ctx context.Context, e action.Action) {
 	_, span := util.StartSpan(ctx, "ChanQueue.Enqueue")
 	defer span.End()
-
-	select {
-	case q.queue <- e:
-	}
+	q.queue <- e
 }
 
 // Dequeue reads the next element from the queue, note that this operation is blocking
