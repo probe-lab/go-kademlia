@@ -218,3 +218,10 @@ func (k Key8) String() string {
 func (k Key8) BitString() string {
 	return fmt.Sprintf("%08b", uint8(k))
 }
+
+// KeyList is a list of Kademlia keys. It implements sort.Interface.
+type KeyList[K kad.Key[K]] []K
+
+func (ks KeyList[K]) Len() int           { return len(ks) }
+func (ks KeyList[K]) Swap(i, j int)      { ks[i], ks[j] = ks[j], ks[i] }
+func (ks KeyList[K]) Less(i, j int) bool { return ks[i].Compare(ks[j]) < 0 }

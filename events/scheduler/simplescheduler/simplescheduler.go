@@ -48,7 +48,8 @@ func (s *SimpleScheduler) EnqueueAction(ctx context.Context, a action.Action) {
 
 // ScheduleAction schedules an action to run at a specific time.
 func (s *SimpleScheduler) ScheduleAction(ctx context.Context, t time.Time,
-	a action.Action) planner.PlannedAction {
+	a action.Action,
+) planner.PlannedAction {
 	if s.clk.Now().After(t) {
 		s.EnqueueAction(ctx, a)
 		return nil

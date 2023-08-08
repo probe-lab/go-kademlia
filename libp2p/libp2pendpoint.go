@@ -3,6 +3,7 @@ package libp2p
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -41,8 +42,10 @@ type Libp2pEndpoint struct {
 	readers sync.Pool
 }
 
-// var _ endpoint.NetworkedEndpoint = (*Libp2pEndpoint)(nil)
-// var _ endpoint.ServerEndpoint = (*Libp2pEndpoint)(nil)
+var (
+	_ endpoint.NetworkedEndpoint[key.Key256, multiaddr.Multiaddr] = (*Libp2pEndpoint)(nil)
+	_ endpoint.ServerEndpoint[key.Key256, multiaddr.Multiaddr]    = (*Libp2pEndpoint)(nil)
+)
 
 func NewLibp2pEndpoint(ctx context.Context, host host.Host,
 	sched scheduler.Scheduler,
@@ -262,12 +265,25 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 	return nil
 }
 
-func (e *Libp2pEndpoint) Connectedness(id kad.NodeID[key.Key256]) (network.Connectedness, error) {
+func (e *Libp2pEndpoint) Connectedness(id kad.NodeID[key.Key256]) (endpoint.Connectedness, error) {
 	p, err := getPeerID(id)
 	if err != nil {
-		return network.NotConnected, err
+		return endpoint.NotConnected, err
 	}
-	return e.host.Network().Connectedness(p.ID), nil
+
+	c := e.host.Network().Connectedness(p.ID)
+	switch c {
+	case network.NotConnected:
+		return endpoint.NotConnected, nil
+	case network.Connected:
+		return endpoint.Connected, nil
+	case network.CanConnect:
+		return endpoint.CanConnect, nil
+	case network.CannotConnect:
+		return endpoint.CannotConnect, nil
+	default:
+		panic(fmt.Sprintf("unexpected libp2p connectedness value: %v", c))
+	}
 }
 
 func (e *Libp2pEndpoint) PeerInfo(id kad.NodeID[key.Key256]) (peer.AddrInfo, error) {

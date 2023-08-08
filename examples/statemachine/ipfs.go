@@ -5,54 +5,59 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/plprobelab/go-kademlia/coord"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/query"
+	"github.com/plprobelab/go-kademlia/util"
 )
 
 type IpfsDht struct {
-	kad          *KademliaHandler[key.Key256, net.IP]
-	queryWaiters map[QueryID]chan<- kad.Response[key.Key256, net.IP]
+	coordinator  *coord.Coordinator[key.Key256, net.IP]
+	queryWaiters map[query.QueryID]chan<- kad.Response[key.Key256, net.IP]
 }
 
-func NewIpfsDht(kh *KademliaHandler[key.Key256, net.IP]) *IpfsDht {
+func NewIpfsDht(c *coord.Coordinator[key.Key256, net.IP]) *IpfsDht {
 	return &IpfsDht{
-		kad:          kh,
-		queryWaiters: make(map[QueryID]chan<- kad.Response[key.Key256, net.IP]),
+		coordinator:  c,
+		queryWaiters: make(map[query.QueryID]chan<- kad.Response[key.Key256, net.IP]),
 	}
 }
 
 func (d *IpfsDht) Start(ctx context.Context) {
+	ctx, span := util.StartSpan(ctx, "IpfsDht.Start")
+	defer span.End()
 	go d.mainloop(ctx)
 }
 
 func (d *IpfsDht) mainloop(ctx context.Context) {
-	kadEvents := d.kad.Start(ctx)
+	ctx, span := util.StartSpan(ctx, "IpfsDht.mainloop")
+	defer span.End()
+
+	kadEvents := d.coordinator.Start(ctx)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case ev := <-kadEvents:
 			switch tev := ev.(type) {
-			case *KademliaOutboundQueryProgressedEvent[key.Key256, net.IP]:
+			case *coord.KademliaOutboundQueryProgressedEvent[key.Key256, net.IP]:
 				// TODO: locking
 				ch, ok := d.queryWaiters[tev.QueryID]
 				if !ok {
 					// we have lost the query waiter somehow
-					d.kad.StopQuery(ctx, tev.QueryID)
+					d.coordinator.StopQuery(ctx, tev.QueryID)
 					continue
 				}
 
 				// notify the waiter
 				ch <- tev.Response
-
-			default:
-				panic(fmt.Sprintf("unexpected event: %T", tev))
 			}
 		}
 	}
 }
 
-func (d *IpfsDht) registerQueryWaiter(queryID QueryID, ch chan<- kad.Response[key.Key256, net.IP]) {
+func (d *IpfsDht) registerQueryWaiter(queryID query.QueryID, ch chan<- kad.Response[key.Key256, net.IP]) {
 	// TODO: locking
 	d.queryWaiters[queryID] = ch
 }
@@ -60,15 +65,15 @@ func (d *IpfsDht) registerQueryWaiter(queryID QueryID, ch chan<- kad.Response[ke
 // Initiates an iterative query for the the address of the given peer.
 // FindNode is a fundamental Kademlia operation so this logic should be on KademliaHandler
 func (d *IpfsDht) FindNode(ctx context.Context, node kad.NodeID[key.Key256]) (kad.NodeInfo[key.Key256, net.IP], error) {
-	trace("IpfsHandler.FindNode")
 	// TODO: look in local peer store first
 
+	var queryID query.QueryID = "testquery" // TODO: randomize to support multiple queries
+
 	// If not in peer store then query the Kademlia dht
-	queryID, err := d.kad.StartQuery(ctx, &FindNodeRequest[key.Key256, net.IP]{NodeID: node})
+	err := d.coordinator.StartQuery(ctx, queryID, protoID, &FindNodeRequest[key.Key256, net.IP]{NodeID: node})
 	if err != nil {
 		return nil, fmt.Errorf("failed to start query: %w", err)
 	}
-	trace("Query id is %d", queryID)
 
 	ch := make(chan kad.Response[key.Key256, net.IP])
 	d.registerQueryWaiter(queryID, ch)
@@ -81,23 +86,22 @@ func (d *IpfsDht) FindNode(ctx context.Context, node kad.NodeID[key.Key256]) (ka
 		case resp, ok := <-ch:
 			if !ok {
 				// channel was closed, so query can't progress
-				d.kad.StopQuery(ctx, queryID)
+				d.coordinator.StopQuery(ctx, queryID)
 				return nil, fmt.Errorf("query was unexpectedly stopped")
 			}
-			trace("IpfsHandler.FindNode: got event from kademlia")
 			// we got a response from a message sent by query
 			switch tresp := resp.(type) {
 			case *FindNodeResponse[key.Key256, net.IP]:
 				// interpret the response
+				println("IpfsHandler.FindNode: got FindNode response")
 				for _, found := range tresp.CloserPeers {
-					// TODO: is this the best way to test for node equality?
 					if key.Equal(found.ID().Key(), node.Key()) {
 						// found the node we were looking for
-						d.kad.StopQuery(ctx, queryID)
+						d.coordinator.StopQuery(ctx, queryID)
 						return found, nil
 					}
 				}
-				trace("IpfsHandler.FindNode: desired node not found yet")
+				debug("IpfsHandler.FindNode: desired node not found yet")
 			default:
 				return nil, fmt.Errorf("unknown response: %v", resp)
 			}

@@ -395,6 +395,73 @@ func TestFindWithData(t *testing.T) {
 	}
 }
 
+func TestClosest(t *testing.T) {
+	key0 := key.Key8(0)
+
+	keys := []key.Key8{
+		key.Key8(0b00010000),
+		key.Key8(0b00100000),
+		key.Key8(0b00110000),
+		key.Key8(0b00111000),
+		key.Key8(0b00011000),
+		key.Key8(0b00011100),
+		key.Key8(0b00000110),
+		key.Key8(0b00000101),
+		key.Key8(0b00000100),
+		key.Key8(0b00001000),
+		key.Key8(0b00001100),
+	}
+
+	tr, err := trieFromKeys[key.Key8, int](keys)
+	require.NoError(t, err)
+
+	requireEntriesOrdered := func(t *testing.T, target key.Key8, found []Entry[key.Key8, int]) {
+		t.Helper()
+		for i := range found {
+			t.Logf("found[%d]=%v (distance=%v)", i, found[i].Key, target.Xor(found[i].Key))
+			// assert that first key is closer or same as every other possible key
+			if i == 0 {
+				distanceFirst := target.Xor(found[0].Key)
+				for i, k := range keys {
+					// skip target and first key
+					if key.Equal(target, k) || key.Equal(found[0].Key, k) {
+						continue
+					}
+					distanceKey := target.Xor(k)
+					t.Logf("first result distance to target=%v, distance to key[%d]=%v", distanceFirst, i, distanceKey)
+					require.True(t, distanceFirst.Compare(distanceKey) <= 0, "distance from first(key:%v) to target(key:%v)=%v, distance to key[%d](key:%v)=%v", found[0].Key, distanceFirst, target, i, k, distanceKey)
+				}
+				continue
+			}
+			// assert that this key is further or same as the previous key
+			distancePrev := target.Xor(found[i-1].Key)
+			distanceThis := target.Xor(found[i].Key)
+			require.True(t, distancePrev.Compare(distanceThis) <= 0, "distance[%d]=%v, distance[%d]=%v", i-1, distancePrev, i, distanceThis)
+		}
+	}
+
+	t.Run("zero", func(t *testing.T) {
+		// find the 5 nearest keys to the zero key
+		found := Closest(tr, key0, 5)
+		require.Equal(t, 5, len(found))
+		requireEntriesOrdered(t, key0, found)
+	})
+
+	t.Run("key8", func(t *testing.T) {
+		// find the 3 nearest keys to keys[8]
+		found := Closest(tr, keys[8], 3)
+		require.Equal(t, 3, len(found))
+		requireEntriesOrdered(t, keys[8], found)
+	})
+
+	t.Run("key3overflow", func(t *testing.T) {
+		// find the more than available number of keys close to keys[3]
+		found := Closest(tr, keys[3], 20)
+		require.Equal(t, len(keys), len(found))
+		requireEntriesOrdered(t, keys[3], found)
+	})
+}
+
 func BenchmarkBuildTrieMutable(b *testing.B) {
 	b.Run("1000", benchmarkBuildTrieMutable(1000))
 	b.Run("10000", benchmarkBuildTrieMutable(10000))

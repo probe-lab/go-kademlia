@@ -15,7 +15,6 @@ import (
 
 	"github.com/benbjohnson/clock"
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/net/swarm"
 	ma "github.com/multiformats/go-multiaddr"
@@ -106,15 +105,15 @@ func TestConnections(t *testing.T) {
 	// test connectedness, not connected but known address -> NotConnected
 	connectedness, err := endpoints[0].Connectedness(ids[1])
 	require.NoError(t, err)
-	require.Equal(t, network.NotConnected, connectedness)
+	require.Equal(t, endpoint.NotConnected, connectedness)
 	// not connected, unknown address -> NotConnected
 	connectedness, err = endpoints[0].Connectedness(ids[2])
 	require.NoError(t, err)
-	require.Equal(t, network.NotConnected, connectedness)
+	require.Equal(t, endpoint.NotConnected, connectedness)
 	// invalid peerid -> error
 	connectedness, err = endpoints[1].Connectedness(invalidID.ID())
 	require.Equal(t, endpoint.ErrInvalidPeer, err)
-	require.Equal(t, network.NotConnected, connectedness)
+	require.Equal(t, endpoint.NotConnected, connectedness)
 	// verify peerinfo for invalid peerid
 	peerinfo, err := endpoints[1].PeerInfo(invalidID.ID())
 	require.Equal(t, endpoint.ErrInvalidPeer, err)
@@ -139,7 +138,7 @@ func TestConnections(t *testing.T) {
 	// test connectedness
 	connectedness, err = endpoints[0].Connectedness(ids[1])
 	require.NoError(t, err)
-	require.Equal(t, network.Connected, connectedness)
+	require.Equal(t, endpoint.Connected, connectedness)
 	// test peerinfo
 	peerinfo, err = endpoints[0].PeerInfo(ids[1])
 	require.NoError(t, err)

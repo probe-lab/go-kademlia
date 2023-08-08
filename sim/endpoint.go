@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	ba "github.com/plprobelab/go-kademlia/events/action/basicaction"
@@ -32,9 +33,11 @@ type Endpoint[K kad.Key[K], A kad.Address[A]] struct {
 	self  kad.NodeID[K]
 	sched scheduler.Scheduler // client
 
-	peerstore      map[string]kad.NodeInfo[K, A]
-	connStatus     map[string]endpoint.Connectedness
-	serverProtos   map[address.ProtocolID]endpoint.RequestHandlerFn[K]    // server
+	peerstore    map[string]kad.NodeInfo[K, A]
+	connStatus   map[string]endpoint.Connectedness
+	serverProtos map[address.ProtocolID]endpoint.RequestHandlerFn[K] // server
+
+	streamMu       sync.Mutex                                             // guards access to streamFollowup and streamTimeout
 	streamFollowup map[endpoint.StreamID]endpoint.ResponseHandlerFn[K, A] // client
 	streamTimeout  map[endpoint.StreamID]planner.PlannedAction            // client
 
@@ -133,8 +136,10 @@ func (e *Endpoint[K, A]) SendRequestHandleResponse(ctx context.Context,
 		}))
 		return nil
 	}
-	e.streamFollowup[sid] = handleResp
+	e.streamMu.Lock()
+	defer e.streamMu.Unlock()
 
+	e.streamFollowup[sid] = handleResp
 	// timeout
 	if timeout != 0 {
 		e.streamTimeout[sid] = scheduler.ScheduleActionIn(ctx, e.sched, timeout,
@@ -144,9 +149,12 @@ func (e *Endpoint[K, A]) SendRequestHandleResponse(ctx context.Context,
 				)
 				defer span.End()
 
+				e.streamMu.Lock()
 				handleFn, ok := e.streamFollowup[sid]
 				delete(e.streamFollowup, sid)
 				delete(e.streamTimeout, sid)
+				e.streamMu.Unlock()
+
 				if !ok || handleFn == nil {
 					span.RecordError(fmt.Errorf("no followup for stream %d", sid))
 					return
@@ -188,9 +196,14 @@ func (e *Endpoint[K, A]) HandleMessage(ctx context.Context, id kad.NodeID[K],
 			attribute.Int64("StreamID", int64(sid))))
 	defer span.End()
 
-	if followup, ok := e.streamFollowup[sid]; ok {
+	e.streamMu.Lock()
+	followup, ok := e.streamFollowup[sid]
+	e.streamMu.Unlock()
+
+	if ok {
 		span.AddEvent("Response to previous request")
 
+		e.streamMu.Lock()
 		timeout, ok := e.streamTimeout[sid]
 		if ok {
 			e.sched.RemovePlannedAction(ctx, timeout)
@@ -198,6 +211,7 @@ func (e *Endpoint[K, A]) HandleMessage(ctx context.Context, id kad.NodeID[K],
 		// remove stream id from endpoint
 		delete(e.streamFollowup, sid)
 		delete(e.streamTimeout, sid)
+		e.streamMu.Unlock()
 
 		resp, ok := msg.(kad.Response[K, A])
 		var err error

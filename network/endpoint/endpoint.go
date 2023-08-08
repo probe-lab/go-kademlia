@@ -39,15 +39,17 @@ type ResponseHandlerFn[K kad.Key[K], A kad.Address[A]] func(context.Context, kad
 type Endpoint[K kad.Key[K], A kad.Address[A]] interface {
 	// MaybeAddToPeerstore adds the given address to the peerstore if it is
 	// valid and if it is not already there.
+	// TODO: consider returning a status of whether the nodeinfo is a new node or contains a new address
 	MaybeAddToPeerstore(context.Context, kad.NodeInfo[K, A], time.Duration) error
-	// SendRequestHandleResponse sends a request to the given peer and handles
+
+	// SendRequestHandleResponse attempts to sends a request to the given peer and handles
 	// the response with the given handler.
+	// An error is returned if the endpoint is unable to initiate sending the message for
+	// any reason. The handler will not be called if an error is returned.
 	SendRequestHandleResponse(context.Context, address.ProtocolID, kad.NodeID[K],
 		kad.Message, kad.Message, time.Duration,
 		ResponseHandlerFn[K, A]) error
 
-	// Key returns the Key of the local node.
-	Key() K
 	// NetworkAddress returns the network address of the given peer (if known).
 	NetworkAddress(kad.NodeID[K]) (kad.NodeInfo[K, A], error)
 }
