@@ -4,6 +4,8 @@ import (
 	"context"
 	"sort"
 
+	"github.com/plprobelab/go-kademlia/internal/kadtest"
+
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/util"
@@ -11,43 +13,43 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-type peerInfo[K kad.Key[K]] struct {
-	id    kad.NodeID[K]
+type peerInfo[K kad.Key[K], N kad.NodeID[K]] struct {
+	id    N
 	kadId K
 }
 
-type SimpleRT[K kad.Key[K]] struct {
+type SimpleRT[K kad.Key[K], N kad.NodeID[K]] struct {
 	self       K
-	buckets    [][]peerInfo[K]
+	buckets    [][]peerInfo[K, N]
 	bucketSize int
 }
 
-var _ kad.RoutingTable[key.Key256] = (*SimpleRT[key.Key256])(nil)
+var _ kad.RoutingTable[key.Key256, kadtest.ID[key.Key256]] = (*SimpleRT[key.Key256, kadtest.ID[key.Key256]])(nil)
 
-func New[K kad.Key[K]](self K, bucketSize int) *SimpleRT[K] {
-	rt := SimpleRT[K]{
-		self:       self,
-		buckets:    make([][]peerInfo[K], 0),
+func New[K kad.Key[K], N kad.NodeID[K]](self N, bucketSize int) *SimpleRT[K, N] {
+	rt := SimpleRT[K, N]{
+		self:       self.Key(),
+		buckets:    make([][]peerInfo[K, N], 0),
 		bucketSize: bucketSize,
 	}
 	// define bucket 0
-	rt.buckets = append(rt.buckets, make([]peerInfo[K], 0))
+	rt.buckets = append(rt.buckets, make([]peerInfo[K, N], 0))
 	return &rt
 }
 
-func (rt *SimpleRT[K]) Self() K {
+func (rt *SimpleRT[K, N]) Self() K {
 	return rt.self
 }
 
-func (rt *SimpleRT[K]) KeySize() int {
+func (rt *SimpleRT[K, N]) KeySize() int {
 	return rt.self.BitLen() * 8
 }
 
-func (rt *SimpleRT[K]) BucketSize() int {
+func (rt *SimpleRT[K, N]) BucketSize() int {
 	return rt.bucketSize
 }
 
-func (rt *SimpleRT[K]) BucketIdForKey(kadId K) (int, error) {
+func (rt *SimpleRT[K, N]) BucketIdForKey(kadId K) (int, error) {
 	bid := rt.self.CommonPrefixLength(kadId)
 	nBuckets := len(rt.buckets)
 	if bid >= nBuckets {
@@ -56,15 +58,15 @@ func (rt *SimpleRT[K]) BucketIdForKey(kadId K) (int, error) {
 	return bid, nil
 }
 
-func (rt *SimpleRT[K]) SizeOfBucket(bucketId int) int {
+func (rt *SimpleRT[K, N]) SizeOfBucket(bucketId int) int {
 	return len(rt.buckets[bucketId])
 }
 
-func (rt *SimpleRT[K]) AddNode(id kad.NodeID[K]) bool {
+func (rt *SimpleRT[K, N]) AddNode(id N) bool {
 	return rt.addPeer(id.Key(), id)
 }
 
-func (rt *SimpleRT[K]) addPeer(kadId K, id kad.NodeID[K]) bool {
+func (rt *SimpleRT[K, N]) addPeer(kadId K, id N) bool {
 	//_, span := util.StartSpan(ctx, "routing.simple.addPeer", trace.WithAttributes(
 	//	attribute.String("KadID", key.HexString(kadId)),
 	//	attribute.Stringer("PeerID", id),
@@ -91,22 +93,22 @@ func (rt *SimpleRT[K]) addPeer(kadId K, id kad.NodeID[K]) bool {
 		}
 
 		// add new peer to bucket
-		rt.buckets[bid] = append(rt.buckets[bid], peerInfo[K]{id, kadId})
+		rt.buckets[bid] = append(rt.buckets[bid], peerInfo[K, N]{id, kadId})
 		// span.AddEvent("peer added to bucket " + strconv.Itoa(bid))
 		return true
 	}
 	if len(rt.buckets[lastBucketId]) < rt.bucketSize {
 		// last bucket is not full, add new peer
-		rt.buckets[lastBucketId] = append(rt.buckets[lastBucketId], peerInfo[K]{id, kadId})
+		rt.buckets[lastBucketId] = append(rt.buckets[lastBucketId], peerInfo[K, N]{id, kadId})
 		// span.AddEvent("peer added to bucket " + strconv.Itoa(lastBucketId))
 		return true
 	}
 	// last bucket is full, try to split it
 	for len(rt.buckets[lastBucketId]) == rt.bucketSize {
 		// farBucket contains peers with a CPL matching lastBucketId
-		farBucket := make([]peerInfo[K], 0)
+		farBucket := make([]peerInfo[K, N], 0)
 		// closeBucket contains peers with a CPL higher than lastBucketId
-		closeBucket := make([]peerInfo[K], 0)
+		closeBucket := make([]peerInfo[K, N], 0)
 
 		// span.AddEvent("splitting last bucket (" + strconv.Itoa(lastBucketId) + ")")
 
@@ -135,12 +137,12 @@ func (rt *SimpleRT[K]) addPeer(kadId K, id kad.NodeID[K]) bool {
 
 	newBid, _ := rt.BucketIdForKey(kadId)
 	// add new peer to appropraite bucket
-	rt.buckets[newBid] = append(rt.buckets[newBid], peerInfo[K]{id, kadId})
+	rt.buckets[newBid] = append(rt.buckets[newBid], peerInfo[K, N]{id, kadId})
 	// span.AddEvent("peer added to bucket " + strconv.Itoa(newBid))
 	return true
 }
 
-func (rt *SimpleRT[K]) alreadyInBucket(kadId K, bucketId int) bool {
+func (rt *SimpleRT[K, N]) alreadyInBucket(kadId K, bucketId int) bool {
 	for _, p := range rt.buckets[bucketId] {
 		// error already checked in keyError by the caller
 		if key.Equal(kadId, p.kadId) {
@@ -150,7 +152,7 @@ func (rt *SimpleRT[K]) alreadyInBucket(kadId K, bucketId int) bool {
 	return false
 }
 
-func (rt *SimpleRT[K]) RemoveKey(kadId K) bool {
+func (rt *SimpleRT[K, N]) RemoveKey(kadId K) bool {
 	//_, span := util.StartSpan(ctx, "routing.simple.removeKey", trace.WithAttributes(
 	//	attribute.String("KadID", key.HexString(kadId)),
 	//))
@@ -172,7 +174,7 @@ func (rt *SimpleRT[K]) RemoveKey(kadId K) bool {
 	return false
 }
 
-func (rt *SimpleRT[K]) Find(ctx context.Context, kadId K) (kad.NodeID[K], error) {
+func (rt *SimpleRT[K, N]) Find(ctx context.Context, kadId K) (N, error) {
 	_, span := util.StartSpan(ctx, "routing.simple.find", trace.WithAttributes(
 		attribute.String("KadID", key.HexString(kadId)),
 	))
@@ -184,12 +186,12 @@ func (rt *SimpleRT[K]) Find(ctx context.Context, kadId K) (kad.NodeID[K], error)
 			return p.id, nil
 		}
 	}
-	return nil, nil
+	return *new(N), nil // TODO: can't return nil
 }
 
 // TODO: not exactly working as expected
 // returns min(n, bucketSize) peers from the bucket matching the given key
-func (rt *SimpleRT[K]) NearestNodes(kadId K, n int) []kad.NodeID[K] {
+func (rt *SimpleRT[K, N]) NearestNodes(kadId K, n int) []N {
 	//_, span := util.StartSpan(ctx, "routing.simple.nearestPeers", trace.WithAttributes(
 	//	attribute.String("KadID", key.HexString(kadId)),
 	//	attribute.Int("n", int(n)),
@@ -198,13 +200,13 @@ func (rt *SimpleRT[K]) NearestNodes(kadId K, n int) []kad.NodeID[K] {
 
 	bid, _ := rt.BucketIdForKey(kadId)
 
-	var peers []peerInfo[K]
+	var peers []peerInfo[K, N]
 	// TODO: optimize this
 	if len(rt.buckets[bid]) == n {
-		peers = make([]peerInfo[K], len(rt.buckets[bid]))
+		peers = make([]peerInfo[K, N], len(rt.buckets[bid]))
 		copy(peers, rt.buckets[bid])
 	} else {
-		peers = make([]peerInfo[K], 0)
+		peers = make([]peerInfo[K, N], 0)
 		for i := 0; i < len(rt.buckets); i++ {
 			for _, p := range rt.buckets[i] {
 				if !key.Equal(rt.self, p.kadId) {
@@ -224,7 +226,7 @@ func (rt *SimpleRT[K]) NearestNodes(kadId K, n int) []kad.NodeID[K] {
 		}
 		return false
 	})
-	pids := make([]kad.NodeID[K], min(n, len(peers)))
+	pids := make([]N, min(n, len(peers)))
 	for i := 0; i < min(n, len(peers)); i++ {
 		pids[i] = peers[i].id
 	}

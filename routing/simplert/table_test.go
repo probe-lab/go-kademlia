@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/stretchr/testify/require"
-
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/libp2p"
+
+	kt "github.com/plprobelab/go-kademlia/internal/kadtest"
+	"github.com/plprobelab/go-kademlia/key"
+	"github.com/stretchr/testify/require"
 )
 
 func zeroBytes(n int) []byte {
@@ -38,16 +38,16 @@ var (
 
 func TestBasic(t *testing.T) {
 	bucketSize := 100
-	rt := New(key0, bucketSize)
+	rt := New[key.Key256](kt.NewID(key0), bucketSize)
 	require.Equal(t, bucketSize, rt.BucketSize())
 
 	require.Equal(t, key0, rt.Self())
 }
 
 func TestAddPeer(t *testing.T) {
-	p := libp2p.PeerID{ID: peer.ID("")}
+	p := kt.NewID(key0) // irrelevant
 
-	rt := New(key0, 2)
+	rt := New[key.Key256](kt.NewID(key0), 2)
 
 	require.Equal(t, 0, rt.SizeOfBucket(0))
 
@@ -118,9 +118,9 @@ func TestAddPeer(t *testing.T) {
 }
 
 func TestRemovePeer(t *testing.T) {
-	p := libp2p.PeerID{ID: peer.ID("")}
+	p := kt.NewID(key0) // irrelevant
 
-	rt := New(key0, 2)
+	rt := New[key.Key256](kt.NewID(key0), 2)
 	rt.addPeer(key1, p)
 	success := rt.RemoveKey(key2)
 	require.False(t, success)
@@ -130,9 +130,9 @@ func TestRemovePeer(t *testing.T) {
 
 func TestFindPeer(t *testing.T) {
 	ctx := context.Background()
-	p := libp2p.PeerID{ID: peer.ID("QmPeer")}
+	p := kt.NewID(key0)
 
-	rt := New(key0, 2)
+	rt := New[key.Key256](kt.NewID(key0), 2)
 	success := rt.addPeer(key1, p)
 	require.True(t, success)
 
@@ -161,7 +161,13 @@ func TestNearestPeers(t *testing.T) {
 
 	bucketSize := 5
 
-	rt := New(key0, bucketSize)
+	rt := SimpleRT[key.Key256, libp2p.PeerID]{
+		self:       key0,
+		buckets:    make([][]peerInfo[key.Key256, libp2p.PeerID], 0),
+		bucketSize: bucketSize,
+	}
+	rt.buckets = append(rt.buckets, make([]peerInfo[key.Key256, libp2p.PeerID], 0))
+
 	rt.addPeer(key1, peerIds[1])
 	rt.addPeer(key2, peerIds[2])
 	rt.addPeer(key3, peerIds[3])
@@ -178,7 +184,7 @@ func TestNearestPeers(t *testing.T) {
 	peers := rt.NearestNodes(key0, bucketSize)
 	require.Equal(t, bucketSize, len(peers))
 
-	expectedOrder := []kad.NodeID[key.Key256]{peerIds[9], peerIds[8], peerIds[7], peerIds[10], peerIds[11]}
+	expectedOrder := []libp2p.PeerID{peerIds[9], peerIds[8], peerIds[7], peerIds[10], peerIds[11]}
 	require.Equal(t, expectedOrder, peers)
 
 	peers = rt.NearestNodes(key11, 2)
@@ -186,9 +192,15 @@ func TestNearestPeers(t *testing.T) {
 
 	// create routing table with a single duplicate peer
 	// useful to test peers sorting with duplicate (even tough it should never happen)
-	rt2 := New(key0, 2)
-	rt2.buckets[0] = append(rt2.buckets[0], peerInfo[key.Key256]{peerIds[1], key1})
-	rt2.buckets[0] = append(rt2.buckets[0], peerInfo[key.Key256]{peerIds[1], key1})
+	rt2 := SimpleRT[key.Key256, libp2p.PeerID]{
+		self:       key0,
+		buckets:    make([][]peerInfo[key.Key256, libp2p.PeerID], 0),
+		bucketSize: bucketSize,
+	}
+	rt2.buckets = append(rt2.buckets, make([]peerInfo[key.Key256, libp2p.PeerID], 0))
+
+	rt2.buckets[0] = append(rt2.buckets[0], peerInfo[key.Key256, libp2p.PeerID]{peerIds[1], key1})
+	rt2.buckets[0] = append(rt2.buckets[0], peerInfo[key.Key256, libp2p.PeerID]{peerIds[1], key1})
 	peers = rt2.NearestNodes(key0, 10)
 	require.Equal(t, peers[0], peers[1])
 }
