@@ -5,10 +5,8 @@ import (
 	"fmt"
 
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
-
-	"github.com/plprobelab/go-kademlia/key"
-
 	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/key/trie"
 )
 
