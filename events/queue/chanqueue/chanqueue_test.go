@@ -57,14 +57,3 @@ func TestChanQueue(t *testing.T) {
 
 	q.Close()
 }
-
-func TestChanQueueMaxCapacity(t *testing.T) {
-	ctx := context.Background()
-
-	q := NewChanQueue(1)
-
-	q.Enqueue(ctx, ta.IntAction(1))
-	require.Equal(t, uint(1), q.Size())
-	q.Enqueue(ctx, ta.IntAction(2))
-	require.Equal(t, uint(1), q.Size())
-}

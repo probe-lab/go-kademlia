@@ -34,7 +34,7 @@ func (d *IpfsDht) mainloop(ctx context.Context) {
 	ctx, span := util.StartSpan(ctx, "IpfsDht.mainloop")
 	defer span.End()
 
-	kadEvents := d.coordinator.Start(ctx)
+	kadEvents := d.coordinator.Events()
 	for {
 		select {
 		case <-ctx.Done():

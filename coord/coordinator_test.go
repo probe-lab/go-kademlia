@@ -185,7 +185,8 @@ func TestExhaustiveQuery(t *testing.T) {
 	if err != nil {
 		log.Fatalf("unexpected error creating coordinator: %v", err)
 	}
-	events := c.Start(ctx)
+	siml.AddPeer(c)
+	events := c.Events()
 
 	queryID := query.QueryID("query1")
 
@@ -261,7 +262,8 @@ func TestRoutingUpdatedEventEmittedForCloserNodes(t *testing.T) {
 	if err != nil {
 		log.Fatalf("unexpected error creating coordinator: %v", err)
 	}
-	events := c.Start(ctx)
+	siml.AddPeer(c)
+	events := c.Events()
 
 	queryID := query.QueryID("query1")
 

@@ -67,7 +67,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	kad.Start(ctx)
+	siml.AddPeer(kad)
 
 	ih := NewIpfsDht(kad)
 	ih.Start(ctx)

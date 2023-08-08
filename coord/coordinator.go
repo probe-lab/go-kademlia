@@ -9,6 +9,11 @@ import (
 
 	"github.com/benbjohnson/clock"
 
+	"github.com/plprobelab/go-kademlia/events/action"
+	"github.com/plprobelab/go-kademlia/events/planner"
+	sp "github.com/plprobelab/go-kademlia/events/planner/simpleplanner"
+	"github.com/plprobelab/go-kademlia/events/queue"
+	"github.com/plprobelab/go-kademlia/events/queue/chanqueue"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/kaderr"
 	"github.com/plprobelab/go-kademlia/key"
@@ -38,9 +43,11 @@ type Coordinator[K kad.Key[K], A kad.Address[A]] struct {
 
 	peerstoreTTL time.Duration
 
-	outboundEvents chan KademliaEvent
-	inboundEvents  chan coordinatorInternalEvent
-	startOnce      sync.Once
+	queue   queue.EventQueue
+	planner planner.AwareActionPlanner
+
+	outboundEvents     chan KademliaEvent
+	startHeartbeatOnce sync.Once
 }
 
 const DefaultChanqueueCapacity = 1024
@@ -92,106 +99,69 @@ func NewCoordinator[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], ep endpo
 		rt:             rt,
 		qp:             qp,
 		outboundEvents: make(chan KademliaEvent, 20),
-		inboundEvents:  make(chan coordinatorInternalEvent, 20),
+		queue:          chanqueue.NewChanQueue(DefaultChanqueueCapacity),
+		planner:        sp.NewSimplePlanner(cfg.Clock),
 	}, nil
 }
 
-func (c *Coordinator[K, A]) Start(ctx context.Context) <-chan KademliaEvent {
-	ctx, span := util.StartSpan(ctx, "Coordinator.Start")
-	defer span.End()
-	// ensure there is only ever one mainloop
-	c.startOnce.Do(func() {
-		go c.mainloop(ctx)
-		go c.heartbeat(ctx)
-	})
+func (c *Coordinator[K, A]) Events() <-chan KademliaEvent {
 	return c.outboundEvents
 }
 
-func (c *Coordinator[K, A]) mainloop(ctx context.Context) {
-	ctx, span := util.StartSpan(ctx, "Coordinator.mainloop")
-	defer span.End()
+func (c *Coordinator[K, A]) handleInboundEvent(ctx context.Context, ev interface{}) {
+	switch tev := ev.(type) {
+	case *eventUnroutablePeer[K]:
+		// TODO: remove from routing table
+		c.dispatchQueryPoolEvent(ctx, nil)
 
-	// once the main loop exits no further events will be sent so clients waiting
-	// on the event channel should be notified
-	defer close(c.outboundEvents)
+	case *eventMessageFailed[K]:
+		qev := &query.EventPoolMessageFailure[K]{
+			QueryID: tev.QueryID,
+			NodeID:  tev.NodeID,
+			Error:   tev.Error,
+		}
 
-	for {
-		// wait for inbound events to trigger state changes
-		select {
-		case <-ctx.Done():
-			return
-		case ev := <-c.inboundEvents:
-			switch tev := ev.(type) {
-			case *eventUnroutablePeer[K]:
-				// TODO: remove from routing table
-				c.dispatchQueryPoolEvent(ctx, nil)
+		c.dispatchQueryPoolEvent(ctx, qev)
 
-			case *eventMessageFailed[K]:
-				qev := &query.EventPoolMessageFailure[K]{
-					QueryID: tev.QueryID,
-					NodeID:  tev.NodeID,
-					Error:   tev.Error,
-				}
-
-				c.dispatchQueryPoolEvent(ctx, qev)
-
-			case *eventMessageResponse[K, A]:
-				if tev.Response != nil {
-					candidates := tev.Response.CloserNodes()
-					if len(candidates) > 0 {
-						// ignore error here
-						c.AddNodes(ctx, candidates)
-					}
-				}
-
-				// notify caller so they have chance to stop query
-				c.outboundEvents <- &KademliaOutboundQueryProgressedEvent[K, A]{
-					NodeID:   tev.NodeID,
-					QueryID:  tev.QueryID,
-					Response: tev.Response,
-					Stats:    tev.Stats,
-				}
-
-				qev := &query.EventPoolMessageResponse[K, A]{
-					QueryID:  tev.QueryID,
-					NodeID:   tev.NodeID,
-					Response: tev.Response,
-				}
-				c.dispatchQueryPoolEvent(ctx, qev)
-			case *eventAddQuery[K, A]:
-				qev := &query.EventPoolAddQuery[K, A]{
-					QueryID:           tev.QueryID,
-					Target:            tev.Target,
-					ProtocolID:        tev.ProtocolID,
-					Message:           tev.Message,
-					KnownClosestNodes: tev.KnownClosestPeers,
-				}
-				c.dispatchQueryPoolEvent(ctx, qev)
-			case *eventStopQuery[K]:
-				qev := &query.EventPoolStopQuery{
-					QueryID: tev.QueryID,
-				}
-				c.dispatchQueryPoolEvent(ctx, qev)
-			case *eventPoll:
-				c.dispatchQueryPoolEvent(ctx, nil)
-			default:
-				panic(fmt.Sprintf("unexpected event: %T", tev))
+	case *eventMessageResponse[K, A]:
+		if tev.Response != nil {
+			candidates := tev.Response.CloserNodes()
+			if len(candidates) > 0 {
+				// ignore error here
+				c.AddNodes(ctx, candidates)
 			}
 		}
-	}
-}
 
-func (c *Coordinator[K, A]) heartbeat(ctx context.Context) {
-	ticker := c.cfg.Clock.Ticker(5 * time.Millisecond)
-
-	for {
-		// wait for inbound events to trigger state changes
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			c.inboundEvents <- &eventPoll{}
+		// notify caller so they have chance to stop query
+		c.outboundEvents <- &KademliaOutboundQueryProgressedEvent[K, A]{
+			NodeID:   tev.NodeID,
+			QueryID:  tev.QueryID,
+			Response: tev.Response,
+			Stats:    tev.Stats,
 		}
+
+		qev := &query.EventPoolMessageResponse[K, A]{
+			QueryID:  tev.QueryID,
+			NodeID:   tev.NodeID,
+			Response: tev.Response,
+		}
+		c.dispatchQueryPoolEvent(ctx, qev)
+	case *eventAddQuery[K, A]:
+		qev := &query.EventPoolAddQuery[K, A]{
+			QueryID:           tev.QueryID,
+			Target:            tev.Target,
+			ProtocolID:        tev.ProtocolID,
+			Message:           tev.Message,
+			KnownClosestNodes: tev.KnownClosestPeers,
+		}
+		c.dispatchQueryPoolEvent(ctx, qev)
+	case *eventStopQuery[K]:
+		qev := &query.EventPoolStopQuery{
+			QueryID: tev.QueryID,
+		}
+		c.dispatchQueryPoolEvent(ctx, qev)
+	default:
+		panic(fmt.Sprintf("unexpected event: %T", tev))
 	}
 }
 
@@ -230,17 +200,17 @@ func (c *Coordinator[K, A]) attemptSendMessage(ctx context.Context, protoID addr
 	onSendError := func(ctx context.Context, err error) {
 		if errors.Is(err, endpoint.ErrCannotConnect) {
 			// here we can notify that the peer is unroutable, which would feed into peerstore and routing table
-			c.inboundEvents <- &eventUnroutablePeer[K]{
+			c.queue.Enqueue(ctx, &eventUnroutablePeer[K]{
 				NodeID: to,
-			}
+			})
 			return
 		}
-		c.inboundEvents <- &eventMessageFailed[K]{
+		c.queue.Enqueue(ctx, &eventMessageFailed[K]{
 			NodeID:  to,
 			QueryID: queryID,
 			Stats:   stats,
 			Error:   err,
-		}
+		})
 	}
 
 	onMessageResponse := func(ctx context.Context, resp kad.Response[K, A], err error) {
@@ -248,12 +218,12 @@ func (c *Coordinator[K, A]) attemptSendMessage(ctx context.Context, protoID addr
 			onSendError(ctx, err)
 			return
 		}
-		c.inboundEvents <- &eventMessageResponse[K, A]{
+		c.queue.Enqueue(ctx, &eventMessageResponse[K, A]{
 			NodeID:   to,
 			QueryID:  queryID,
 			Response: resp,
 			Stats:    stats,
-		}
+		})
 	}
 
 	err := c.ep.SendRequestHandleResponse(ctx, protoID, to, msg, msg.EmptyResponse(), 0, onMessageResponse)
@@ -273,8 +243,8 @@ func (c *Coordinator[K, A]) StartQuery(ctx context.Context, queryID query.QueryI
 		KnownClosestPeers: knownClosestPeers,
 	}
 
-	// c.queue.Enqueue(ctx, ev)
-	c.inboundEvents <- ev
+	c.queue.Enqueue(ctx, ev)
+	// c.inboundEvents <- ev
 
 	return nil
 }
@@ -284,7 +254,8 @@ func (c *Coordinator[K, A]) StopQuery(ctx context.Context, queryID query.QueryID
 		QueryID: queryID,
 	}
 
-	c.inboundEvents <- ev
+	c.queue.Enqueue(ctx, ev)
+	// c.inboundEvents <- ev
 	return nil
 }
 
@@ -350,6 +321,7 @@ func (*KademliaOutboundQueryFinishedEvent) kademliaEvent()         {}
 
 type coordinatorInternalEvent interface {
 	coordinatorInternalEvent()
+	Run(ctx context.Context)
 }
 
 type eventUnroutablePeer[K kad.Key[K]] struct {
@@ -382,12 +354,65 @@ type eventStopQuery[K kad.Key[K]] struct {
 	QueryID query.QueryID
 }
 
-type eventPoll struct{}
-
 // coordinatorInternalEvent() ensures that only an internal coordinator event can be assigned to the coordinatorInternalEvent interface.
 func (*eventUnroutablePeer[K]) coordinatorInternalEvent()     {}
 func (*eventMessageFailed[K]) coordinatorInternalEvent()      {}
 func (*eventMessageResponse[K, A]) coordinatorInternalEvent() {}
 func (*eventAddQuery[K, A]) coordinatorInternalEvent()        {}
 func (*eventStopQuery[K]) coordinatorInternalEvent()          {}
-func (*eventPoll) coordinatorInternalEvent()                  {}
+
+func (*eventUnroutablePeer[K]) Run(context.Context)     {}
+func (*eventMessageFailed[K]) Run(context.Context)      {}
+func (*eventMessageResponse[K, A]) Run(context.Context) {}
+func (*eventAddQuery[K, A]) Run(context.Context)        {}
+func (*eventStopQuery[K]) Run(context.Context)          {}
+
+// var _ scheduler.Scheduler = (*Coordinator[key.Key8])(nil)
+func (c *Coordinator[K, A]) Clock() clock.Clock {
+	return c.cfg.Clock
+}
+
+func (c *Coordinator[K, A]) EnqueueAction(ctx context.Context, a action.Action) {
+	c.queue.Enqueue(ctx, a)
+}
+
+func (c *Coordinator[K, A]) ScheduleAction(ctx context.Context, t time.Time, a action.Action) planner.PlannedAction {
+	if c.cfg.Clock.Now().After(t) {
+		c.EnqueueAction(ctx, a)
+		return nil
+	}
+	return c.planner.ScheduleAction(ctx, t, a)
+}
+
+func (c *Coordinator[K, A]) RemovePlannedAction(ctx context.Context, a planner.PlannedAction) bool {
+	return c.planner.RemoveAction(ctx, a)
+}
+
+func (c *Coordinator[K, A]) RunOne(ctx context.Context) bool {
+	c.moveOverdueActions(ctx)
+	if a := c.queue.Dequeue(ctx); a != nil {
+		c.handleInboundEvent(ctx, a)
+		return true
+	}
+	return false
+}
+
+// moveOverdueActions moves all overdue actions from the planner to the queue.
+func (c *Coordinator[K, A]) moveOverdueActions(ctx context.Context) {
+	overdue := c.planner.PopOverdueActions(ctx)
+
+	queue.EnqueueMany(ctx, c.queue, overdue)
+}
+
+// NextActionTime returns the time of the next action to run, or the current
+// time if there are actions to be run in the queue, or util.MaxTime if there
+// are no scheduled to run.
+func (c *Coordinator[K, A]) NextActionTime(ctx context.Context) time.Time {
+	c.moveOverdueActions(ctx)
+	nextScheduled := c.planner.NextActionTime(ctx)
+
+	if !queue.Empty(c.queue) {
+		return c.cfg.Clock.Now()
+	}
+	return nextScheduled
+}
