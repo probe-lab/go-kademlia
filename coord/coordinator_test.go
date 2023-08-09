@@ -33,7 +33,7 @@ var (
 	_ coordinatorInternalEvent = &eventStopQuery[key.Key8]{}
 )
 
-func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key8, kadtest.StrAddr], []*sim.Endpoint[key.Key8, kadtest.StrAddr], []kad.RoutingTable[key.Key8], *litesimulator.LiteSimulator) {
+func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key8, kadtest.StrAddr], []*sim.Endpoint[key.Key8, kadtest.StrAddr], []kad.RoutingTable[key.Key8, kad.NodeID[key.Key8]], *litesimulator.LiteSimulator) {
 	// create node identifiers
 	nodeCount := 4
 	ids := make([]*kadtest.ID[key.Key8], nodeCount)
@@ -59,7 +59,7 @@ func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key8
 	// create a fake router to virtually connect nodes
 	router := sim.NewRouter[key.Key8, kadtest.StrAddr]()
 
-	rts := make([]kad.RoutingTable[key.Key8], len(addrs))
+	rts := make([]kad.RoutingTable[key.Key8, kad.NodeID[key.Key8]], len(addrs))
 	eps := make([]*sim.Endpoint[key.Key8, kadtest.StrAddr], len(addrs))
 	schedulers := make([]scheduler.AwareScheduler, len(addrs))
 	servers := make([]*sim.Server[key.Key8, kadtest.StrAddr], len(addrs))
@@ -67,7 +67,7 @@ func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key8
 	for i := 0; i < len(addrs); i++ {
 		i := i // :(
 		// create a routing table, with bucket size 2
-		rts[i] = simplert.New(addrs[i].ID().Key(), 2)
+		rts[i] = simplert.New[key.Key8, kad.NodeID[key.Key8]](addrs[i].ID(), 2)
 		// create a scheduler based on the mock clock
 		schedulers[i] = ss.NewSimpleScheduler(clk)
 		// create a fake endpoint for the node, communicating through the router
@@ -99,7 +99,7 @@ func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key8
 
 // connectNodes adds nodes to each other's peerstores and routing tables
 func connectNodes(t *testing.T, n0, n1 kad.NodeInfo[key.Key8, kadtest.StrAddr], ep0, ep1 endpoint.Endpoint[key.Key8, kadtest.StrAddr],
-	rt0, rt1 kad.RoutingTable[key.Key8],
+	rt0, rt1 kad.RoutingTable[key.Key8, kad.NodeID[key.Key8]],
 ) {
 	t.Helper()
 

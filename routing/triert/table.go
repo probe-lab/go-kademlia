@@ -4,29 +4,29 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/plprobelab/go-kademlia/key"
-
+	"github.com/plprobelab/go-kademlia/internal/kadtest"
 	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/key/trie"
 )
 
 // TrieRT is a routing table backed by a XOR Trie which offers good scalablity and performance
 // for large networks.
-type TrieRT[K kad.Key[K]] struct {
+type TrieRT[K kad.Key[K], N kad.NodeID[K]] struct {
 	self      K
-	keyFilter KeyFilterFunc[K]
+	keyFilter KeyFilterFunc[K, N]
 
-	keys *trie.Trie[K, kad.NodeID[K]]
+	keys *trie.Trie[K, N]
 }
 
-var _ kad.RoutingTable[key.Key256] = (*TrieRT[key.Key256])(nil)
+var _ kad.RoutingTable[key.Key256, kadtest.ID[key.Key256]] = (*TrieRT[key.Key256, kadtest.ID[key.Key256]])(nil)
 
 // New creates a new TrieRT using the supplied key as the local node's Kademlia key.
 // If cfg is nil, the default config is used.
-func New[K kad.Key[K]](self K, cfg *Config[K]) (*TrieRT[K], error) {
-	rt := &TrieRT[K]{
-		self: self,
-		keys: &trie.Trie[K, kad.NodeID[K]]{},
+func New[K kad.Key[K], N kad.NodeID[K]](self N, cfg *Config[K, N]) (*TrieRT[K, N], error) {
+	rt := &TrieRT[K, N]{
+		self: self.Key(),
+		keys: &trie.Trie[K, N]{},
 	}
 	if err := rt.apply(cfg); err != nil {
 		return nil, fmt.Errorf("apply config: %w", err)
@@ -34,9 +34,9 @@ func New[K kad.Key[K]](self K, cfg *Config[K]) (*TrieRT[K], error) {
 	return rt, nil
 }
 
-func (rt *TrieRT[K]) apply(cfg *Config[K]) error {
+func (rt *TrieRT[K, N]) apply(cfg *Config[K, N]) error {
 	if cfg == nil {
-		cfg = DefaultConfig[K]()
+		cfg = DefaultConfig[K, N]()
 	}
 
 	rt.keyFilter = cfg.KeyFilter
@@ -45,12 +45,12 @@ func (rt *TrieRT[K]) apply(cfg *Config[K]) error {
 }
 
 // Self returns the local node's Kademlia key.
-func (rt *TrieRT[K]) Self() K {
+func (rt *TrieRT[K, N]) Self() K {
 	return rt.self
 }
 
 // AddNode tries to add a node to the routing table.
-func (rt *TrieRT[K]) AddNode(node kad.NodeID[K]) bool {
+func (rt *TrieRT[K, N]) AddNode(node N) bool {
 	kk := node.Key()
 	if rt.keyFilter != nil && !rt.keyFilter(rt, kk) {
 		return false
@@ -61,18 +61,18 @@ func (rt *TrieRT[K]) AddNode(node kad.NodeID[K]) bool {
 
 // RemoveKey tries to remove a node identified by its Kademlia key from the
 // routing table. It returns true if the key was found to be present in the table and was removed.
-func (rt *TrieRT[K]) RemoveKey(kk K) bool {
+func (rt *TrieRT[K, N]) RemoveKey(kk K) bool {
 	return rt.keys.Remove(kk)
 }
 
 // NearestNodes returns the n closest nodes to a given key.
-func (rt *TrieRT[K]) NearestNodes(target K, n int) []kad.NodeID[K] {
+func (rt *TrieRT[K, N]) NearestNodes(target K, n int) []N {
 	closestEntries := trie.Closest(rt.keys, target, n)
 	if len(closestEntries) == 0 {
-		return []kad.NodeID[K]{}
+		return []N{}
 	}
 
-	nodes := make([]kad.NodeID[K], 0, len(closestEntries))
+	nodes := make([]N, 0, len(closestEntries))
 	for _, c := range closestEntries {
 		nodes = append(nodes, c.Data)
 	}
@@ -80,7 +80,7 @@ func (rt *TrieRT[K]) NearestNodes(target K, n int) []kad.NodeID[K] {
 	return nodes
 }
 
-func (rt *TrieRT[K]) Find(ctx context.Context, kk K) (kad.NodeID[K], error) {
+func (rt *TrieRT[K, N]) Find(ctx context.Context, kk K) (kad.NodeID[K], error) {
 	found, node := trie.Find(rt.keys, kk)
 	if found {
 		return node, nil
@@ -90,17 +90,17 @@ func (rt *TrieRT[K]) Find(ctx context.Context, kk K) (kad.NodeID[K], error) {
 }
 
 // Size returns the number of peers contained in the table.
-func (rt *TrieRT[K]) Size() int {
+func (rt *TrieRT[K, N]) Size() int {
 	return rt.keys.Size()
 }
 
 // Cpl returns the longest common prefix length the supplied key shares with the table's key.
-func (rt *TrieRT[K]) Cpl(kk K) int {
+func (rt *TrieRT[K, N]) Cpl(kk K) int {
 	return rt.self.CommonPrefixLength(kk)
 }
 
 // CplSize returns the number of peers in the table whose longest common prefix with the table's key is of length cpl.
-func (rt *TrieRT[K]) CplSize(cpl int) int {
+func (rt *TrieRT[K, N]) CplSize(cpl int) int {
 	n, err := countCpl(rt.keys, rt.self, cpl, 0)
 	if err != nil {
 		return 0
@@ -108,7 +108,7 @@ func (rt *TrieRT[K]) CplSize(cpl int) int {
 	return n
 }
 
-func countCpl[K kad.Key[K]](t *trie.Trie[K, kad.NodeID[K]], kk K, cpl int, depth int) (int, error) {
+func countCpl[K kad.Key[K], N kad.NodeID[K]](t *trie.Trie[K, N], kk K, cpl int, depth int) (int, error) {
 	// special cases for very small tables where keys may be placed higher in the trie due to low population
 	if t.IsLeaf() {
 		if !t.HasKey() {

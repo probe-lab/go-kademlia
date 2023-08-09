@@ -38,7 +38,7 @@ type Config[K kad.Key[K], A kad.Address[A]] struct {
 
 	// RoutingTable is the routing table used to find closer peers. It is
 	// updated with newly discovered peers.
-	RoutingTable kad.RoutingTable[K]
+	RoutingTable kad.RoutingTable[K, kad.NodeID[K]]
 	// Endpoint is the message endpoint used to send requests
 	Endpoint endpoint.Endpoint[K, A]
 	// Scheduler is the scheduler used to schedule events for the single worker
@@ -152,7 +152,7 @@ func WithNotifyFailureFunc[K kad.Key[K], A kad.Address[A]](fn NotifyFailureFn) O
 	}
 }
 
-func WithRoutingTable[K kad.Key[K], A kad.Address[A]](rt kad.RoutingTable[K]) Option[K, A] {
+func WithRoutingTable[K kad.Key[K], A kad.Address[A]](rt kad.RoutingTable[K, kad.NodeID[K]]) Option[K, A] {
 	return func(cfg *Config[K, A]) error {
 		if rt == nil {
 			return fmt.Errorf("SimpleQuery option RoutingTable cannot be nil")

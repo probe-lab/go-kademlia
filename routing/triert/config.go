@@ -5,15 +5,15 @@ import (
 )
 
 // Config holds configuration options for a TrieRT.
-type Config[T kad.Key[T]] struct {
+type Config[K kad.Key[K], N kad.NodeID[K]] struct {
 	// KeyFilter defines the filter that is applied before a key is added to the table.
 	// If nil, no filter is applied.
-	KeyFilter KeyFilterFunc[T]
+	KeyFilter KeyFilterFunc[K, N]
 }
 
 // DefaultConfig returns a default configuration for a TrieRT.
-func DefaultConfig[T kad.Key[T]]() *Config[T] {
-	return &Config[T]{
+func DefaultConfig[K kad.Key[K], N kad.NodeID[K]]() *Config[K, N] {
+	return &Config[K, N]{
 		KeyFilter: nil,
 	}
 }

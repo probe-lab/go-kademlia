@@ -35,7 +35,7 @@ type Key[K any] interface {
 }
 
 // RoutingTable is the interface all Kademlia Routing Tables types support.
-type RoutingTable[K Key[K]] interface {
+type RoutingTable[K Key[K], N NodeID[K]] interface {
 	// AddNode tries to add a peer to the routing table. It returns true if
 	// the node was added and false if it wasn't added, e.g., because it
 	// was already part of the routing table.
@@ -48,7 +48,7 @@ type RoutingTable[K Key[K]] interface {
 	// Nodes added to the routing table are grouped into buckets based on their
 	// XOR distance to the local node's identifier. The details of the XOR
 	// arithmetics are defined on K.
-	AddNode(NodeID[K]) bool
+	AddNode(N) bool
 
 	// RemoveKey tries to remove a node identified by its Kademlia key from the
 	// routing table.
@@ -63,7 +63,7 @@ type RoutingTable[K Key[K]] interface {
 	// The returned list of nodes will be ordered from closest to furthest and
 	// contain at maximum the given number of entries, but also possibly less
 	// if the number exceeds the number of nodes in the routing table.
-	NearestNodes(K, int) []NodeID[K]
+	NearestNodes(K, int) []N
 }
 
 // NodeID is a generic node identifier and not equal to a Kademlia key. Some

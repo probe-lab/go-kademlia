@@ -31,7 +31,7 @@ const (
 
 // connectNodes adds nodes to each other's peerstores and routing tables
 func connectNodes(ctx context.Context, n0, n1 kad.NodeInfo[key.Key8, net.IP], ep0, ep1 endpoint.Endpoint[key.Key8, net.IP],
-	rt0, rt1 kad.RoutingTable[key.Key8],
+	rt0, rt1 kad.RoutingTable[key.Key8, kad.NodeID[key.Key8]],
 ) {
 	// add n1 to n0's peerstore and routing table
 	ep0.MaybeAddToPeerstore(ctx, n1, peerstoreTTL)
@@ -64,14 +64,14 @@ func findNode(ctx context.Context) {
 	//   ^   ^
 	//  A B C D
 
-	rts := make([]*simplert.SimpleRT[key.Key8], len(nodes))
+	rts := make([]*simplert.SimpleRT[key.Key8, kad.NodeID[key.Key8]], len(nodes))
 	eps := make([]*sim.Endpoint[key.Key8, net.IP], len(nodes))
 	schedulers := make([]scheduler.AwareScheduler, len(nodes))
 	servers := make([]server.Server[key.Key8], len(nodes))
 
 	for i := 0; i < len(nodes); i++ {
 		// create a routing table, with bucket size 2
-		rts[i] = simplert.New[key.Key8](nodes[i].ID().Key(), 2)
+		rts[i] = simplert.New[key.Key8, kad.NodeID[key.Key8]](nodes[i].ID(), 2)
 		// create a scheduler based on the mock clock
 		schedulers[i] = ss.NewSimpleScheduler(clk)
 		// create a fake endpoint for the node, communicating through the router
