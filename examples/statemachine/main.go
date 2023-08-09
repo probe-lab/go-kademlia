@@ -18,8 +18,6 @@ import (
 	"github.com/plprobelab/go-kademlia/coord"
 	"github.com/plprobelab/go-kademlia/events/scheduler"
 	ss "github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
-	"github.com/plprobelab/go-kademlia/events/simulator"
-	"github.com/plprobelab/go-kademlia/events/simulator/litesimulator"
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
@@ -67,7 +65,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	siml.AddPeer(kad)
+	siml.Add(kad)
 
 	ih := NewIpfsDht(kad)
 	ih.Start(ctx)
@@ -99,7 +97,7 @@ func main() {
 
 const peerstoreTTL = 10 * time.Minute
 
-func setupSimulation(ctx context.Context) ([]kad.NodeInfo[key.Key256, net.IP], []*sim.Endpoint[key.Key256, net.IP], []kad.RoutingTable[key.Key256, kad.NodeID[key.Key256]], *litesimulator.LiteSimulator) {
+func setupSimulation(ctx context.Context) ([]kad.NodeInfo[key.Key256, net.IP], []*sim.Endpoint[key.Key256, net.IP], []kad.RoutingTable[key.Key256, kad.NodeID[key.Key256]], *sim.LiteSimulator) {
 	// create node identifiers
 	nodeCount := 4
 	ids := make([]*kadtest.ID[key.Key256], nodeCount)
@@ -182,8 +180,8 @@ func setupSimulation(ctx context.Context) ([]kad.NodeInfo[key.Key256, net.IP], [
 	connectNodes(ctx, addrs[2], addrs[3], eps[2], eps[3], rts[2], rts[3])
 
 	// create a simulator, simulating [A, B, C, D]'s simulators
-	siml := litesimulator.NewLiteSimulator(clk)
-	simulator.AddPeers(siml, schedulers...)
+	siml := sim.NewLiteSimulator(clk)
+	sim.AddSchedulers(siml, schedulers...)
 
 	return addrs, eps, rts, siml
 }

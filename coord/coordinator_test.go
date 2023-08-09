@@ -13,8 +13,6 @@ import (
 
 	"github.com/plprobelab/go-kademlia/events/scheduler"
 	ss "github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
-	"github.com/plprobelab/go-kademlia/events/simulator"
-	"github.com/plprobelab/go-kademlia/events/simulator/litesimulator"
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
@@ -33,7 +31,7 @@ var (
 	_ coordinatorInternalEvent = &eventStopQuery[key.Key8]{}
 )
 
-func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key8, kadtest.StrAddr], []*sim.Endpoint[key.Key8, kadtest.StrAddr], []kad.RoutingTable[key.Key8, kad.NodeID[key.Key8]], *litesimulator.LiteSimulator) {
+func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key8, kadtest.StrAddr], []*sim.Endpoint[key.Key8, kadtest.StrAddr], []kad.RoutingTable[key.Key8, kad.NodeID[key.Key8]], *sim.LiteSimulator) {
 	// create node identifiers
 	nodeCount := 4
 	ids := make([]*kadtest.ID[key.Key8], nodeCount)
@@ -91,8 +89,8 @@ func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key8
 	connectNodes(t, addrs[2], addrs[3], eps[2], eps[3], rts[2], rts[3])
 
 	// create a simulator, simulating [A, B, C, D]'s simulators
-	siml := litesimulator.NewLiteSimulator(clk)
-	simulator.AddPeers(siml, schedulers...)
+	siml := sim.NewLiteSimulator(clk)
+	sim.AddSchedulers(siml, schedulers...)
 
 	return addrs, eps, rts, siml
 }
@@ -193,7 +191,7 @@ func TestExhaustiveQuery(t *testing.T) {
 	if err != nil {
 		log.Fatalf("unexpected error creating coordinator: %v", err)
 	}
-	siml.AddPeer(c)
+	siml.Add(c)
 	events := c.Events()
 
 	queryID := query.QueryID("query1")
@@ -270,7 +268,7 @@ func TestRoutingUpdatedEventEmittedForCloserNodes(t *testing.T) {
 	if err != nil {
 		log.Fatalf("unexpected error creating coordinator: %v", err)
 	}
-	siml.AddPeer(c)
+	siml.Add(c)
 	events := c.Events()
 
 	queryID := query.QueryID("query1")

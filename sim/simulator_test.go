@@ -1,4 +1,4 @@
-package litesimulator
+package sim
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 	"github.com/plprobelab/go-kademlia/events/action/basicaction"
 	"github.com/plprobelab/go-kademlia/events/scheduler"
 	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
-	"github.com/plprobelab/go-kademlia/events/simulator"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,11 +24,13 @@ func TestLiteSimulator(t *testing.T) {
 	}
 
 	sim := NewLiteSimulator(clk)
-	simulator.AddPeers(sim, scheds...)
+	AddSchedulers(sim, scheds...)
 
-	simulator.RemovePeers(sim, scheds[0], scheds[3], scheds[6])
-	require.Equal(t, []scheduler.AwareScheduler{scheds[1], scheds[2],
-		scheds[4], scheds[5]}, sim.schedulers)
+	RemoveSchedulers(sim, scheds[0], scheds[3], scheds[6])
+	require.Equal(t, []scheduler.AwareScheduler{
+		scheds[1], scheds[2],
+		scheds[4], scheds[5],
+	}, sim.schedulers)
 
 	sim.Run(ctx)
 
@@ -75,5 +76,4 @@ func TestLiteSimulator(t *testing.T) {
 	for i, e := range order {
 		require.Equal(t, i, e)
 	}
-
 }
