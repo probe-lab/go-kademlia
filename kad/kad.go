@@ -89,9 +89,9 @@ type NodeID[K Key[K]] interface {
 
 // NodeInfo is a container type that combines node identification information
 // and network addresses at which the node is reachable.
-type NodeInfo[K Key[K], A Address[A]] interface {
+type NodeInfo[K Key[K], N NodeID[K], A Address[A]] interface {
 	// ID returns the node identifier.
-	ID() NodeID[K]
+	ID() N
 
 	// Addresses returns the network addresses associated with the given node.
 	Addresses() []A
@@ -113,7 +113,7 @@ func Equal[K Key[K]](this, that NodeID[K]) bool {
 
 type Message interface{}
 
-type Request[K Key[K], A Address[A]] interface {
+type Request[K Key[K], N NodeID[K], A Address[A]] interface {
 	Message
 
 	// Target returns the target key and true, or false if no target key has been specfied.
@@ -121,11 +121,11 @@ type Request[K Key[K], A Address[A]] interface {
 
 	// EmptyResponse returns an empty response struct for this request message
 	// TODO: this is a weird patter, let's try to remove this.
-	EmptyResponse() Response[K, A]
+	EmptyResponse() Response[K, N, A]
 }
 
-type Response[K Key[K], A Address[A]] interface {
+type Response[K Key[K], N NodeID[K], A Address[A]] interface {
 	Message
 
-	CloserNodes() []NodeInfo[K, A]
+	CloserNodes() []NodeInfo[K, N, A]
 }

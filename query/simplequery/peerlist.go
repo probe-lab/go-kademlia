@@ -17,32 +17,32 @@ const (
 	unreachable
 )
 
-type nodeInfo[K kad.Key[K], A kad.Address[A]] struct {
+type nodeInfo[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
 	distance          K
 	status            NodeStatus
-	id                kad.NodeID[K]
+	id                N
 	addrs             []A
 	tryAgainOnFailure bool
 
-	next *nodeInfo[K, A]
+	next *nodeInfo[K, N, A]
 }
 
-type PeerList[K kad.Key[K], A kad.Address[A]] struct {
+type PeerList[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
 	target   K
-	endpoint endpoint.NetworkedEndpoint[K, A]
+	endpoint endpoint.NetworkedEndpoint[K, N, A]
 
-	closest       *nodeInfo[K, A]
-	closestQueued *nodeInfo[K, A]
+	closest       *nodeInfo[K, N, A]
+	closestQueued *nodeInfo[K, N, A]
 
 	queuedCount int
 }
 
-func newPeerList[K kad.Key[K], A kad.Address[A]](target K, ep endpoint.Endpoint[K, A]) *PeerList[K, A] {
-	nep, ok := ep.(endpoint.NetworkedEndpoint[K, A])
+func newPeerList[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]](target K, ep endpoint.Endpoint[K, N, A]) *PeerList[K, N, A] {
+	nep, ok := ep.(endpoint.NetworkedEndpoint[K, N, A])
 	if !ok {
 		nep = nil
 	}
-	return &PeerList[K, A]{
+	return &PeerList[K, N, A]{
 		target:   target,
 		endpoint: nep,
 	}
@@ -50,9 +50,9 @@ func newPeerList[K kad.Key[K], A kad.Address[A]](target K, ep endpoint.Endpoint[
 
 // normally peers should already be ordered with distance to target, but we
 // sort them just in case
-func (pl *PeerList[K, A]) addToPeerlist(ids []kad.NodeID[K]) {
+func (pl *PeerList[K, N, A]) addToPeerlist(ids []N) {
 	// linked list of new peers sorted by distance to target
-	newHead := sliceToPeerInfos[K, A](pl.target, ids)
+	newHead := sliceToPeerInfos[K, N, A](pl.target, ids)
 	if newHead == nil {
 		return
 	}
@@ -71,7 +71,7 @@ func (pl *PeerList[K, A]) addToPeerlist(ids []kad.NodeID[K]) {
 	}
 
 	// merge the new sorted list into the existing sorted list
-	var prev *nodeInfo[K, A]
+	var prev *nodeInfo[K, N, A]
 	currOld := true // current element is from old list
 	closestQueuedReached := false
 
@@ -171,11 +171,11 @@ func (pl *PeerList[K, A]) addToPeerlist(ids []kad.NodeID[K]) {
 	}
 }
 
-func sliceToPeerInfos[K kad.Key[K], A kad.Address[A]](target K, ids []kad.NodeID[K]) *nodeInfo[K, A] {
+func sliceToPeerInfos[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]](target K, ids []N) *nodeInfo[K, N, A] {
 	// create a new list of nodeInfo
-	newPeers := make([]*nodeInfo[K, A], 0, len(ids))
+	newPeers := make([]*nodeInfo[K, N, A], 0, len(ids))
 	for _, id := range ids {
-		newPeer := addrInfoToPeerInfo[K, A](target, id)
+		newPeer := addrInfoToPeerInfo[K, N, A](target, id)
 		if newPeer != nil {
 			newPeers = append(newPeers, newPeer)
 		}
@@ -202,18 +202,18 @@ func sliceToPeerInfos[K kad.Key[K], A kad.Address[A]](target K, ids []kad.NodeID
 	return newPeers[0]
 }
 
-func addrInfoToPeerInfo[K kad.Key[K], A kad.Address[A]](target K, id kad.NodeID[K]) *nodeInfo[K, A] {
-	if id == nil || id.String() == "" || target.BitLen() != id.Key().BitLen() {
+func addrInfoToPeerInfo[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]](target K, id N) *nodeInfo[K, N, A] {
+	if id.String() == "" || target.BitLen() != id.Key().BitLen() {
 		return nil
 	}
-	return &nodeInfo[K, A]{
+	return &nodeInfo[K, N, A]{
 		distance: target.Xor(id.Key()),
 		status:   queued,
 		id:       id,
 	}
 }
 
-func (pl *PeerList[K, A]) enqueueUnreachablePeer(pi *nodeInfo[K, A]) {
+func (pl *PeerList[K, N, A]) enqueueUnreachablePeer(pi *nodeInfo[K, N, A]) {
 	if pi != nil {
 		// curr is the id we are looking for
 		if pi.status != queued {
@@ -232,9 +232,10 @@ func (pl *PeerList[K, A]) enqueueUnreachablePeer(pi *nodeInfo[K, A]) {
 // setPeerWaiting sets the status of a "queued" peer to "waiting". it records
 // the addresses associated with id in the peerstore at the time of the request
 // to curr.addrs.
-func (pl *PeerList[K, A]) popClosestQueued() kad.NodeID[K] {
+func (pl *PeerList[K, N, A]) popClosestQueued() N {
 	if pl.closestQueued == nil {
-		return nil
+		var v N
+		return v
 	}
 	pi := pl.closestQueued
 	if pl.endpoint != nil {
@@ -246,7 +247,8 @@ func (pl *PeerList[K, A]) popClosestQueued() kad.NodeID[K] {
 
 			pi = findNextQueued(pi)
 			if pi == nil {
-				return nil
+				var v N
+				return v
 			}
 			na, _ = pl.endpoint.NetworkAddress(pi.id)
 		}
@@ -259,7 +261,7 @@ func (pl *PeerList[K, A]) popClosestQueued() kad.NodeID[K] {
 	return pi.id
 }
 
-func (pl *PeerList[K, A]) queriedPeer(id kad.NodeID[K]) {
+func (pl *PeerList[K, N, A]) queriedPeer(id kad.NodeID[K]) {
 	curr := pl.closest
 	for curr != nil && curr.id.String() != id.String() {
 		curr = curr.next
@@ -273,7 +275,7 @@ func (pl *PeerList[K, A]) queriedPeer(id kad.NodeID[K]) {
 }
 
 // unreachablePeer sets the status of a "waiting" peer to "unreachable".
-func (pl *PeerList[K, A]) unreachablePeer(id kad.NodeID[K]) {
+func (pl *PeerList[K, N, A]) unreachablePeer(id kad.NodeID[K]) {
 	curr := pl.closest
 	for curr != nil && curr.id.String() != id.String() {
 		curr = curr.next
@@ -290,7 +292,7 @@ func (pl *PeerList[K, A]) unreachablePeer(id kad.NodeID[K]) {
 	}
 }
 
-func findNextQueued[K kad.Key[K], A kad.Address[A]](pi *nodeInfo[K, A]) *nodeInfo[K, A] {
+func findNextQueued[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]](pi *nodeInfo[K, N, A]) *nodeInfo[K, N, A] {
 	curr := pi
 	for curr != nil && curr.status != queued {
 		curr = curr.next

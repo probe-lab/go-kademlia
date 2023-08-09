@@ -11,7 +11,6 @@ import (
 	"github.com/plprobelab/go-kademlia/events/scheduler"
 	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
-	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
@@ -20,16 +19,16 @@ import (
 func TestRouter(t *testing.T) {
 	ctx := context.Background()
 	clk := clock.NewMock()
-	router := NewRouter[key.Key256, net.IP]()
+	router := NewRouter[key.Key256, kadtest.ID256, net.IP]()
 
 	nPeers := 5
 	scheds := make([]scheduler.AwareScheduler, nPeers)
-	ids := make([]kad.NodeID[key.Key256], nPeers)
-	fakeEndpoints := make([]*Endpoint[key.Key256, net.IP], nPeers)
+	ids := make([]kadtest.ID256, nPeers)
+	fakeEndpoints := make([]*Endpoint[key.Key256, kadtest.ID256, net.IP], nPeers)
 	for i := 0; i < nPeers; i++ {
 		ids[i] = kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{byte(i)}))
 		scheds[i] = simplescheduler.NewSimpleScheduler(clk)
-		fakeEndpoints[i] = NewEndpoint[key.Key256, net.IP](ids[i], scheds[i], router)
+		fakeEndpoints[i] = NewEndpoint(ids[i], scheds[i], router)
 	}
 
 	protoID := address.ProtocolID("/test/proto")

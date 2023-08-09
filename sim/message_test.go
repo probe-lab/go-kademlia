@@ -12,15 +12,15 @@ import (
 )
 
 var (
-	_ kad.Request[key.Key8, net.IP]  = (*Message[key.Key8, net.IP])(nil)
-	_ kad.Response[key.Key8, net.IP] = (*Message[key.Key8, net.IP])(nil)
+	_ kad.Request[key.Key8, kadtest.ID8, kadtest.StrAddr]  = (*Message[key.Key8, kadtest.ID8, kadtest.StrAddr])(nil)
+	_ kad.Response[key.Key8, kadtest.ID8, kadtest.StrAddr] = (*Message[key.Key8, kadtest.ID8, kadtest.StrAddr])(nil)
 )
 
 func TestRequest(t *testing.T) {
 	target := kadtest.StringID("target")
-	msg := NewRequest[key.Key256, net.IP](target.Key())
+	msg := NewRequest[key.Key256, kadtest.ID256, kadtest.StrAddr](target.Key())
 
-	require.Equal(t, &Message[key.Key256, net.IP]{}, msg.EmptyResponse())
+	require.Equal(t, &Message[key.Key256, kadtest.ID256, kadtest.StrAddr]{}, msg.EmptyResponse())
 
 	b := key.Equal(msg.Target(), target.Key())
 	require.True(t, b)
@@ -28,9 +28,9 @@ func TestRequest(t *testing.T) {
 }
 
 func TestResponse(t *testing.T) {
-	closerPeers := []kad.NodeInfo[key.Key256, net.IP]{
-		kadtest.NewInfo[key.Key256, net.IP](kadtest.NewID(kadtest.StringID("peer1").Key()), nil),
-		kadtest.NewInfo[key.Key256, net.IP](kadtest.NewID(kadtest.StringID("peer2").Key()), nil),
+	closerPeers := []kad.NodeInfo[key.Key256, kadtest.ID256, net.IP]{
+		kadtest.NewInfo[key.Key256, kadtest.ID256, net.IP](kadtest.NewID(kadtest.StringID("peer1").Key()), nil),
+		kadtest.NewInfo[key.Key256, kadtest.ID256, net.IP](kadtest.NewID(kadtest.StringID("peer2").Key()), nil),
 	}
 	msg := NewResponse(closerPeers)
 

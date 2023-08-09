@@ -32,16 +32,16 @@ func (r *Request[K]) ID() string {
 	return r.id
 }
 
-func (r *Request[K]) EmptyResponse() kad.Response[K, StrAddr] {
+func (r *Request[K]) EmptyResponse() kad.Response[K, ID[K], StrAddr] {
 	return &Response[K]{}
 }
 
 type Response[K kad.Key[K]] struct {
 	id     string
-	closer []kad.NodeInfo[K, StrAddr]
+	closer []kad.NodeInfo[K, ID[K], StrAddr]
 }
 
-func NewResponse[K kad.Key[K]](id string, closer []kad.NodeInfo[K, StrAddr]) *Response[K] {
+func NewResponse[K kad.Key[K]](id string, closer []kad.NodeInfo[K, ID[K], StrAddr]) *Response[K] {
 	return &Response[K]{
 		id:     id,
 		closer: closer,
@@ -52,7 +52,7 @@ func (r *Response[K]) ID() string {
 	return r.id
 }
 
-func (r *Response[K]) CloserNodes() []kad.NodeInfo[K, StrAddr] {
+func (r *Response[K]) CloserNodes() []kad.NodeInfo[K, ID[K], StrAddr] {
 	return r.closer
 }
 
@@ -71,11 +71,11 @@ type (
 )
 
 var (
-	_ kad.Request[key.Key8, StrAddr]  = (*Request8)(nil)
-	_ kad.Response[key.Key8, StrAddr] = (*Response8)(nil)
+	_ kad.Request[key.Key8, ID[key.Key8], StrAddr]  = (*Request8)(nil)
+	_ kad.Response[key.Key8, ID[key.Key8], StrAddr] = (*Response8)(nil)
 )
 
 var (
-	_ kad.Request[key.Key256, StrAddr]  = (*Request256)(nil)
-	_ kad.Response[key.Key256, StrAddr] = (*Response256)(nil)
+	_ kad.Request[key.Key256, ID[key.Key256], StrAddr]  = (*Request256)(nil)
+	_ kad.Response[key.Key256, ID[key.Key256], StrAddr] = (*Response256)(nil)
 )

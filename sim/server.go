@@ -13,19 +13,19 @@ import (
 	"github.com/plprobelab/go-kademlia/util"
 )
 
-type Server[K kad.Key[K], A kad.Address[A]] struct {
-	rt       kad.RoutingTable[K, kad.NodeID[K]]
-	endpoint endpoint.Endpoint[K, A]
+type Server[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
+	rt       kad.RoutingTable[K, N]
+	endpoint endpoint.Endpoint[K, N, A]
 
 	peerstoreTTL              time.Duration
 	numberOfCloserPeersToSend int
 }
 
-func NewServer[K kad.Key[K], A kad.Address[A]](rt kad.RoutingTable[K, kad.NodeID[K]], endpoint endpoint.Endpoint[K, A], cfg *ServerConfig) *Server[K, A] {
+func NewServer[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]](rt kad.RoutingTable[K, N], endpoint endpoint.Endpoint[K, N, A], cfg *ServerConfig) *Server[K, N, A] {
 	if cfg == nil {
 		cfg = DefaultServerConfig()
 	}
-	return &Server[K, A]{
+	return &Server[K, N, A]{
 		rt:                        rt,
 		endpoint:                  endpoint,
 		peerstoreTTL:              cfg.PeerstoreTTL,
@@ -33,24 +33,20 @@ func NewServer[K kad.Key[K], A kad.Address[A]](rt kad.RoutingTable[K, kad.NodeID
 	}
 }
 
-func (s *Server[K, A]) HandleRequest(ctx context.Context, rpeer kad.NodeID[K],
-	msg kad.Message,
-) (kad.Message, error) {
+func (s *Server[K, N, A]) HandleRequest(ctx context.Context, rpeer N, msg kad.Message) (kad.Message, error) {
 	switch msg := msg.(type) {
-	case *Message[K, A]:
+	case *Message[K, N, A]:
 		return s.HandleFindNodeRequest(ctx, rpeer, msg)
 	default:
 		return nil, ErrUnknownMessageFormat
 	}
 }
 
-func (s *Server[K, A]) HandleFindNodeRequest(ctx context.Context,
-	rpeer kad.NodeID[K], msg kad.Message,
-) (kad.Message, error) {
+func (s *Server[K, N, A]) HandleFindNodeRequest(ctx context.Context, rpeer N, msg kad.Message) (kad.Message, error) {
 	var target K
 
 	switch msg := msg.(type) {
-	case *Message[K, A]:
+	case *Message[K, N, A]:
 		target = msg.Target()
 	default:
 		// invalid request, don't reply
@@ -69,8 +65,8 @@ func (s *Server[K, A]) HandleFindNodeRequest(ctx context.Context,
 
 	var resp kad.Message
 	switch msg.(type) {
-	case *Message[K, A]:
-		peerAddrs := make([]kad.NodeInfo[K, A], len(nodes))
+	case *Message[K, N, A]:
+		peerAddrs := make([]kad.NodeInfo[K, N, A], len(nodes))
 		var index int
 		for _, p := range nodes {
 			na, err := s.endpoint.NetworkAddress(p)

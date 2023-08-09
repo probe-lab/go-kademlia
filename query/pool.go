@@ -13,11 +13,11 @@ import (
 	"github.com/plprobelab/go-kademlia/util"
 )
 
-type Pool[K kad.Key[K], A kad.Address[A]] struct {
+type Pool[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
 	// self is the node id of the system the pool is running on
-	self       kad.NodeID[K]
-	queries    []*Query[K, A]
-	queryIndex map[QueryID]*Query[K, A]
+	self       N
+	queries    []*Query[K, N, A]
+	queryIndex map[QueryID]*Query[K, N, A]
 
 	// cfg is a copy of the optional configuration supplied to the pool
 	cfg PoolConfig
@@ -93,23 +93,23 @@ func DefaultPoolConfig() *PoolConfig {
 	}
 }
 
-func NewPool[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], cfg *PoolConfig) (*Pool[K, A], error) {
+func NewPool[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]](self N, cfg *PoolConfig) (*Pool[K, N, A], error) {
 	if cfg == nil {
 		cfg = DefaultPoolConfig()
 	} else if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
-	return &Pool[K, A]{
+	return &Pool[K, N, A]{
 		self:       self,
 		cfg:        *cfg,
-		queries:    make([]*Query[K, A], 0),
-		queryIndex: make(map[QueryID]*Query[K, A]),
+		queries:    make([]*Query[K, N, A], 0),
+		queryIndex: make(map[QueryID]*Query[K, N, A]),
 	}, nil
 }
 
 // Advance advances the state of the pool by attempting to advance one of its queries
-func (p *Pool[K, A]) Advance(ctx context.Context, ev PoolEvent) PoolState {
+func (p *Pool[K, N, A]) Advance(ctx context.Context, ev PoolEvent) PoolState {
 	ctx, span := util.StartSpan(ctx, "Pool.Advance")
 	defer span.End()
 
@@ -190,12 +190,12 @@ func (p *Pool[K, A]) Advance(ctx context.Context, ev PoolEvent) PoolState {
 	return &StatePoolIdle{}
 }
 
-func (p *Pool[K, A]) advanceQuery(ctx context.Context, qry *Query[K, A], qev QueryEvent) (PoolState, bool) {
+func (p *Pool[K, N, A]) advanceQuery(ctx context.Context, qry *Query[K, A], qev QueryEvent) (PoolState, bool) {
 	state := qry.Advance(ctx, qev)
 	switch st := state.(type) {
-	case *StateQueryWaitingMessage[K, A]:
+	case *StateQueryWaitingMessage[K, N, A]:
 		p.queriesInFlight++
-		return &StatePoolQueryMessage[K, A]{
+		return &StatePoolQueryMessage[K, N, A]{
 			QueryID:    st.QueryID,
 			Stats:      st.Stats,
 			NodeID:     st.NodeID,
@@ -232,7 +232,7 @@ func (p *Pool[K, A]) advanceQuery(ctx context.Context, qry *Query[K, A], qev Que
 	return nil, false
 }
 
-func (p *Pool[K, A]) removeQuery(queryID QueryID) {
+func (p *Pool[K, N, A]) removeQuery(queryID QueryID) {
 	for i := range p.queries {
 		if p.queries[i].id != queryID {
 			continue
@@ -248,7 +248,7 @@ func (p *Pool[K, A]) removeQuery(queryID QueryID) {
 
 // addQuery adds a query to the pool, returning the new query id
 // TODO: remove target argument and use msg.Target
-func (p *Pool[K, A]) addQuery(ctx context.Context, queryID QueryID, target K, protocolID address.ProtocolID, msg kad.Request[K, A], knownClosestNodes []kad.NodeID[K]) error {
+func (p *Pool[K, N, A]) addQuery(ctx context.Context, queryID QueryID, target K, protocolID address.ProtocolID, msg kad.Request[K, N, A], knownClosestNodes []N) error {
 	if _, exists := p.queryIndex[queryID]; exists {
 		return fmt.Errorf("query id already in use")
 	}
@@ -280,11 +280,11 @@ type PoolState interface {
 type StatePoolIdle struct{}
 
 // StatePoolQueryMessage indicates that at a query is waiting to message a node.
-type StatePoolQueryMessage[K kad.Key[K], A kad.Address[A]] struct {
+type StatePoolQueryMessage[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
 	QueryID    QueryID
 	NodeID     kad.NodeID[K]
 	ProtocolID address.ProtocolID
-	Message    kad.Request[K, A]
+	Message    kad.Request[K, N, A]
 	Stats      QueryStats
 }
 
@@ -309,12 +309,12 @@ type StatePoolQueryTimeout struct {
 }
 
 // poolState() ensures that only Pool states can be assigned to the PoolState interface.
-func (*StatePoolIdle) poolState()                {}
-func (*StatePoolQueryMessage[K, A]) poolState()  {}
-func (*StatePoolWaitingAtCapacity) poolState()   {}
-func (*StatePoolWaitingWithCapacity) poolState() {}
-func (*StatePoolQueryFinished) poolState()       {}
-func (*StatePoolQueryTimeout) poolState()        {}
+func (*StatePoolIdle) poolState()                  {}
+func (*StatePoolQueryMessage[K, N, A]) poolState() {}
+func (*StatePoolWaitingAtCapacity) poolState()     {}
+func (*StatePoolWaitingWithCapacity) poolState()   {}
+func (*StatePoolQueryFinished) poolState()         {}
+func (*StatePoolQueryTimeout) poolState()          {}
 
 // PoolEvent is an event intended to advance the state of a pool.
 type PoolEvent interface {
@@ -322,12 +322,12 @@ type PoolEvent interface {
 }
 
 // EventPoolAddQuery is an event that attempts to add a new query
-type EventPoolAddQuery[K kad.Key[K], A kad.Address[A]] struct {
-	QueryID           QueryID            // the id to use for the new query
-	Target            K                  // the target key for the query
-	ProtocolID        address.ProtocolID // the protocol that defines how the message should be interpreted
-	Message           kad.Request[K, A]  // the message the query should send to each node it traverses
-	KnownClosestNodes []kad.NodeID[K]    // an initial set of close nodes the query should use
+type EventPoolAddQuery[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
+	QueryID           QueryID              // the id to use for the new query
+	Target            K                    // the target key for the query
+	ProtocolID        address.ProtocolID   // the protocol that defines how the message should be interpreted
+	Message           kad.Request[K, N, A] // the message the query should send to each node it traverses
+	KnownClosestNodes []N                  // an initial set of close nodes the query should use
 }
 
 // EventPoolStopQuery notifies a pool to stop a query.
@@ -336,21 +336,21 @@ type EventPoolStopQuery struct {
 }
 
 // EventPoolMessageResponse notifies a pool that a query that a sent message has received a successful response.
-type EventPoolMessageResponse[K kad.Key[K], A kad.Address[A]] struct {
-	QueryID  QueryID            // the id of the query that sent the message
-	NodeID   kad.NodeID[K]      // the node the message was sent to
-	Response kad.Response[K, A] // the message response sent by the node
+type EventPoolMessageResponse[K kad.Key[K], N kad.NodeID[K], A kad.Address[A]] struct {
+	QueryID  QueryID               // the id of the query that sent the message
+	NodeID   N                     // the node the message was sent to
+	Response kad.Response[K, N, A] // the message response sent by the node
 }
 
 // EventPoolMessageFailure notifies a pool that a query that an attempt to send a message has failed.
-type EventPoolMessageFailure[K kad.Key[K]] struct {
-	QueryID QueryID       // the id of the query that sent the message
-	NodeID  kad.NodeID[K] // the node the message was sent to
-	Error   error         // the error that caused the failure, if any
+type EventPoolMessageFailure[K kad.Key[K], N kad.NodeID[K]] struct {
+	QueryID QueryID // the id of the query that sent the message
+	NodeID  N       // the node the message was sent to
+	Error   error   // the error that caused the failure, if any
 }
 
 // poolEvent() ensures that only Pool events can be assigned to the PoolEvent interface.
-func (*EventPoolAddQuery[K, A]) poolEvent()        {}
-func (*EventPoolStopQuery) poolEvent()             {}
-func (*EventPoolMessageResponse[K, A]) poolEvent() {}
-func (*EventPoolMessageFailure[K]) poolEvent()     {}
+func (*EventPoolAddQuery[K, N, A]) poolEvent()        {}
+func (*EventPoolStopQuery) poolEvent()                {}
+func (*EventPoolMessageResponse[K, N, A]) poolEvent() {}
+func (*EventPoolMessageFailure[K, N]) poolEvent()     {}
