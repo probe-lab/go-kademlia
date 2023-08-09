@@ -158,6 +158,38 @@ func TestConfigValidate(t *testing.T) {
 		cfg.Clock = nil
 		require.Error(t, cfg.Validate())
 	})
+
+	t.Run("query concurrency positive", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.QueryConcurrency = 0
+		require.Error(t, cfg.Validate())
+		cfg.QueryConcurrency = -1
+		require.Error(t, cfg.Validate())
+	})
+
+	t.Run("query timeout positive", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.QueryTimeout = 0
+		require.Error(t, cfg.Validate())
+		cfg.QueryTimeout = -1
+		require.Error(t, cfg.Validate())
+	})
+
+	t.Run("request concurrency positive", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.RequestConcurrency = 0
+		require.Error(t, cfg.Validate())
+		cfg.QueryConcurrency = -1
+		require.Error(t, cfg.Validate())
+	})
+
+	t.Run("request timeout positive", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.RequestTimeout = 0
+		require.Error(t, cfg.Validate())
+		cfg.RequestTimeout = -1
+		require.Error(t, cfg.Validate())
+	})
 }
 
 func TestExhaustiveQuery(t *testing.T) {

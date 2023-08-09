@@ -3,19 +3,21 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/benbjohnson/clock"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 
+	"github.com/plprobelab/go-kademlia/coord"
 	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
 	tutil "github.com/plprobelab/go-kademlia/examples/util"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/libp2p"
 	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/query/simplequery"
+	"github.com/plprobelab/go-kademlia/query"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
 	"github.com/plprobelab/go-kademlia/util"
 )
@@ -25,6 +27,9 @@ var protocolID address.ProtocolID = "/ipfs/kad/1.0.0" // IPFS DHT network protoc
 func FindPeer(ctx context.Context) {
 	ctx, span := util.StartSpan(ctx, "FindPeer Test")
 	defer span.End()
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	// this example is using real time
 	clk := clock.New()
@@ -78,67 +83,75 @@ func FindPeer(ctx context.Context) {
 		panic("failed to add friend to rt")
 	}
 
-	// endCond is used to terminate the simulation once the query is done
-	endCond := false
-	handleResultsFn := func(ctx context.Context, id kad.NodeID[key.Key256],
-		resp kad.Response[key.Key256, multiaddr.Multiaddr],
-	) (bool, []kad.NodeID[key.Key256]) {
-		// parse response to ipfs dht message
-		msg, ok := resp.(*libp2p.Message)
-		if !ok {
-			fmt.Println("invalid response!")
-			return false, nil
-		}
-		var targetAddrs *libp2p.AddrInfo
-		peers := make([]kad.NodeID[key.Key256], 0, len(msg.CloserPeers))
-		for _, p := range msg.CloserPeers {
-			addrInfo, err := libp2p.PBPeerToPeerInfo(p)
-			if err != nil {
-				fmt.Println("invalid peer info format")
-				continue
-			}
-			peers = append(peers, addrInfo.PeerID())
-			if addrInfo.PeerID().ID == target {
-				endCond = true
-				targetAddrs = addrInfo
-			}
-		}
-		fmt.Println("---\nResponse from", id, "with", peers)
-		if endCond {
-			fmt.Println("\n  - target found!", target, targetAddrs.Addrs)
-		}
-		// return peers and not msg.CloserPeers because we want to return the
-		// PeerIDs and not AddrInfos. The returned NodeID is used to update the
-		// query. The AddrInfo is only useful for the message endpoint.
-		return endCond, peers
-	}
+	cfg := coord.DefaultConfig()
+	cfg.RequestConcurrency = 1
+	cfg.RequestTimeout = 5 * time.Second
 
-	// create the query, the IPFS DHT protocol ID, the IPFS DHT request message,
-	// a concurrency parameter of 1, a timeout of 5 seconds, the libp2p message
-	// endpoint, the node's routing table and scheduler, and the response
-	// handler function.
-	// The query will be executed only once actions are run on the scheduler.
-	// For now, it is only scheduled to be run.
-	queryOpts := []simplequery.Option[key.Key256, multiaddr.Multiaddr]{
-		simplequery.WithProtocolID[key.Key256, multiaddr.Multiaddr](protocolID),
-		simplequery.WithConcurrency[key.Key256, multiaddr.Multiaddr](1),
-		simplequery.WithRequestTimeout[key.Key256, multiaddr.Multiaddr](2 * time.Second),
-		simplequery.WithHandleResultsFunc[key.Key256, multiaddr.Multiaddr](handleResultsFn),
-		simplequery.WithRoutingTable[key.Key256, multiaddr.Multiaddr](rt),
-		simplequery.WithEndpoint[key.Key256, multiaddr.Multiaddr](msgEndpoint),
-		simplequery.WithScheduler[key.Key256, multiaddr.Multiaddr](sched),
-	}
-	_, err = simplequery.NewSimpleQuery[key.Key256, multiaddr.Multiaddr](ctx, pid.NodeID(), req, queryOpts...)
+	c, err := coord.NewCoordinator[key.Key256, multiaddr.Multiaddr](pid, msgEndpoint, rt, cfg)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	span.AddEvent("start request execution")
 
-	// run the actions from the scheduler until the query is done
-	for i := 0; i < 1000 && !endCond; i++ {
-		for sched.RunOne(ctx) {
+	queryID := query.QueryID("query1")
+
+	err = c.StartQuery(ctx, queryID, protocolID, req)
+	if err != nil {
+		log.Fatalf("failed to start query: %v", err)
+	}
+
+	// run the coordinator and endpoint scheduler until the query is done
+	go func(ctx context.Context) {
+		stepper := clk.Ticker(10 * time.Millisecond)
+		defer stepper.Stop()
+		for {
+			select {
+			case <-stepper.C:
+				sched.RunOne(ctx)
+				c.RunOne(ctx)
+			case <-ctx.Done():
+				return
+			}
 		}
-		time.Sleep(10 * time.Millisecond)
+	}(ctx)
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Fatalf("context cancelled: %v", ctx.Err())
+		case ev := <-c.Events():
+			// read an event from the coordinator
+
+			switch tev := ev.(type) {
+			case *coord.KademliaOutboundQueryProgressedEvent[key.Key256, multiaddr.Multiaddr]:
+				fmt.Printf("query %q progressed\n", tev.QueryID)
+				fmt.Printf("  running: %s\n", clk.Since(tev.Stats.Start))
+				fmt.Printf("  requests made: %d\n", tev.Stats.Requests)
+				fmt.Printf("  requests succeeded: %d\n", tev.Stats.Success)
+				fmt.Printf("  requests failed: %d\n", tev.Stats.Failure)
+
+				for _, found := range tev.Response.CloserNodes() {
+					if key.Equal(found.ID().Key(), targetID.Key()) {
+						fmt.Printf("found the node we were looking for: %v\n", found.ID())
+						fmt.Println("stopping query")
+						c.StopQuery(ctx, queryID)
+					}
+				}
+
+			case *coord.KademliaOutboundQueryFinishedEvent:
+				fmt.Printf("query %q finished\n", tev.QueryID)
+				fmt.Printf("  duration: %s\n", tev.Stats.End.Sub(tev.Stats.Start))
+				fmt.Printf("  requests made: %d\n", tev.Stats.Requests)
+				fmt.Printf("  requests succeeded: %d\n", tev.Stats.Success)
+				fmt.Printf("  requests failed: %d\n", tev.Stats.Failure)
+				return
+			case *coord.KademliaRoutingUpdatedEvent[key.Key256, multiaddr.Multiaddr]:
+				fmt.Printf("updated routing to add node %v\n", tev.NodeInfo.ID())
+			default:
+				fmt.Printf("got event: %#v\n", ev)
+			}
+
+		}
 	}
 }
