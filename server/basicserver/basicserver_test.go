@@ -49,7 +49,7 @@ func TestSimMessageHandling(t *testing.T) {
 	router := sim.NewRouter[key.Key256, net.IP]()
 	sched := simplescheduler.NewSimpleScheduler(clk)
 	fakeEndpoint := sim.NewEndpoint[key.Key256, net.IP](self.ID(), sched, router)
-	rt := simplert.New(self.ID().Key(), 2)
+	rt := simplert.New[key.Key256, kad.NodeID[key.Key256]](self.ID(), 2)
 
 	// add peers to routing table and peerstore
 	for _, p := range kadRemotePeers {
@@ -133,7 +133,7 @@ func TestInvalidSimRequests(t *testing.T) {
 	// create a valid server
 	sched := simplescheduler.NewSimpleScheduler(clk)
 	fakeEndpoint := sim.NewEndpoint[key.Key256, net.IP](self.ID(), sched, router)
-	rt := simplert.New(self.ID().Key(), 2)
+	rt := simplert.New[key.Key256, kad.NodeID[key.Key256]](self.ID(), 2)
 
 	// add peers to routing table and peerstore
 	for _, p := range kadRemotePeers {
@@ -178,7 +178,7 @@ func TestSimRequestNoNetworkAddress(t *testing.T) {
 	// create a valid server
 	sched := simplescheduler.NewSimpleScheduler(clk)
 	fakeEndpoint := sim.NewEndpoint(self.ID(), sched, router)
-	rt := simplert.New(self.ID().Key(), 2)
+	rt := simplert.New[key.Key256, kad.NodeID[key.Key256]](self.ID(), 2)
 
 	parsed, err := peer.Decode("1EooooPEER")
 	require.NoError(t, err)
@@ -249,7 +249,7 @@ func TestInvalidIpfsv1Requests(t *testing.T) {
 	self := libp2p.NewPeerID(selfPid)
 
 	invalidEP := &invalidEndpoint[key.Key256, multiaddr.Multiaddr]{}
-	rt := simplert.New(self.Key(), 4)
+	rt := simplert.New[key.Key256, kad.NodeID[key.Key256]](self, 4)
 
 	nPeers := 6
 	peerids := make([]kad.NodeID[key.Key256], nPeers)
@@ -326,7 +326,7 @@ func TestIPFSv1Handling(t *testing.T) {
 	router := sim.NewRouter[key.Key256, multiaddr.Multiaddr]()
 	sched := simplescheduler.NewSimpleScheduler(clk)
 	fakeEndpoint := sim.NewEndpoint[key.Key256, multiaddr.Multiaddr](self.NodeID(), sched, router)
-	rt := simplert.New(self.Key(), 4)
+	rt := simplert.New[key.Key256, kad.NodeID[key.Key256]](self, 4)
 
 	nPeers := 6
 	peerids := make([]kad.NodeID[key.Key256], nPeers)

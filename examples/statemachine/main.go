@@ -99,7 +99,7 @@ func main() {
 
 const peerstoreTTL = 10 * time.Minute
 
-func setupSimulation(ctx context.Context) ([]kad.NodeInfo[key.Key256, net.IP], []*sim.Endpoint[key.Key256, net.IP], []kad.RoutingTable[key.Key256], *litesimulator.LiteSimulator) {
+func setupSimulation(ctx context.Context) ([]kad.NodeInfo[key.Key256, net.IP], []*sim.Endpoint[key.Key256, net.IP], []kad.RoutingTable[key.Key256, kad.NodeID[key.Key256]], *litesimulator.LiteSimulator) {
 	// create node identifiers
 	nodeCount := 4
 	ids := make([]*kadtest.ID[key.Key256], nodeCount)
@@ -150,7 +150,7 @@ func setupSimulation(ctx context.Context) ([]kad.NodeInfo[key.Key256, net.IP], [
 	// create a fake router to virtually connect nodes
 	router := sim.NewRouter[key.Key256, net.IP]()
 
-	rts := make([]kad.RoutingTable[key.Key256], len(addrs))
+	rts := make([]kad.RoutingTable[key.Key256, kad.NodeID[key.Key256]], len(addrs))
 	eps := make([]*sim.Endpoint[key.Key256, net.IP], len(addrs))
 	schedulers := make([]scheduler.AwareScheduler, len(addrs))
 	servers := make([]*sim.Server[key.Key256, net.IP], len(addrs))
@@ -158,7 +158,7 @@ func setupSimulation(ctx context.Context) ([]kad.NodeInfo[key.Key256, net.IP], [
 	for i := 0; i < len(addrs); i++ {
 		i := i // :(
 		// create a routing table, with bucket size 2
-		rts[i] = simplert.New(addrs[i].ID().Key(), 2)
+		rts[i] = simplert.New[key.Key256, kad.NodeID[key.Key256]](addrs[i].ID(), 2)
 		// create a scheduler based on the mock clock
 		schedulers[i] = ss.NewSimpleScheduler(clk)
 		// create a fake endpoint for the node, communicating through the router
@@ -190,7 +190,7 @@ func setupSimulation(ctx context.Context) ([]kad.NodeInfo[key.Key256, net.IP], [
 
 // connectNodes adds nodes to each other's peerstores and routing tables
 func connectNodes(ctx context.Context, n0, n1 kad.NodeInfo[key.Key256, net.IP], ep0, ep1 endpoint.Endpoint[key.Key256, net.IP],
-	rt0, rt1 kad.RoutingTable[key.Key256],
+	rt0, rt1 kad.RoutingTable[key.Key256, kad.NodeID[key.Key256]],
 ) {
 	// add n1 to n0's peerstore and routing table
 	debug("connecting %s to %s", n0.ID(), n1.ID())

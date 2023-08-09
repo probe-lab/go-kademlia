@@ -36,11 +36,9 @@ func FindPeer(ctx context.Context) {
 	}
 
 	pid := libp2p.NewPeerID(h.ID())
-	// get the peer's kademlia key (derived from its peer.ID)
-	kadid := pid.Key()
 
 	// create a simple routing table, with bucket size 20
-	rt := simplert.New(kadid, 20)
+	rt := simplert.New[key.Key256, kad.NodeID[key.Key256]](pid, 20)
 	// create a scheduler using real time
 	sched := simplescheduler.NewSimpleScheduler(clk)
 	// create a message endpoint is used to communicate with other peers

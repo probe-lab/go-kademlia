@@ -42,7 +42,7 @@ func TestMessageHandling(t *testing.T) {
 	router := NewRouter[key.Key8, net.IP]()
 	sched := simplescheduler.NewSimpleScheduler(clk)
 	fakeEndpoint := NewEndpoint[key.Key8, net.IP](self.ID(), sched, router)
-	rt := simplert.New(self.ID().Key(), 2)
+	rt := simplert.New[key.Key8, kad.NodeID[key.Key8]](self.ID(), 2)
 
 	// add peers to routing table and peerstore
 	for _, p := range kadRemotePeers {
@@ -129,7 +129,7 @@ func TestInvalidSimRequests(t *testing.T) {
 	// create a valid server
 	sched := simplescheduler.NewSimpleScheduler(clk)
 	fakeEndpoint := NewEndpoint[key.Key8, net.IP](self.ID(), sched, router)
-	rt := simplert.New(self.ID().Key(), 2)
+	rt := simplert.New[key.Key8, kad.NodeID[key.Key8]](self.ID(), 2)
 
 	// add peers to routing table and peerstore
 	for _, p := range kadRemotePeers {
@@ -170,7 +170,7 @@ func TestRequestNoNetworkAddress(t *testing.T) {
 	// create a valid server
 	sched := simplescheduler.NewSimpleScheduler(clk)
 	fakeEndpoint := NewEndpoint[key.Key8, net.IP](self.ID(), sched, router)
-	rt := simplert.New(self.ID().Key(), 2)
+	rt := simplert.New[key.Key8, kad.NodeID[key.Key8]](self.ID(), 2)
 
 	node := kadtest.NewID(key.Key8(0xf6))
 

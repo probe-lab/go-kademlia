@@ -55,7 +55,7 @@ func queryTest(ctx context.Context) {
 		ID:    selfA.ID,
 		Addrs: []multiaddr.Multiaddr{addrA},
 	})
-	rtA := simplert.New(selfA.Key(), 2)
+	rtA := simplert.New[key.Key256, kad.NodeID[key.Key256]](selfA, 2)
 	schedA := ss.NewSimpleScheduler(clk)
 	endpointA := sim.NewEndpoint(selfA.NodeID(), schedA, router)
 	servA := basicserver.NewBasicServer[multiaddr.Multiaddr](rtA, endpointA)
@@ -75,7 +75,7 @@ func queryTest(ctx context.Context) {
 		ID:    selfB.ID,
 		Addrs: []multiaddr.Multiaddr{addrB},
 	})
-	rtB := simplert.New(selfB.Key(), 2)
+	rtB := simplert.New[key.Key256, kad.NodeID[key.Key256]](selfB, 2)
 	schedB := ss.NewSimpleScheduler(clk)
 	endpointB := sim.NewEndpoint(selfB.NodeID(), schedB, router)
 	servB := basicserver.NewBasicServer[multiaddr.Multiaddr](rtB, endpointB)
@@ -95,7 +95,7 @@ func queryTest(ctx context.Context) {
 		ID:    selfC.ID,
 		Addrs: []multiaddr.Multiaddr{addrC},
 	})
-	rtC := simplert.New(selfC.Key(), 2)
+	rtC := simplert.New[key.Key256, kad.NodeID[key.Key256]](selfC, 2)
 	schedC := ss.NewSimpleScheduler(clk)
 	endpointC := sim.NewEndpoint(selfC.NodeID(), schedC, router)
 	servC := basicserver.NewBasicServer[multiaddr.Multiaddr](rtC, endpointC)

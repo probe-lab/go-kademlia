@@ -35,7 +35,7 @@ type Coordinator[K kad.Key[K], A kad.Address[A]] struct {
 	qp *query.Pool[K, A]
 
 	// rt is the routing table used to look up nodes by distance
-	rt kad.RoutingTable[K]
+	rt kad.RoutingTable[K, kad.NodeID[K]]
 
 	// ep is the message endpoint used to send requests
 	ep endpoint.Endpoint[K, A]
@@ -76,7 +76,7 @@ func DefaultConfig() *Config {
 	}
 }
 
-func NewCoordinator[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], ep endpoint.Endpoint[K, A], rt kad.RoutingTable[K], cfg *Config) (*Coordinator[K, A], error) {
+func NewCoordinator[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], ep endpoint.Endpoint[K, A], rt kad.RoutingTable[K, kad.NodeID[K]], cfg *Config) (*Coordinator[K, A], error) {
 	if cfg == nil {
 		cfg = DefaultConfig()
 	} else if err := cfg.Validate(); err != nil {

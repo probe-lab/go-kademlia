@@ -18,7 +18,7 @@ import (
 )
 
 type BasicServer[A kad.Address[A]] struct {
-	rt       kad.RoutingTable[key.Key256]
+	rt       kad.RoutingTable[key.Key256, kad.NodeID[key.Key256]]
 	endpoint endpoint.Endpoint[key.Key256, A]
 
 	peerstoreTTL              time.Duration
@@ -27,7 +27,7 @@ type BasicServer[A kad.Address[A]] struct {
 
 // var _ server.Server = (*BasicServer)(nil)
 
-func NewBasicServer[A kad.Address[A]](rt kad.RoutingTable[key.Key256], endpoint endpoint.Endpoint[key.Key256, A],
+func NewBasicServer[A kad.Address[A]](rt kad.RoutingTable[key.Key256, kad.NodeID[key.Key256]], endpoint endpoint.Endpoint[key.Key256, A],
 	options ...Option,
 ) *BasicServer[A] {
 	var cfg Config

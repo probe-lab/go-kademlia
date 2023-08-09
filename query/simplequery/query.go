@@ -39,7 +39,7 @@ type SimpleQuery[K kad.Key[K], A kad.Address[A]] struct {
 	timeout      time.Duration
 
 	msgEndpoint endpoint.Endpoint[K, A]
-	rt          kad.RoutingTable[K]
+	rt          kad.RoutingTable[K, kad.NodeID[K]]
 	sched       scheduler.Scheduler
 
 	inflightRequests int // requests that are either in flight or scheduled

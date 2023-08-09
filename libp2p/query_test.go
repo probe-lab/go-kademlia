@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/plprobelab/go-kademlia/kad"
+
 	"github.com/benbjohnson/clock"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -38,7 +40,7 @@ func TestLibp2pCornerCase(t *testing.T) {
 	id := NewPeerID(h.ID())
 	sched := ss.NewSimpleScheduler(clk)
 	libp2pEndpoint := NewLibp2pEndpoint(ctx, h, sched)
-	rt := simplert.New[key.Key256](id.Key(), bucketSize)
+	rt := simplert.New[key.Key256, kad.NodeID[key.Key256]](id, bucketSize)
 
 	parsed, err := peer.Decode("1D3oooUnknownPeer")
 	require.NoError(t, err)

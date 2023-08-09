@@ -14,14 +14,14 @@ import (
 )
 
 type Server[K kad.Key[K], A kad.Address[A]] struct {
-	rt       kad.RoutingTable[K]
+	rt       kad.RoutingTable[K, kad.NodeID[K]]
 	endpoint endpoint.Endpoint[K, A]
 
 	peerstoreTTL              time.Duration
 	numberOfCloserPeersToSend int
 }
 
-func NewServer[K kad.Key[K], A kad.Address[A]](rt kad.RoutingTable[K], endpoint endpoint.Endpoint[K, A], cfg *ServerConfig) *Server[K, A] {
+func NewServer[K kad.Key[K], A kad.Address[A]](rt kad.RoutingTable[K, kad.NodeID[K]], endpoint endpoint.Endpoint[K, A], cfg *ServerConfig) *Server[K, A] {
 	if cfg == nil {
 		cfg = DefaultServerConfig()
 	}
