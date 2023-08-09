@@ -25,6 +25,14 @@ import (
 	"github.com/plprobelab/go-kademlia/sim"
 )
 
+var (
+	_ coordinatorInternalEvent = &eventUnroutablePeer[key.Key8]{}
+	_ coordinatorInternalEvent = &eventMessageFailed[key.Key8]{}
+	_ coordinatorInternalEvent = &eventMessageResponse[key.Key8, kadtest.StrAddr]{}
+	_ coordinatorInternalEvent = &eventAddQuery[key.Key8, kadtest.StrAddr]{}
+	_ coordinatorInternalEvent = &eventStopQuery[key.Key8]{}
+)
+
 func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key8, kadtest.StrAddr], []*sim.Endpoint[key.Key8, kadtest.StrAddr], []kad.RoutingTable[key.Key8], *litesimulator.LiteSimulator) {
 	// create node identifiers
 	nodeCount := 4
@@ -185,7 +193,8 @@ func TestExhaustiveQuery(t *testing.T) {
 	if err != nil {
 		log.Fatalf("unexpected error creating coordinator: %v", err)
 	}
-	events := c.Start(ctx)
+	siml.AddPeer(c)
+	events := c.Events()
 
 	queryID := query.QueryID("query1")
 
@@ -261,7 +270,8 @@ func TestRoutingUpdatedEventEmittedForCloserNodes(t *testing.T) {
 	if err != nil {
 		log.Fatalf("unexpected error creating coordinator: %v", err)
 	}
-	events := c.Start(ctx)
+	siml.AddPeer(c)
+	events := c.Events()
 
 	queryID := query.QueryID("query1")
 
