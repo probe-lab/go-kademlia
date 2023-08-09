@@ -14,8 +14,6 @@ import (
 	"github.com/plprobelab/go-kademlia/events/action/basicaction"
 	"github.com/plprobelab/go-kademlia/events/scheduler"
 	ss "github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
-	"github.com/plprobelab/go-kademlia/events/simulator"
-	"github.com/plprobelab/go-kademlia/events/simulator/litesimulator"
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
@@ -81,8 +79,8 @@ import (
 //	require.NoError(t, err)
 //
 //	// create and run the simulation
-//	sim := litesimulator.NewLiteSimulator(clk)
-//	simulator.AddPeers(sim, sched0, sched1)
+//	sim := sim.NewLiteSimulator(clk)
+//	sim.AddPeers(sim, sched0, sched1)
 //	sim.Run(ctx)
 //
 //	// check that the peerlist should contain node2 and node1 (in this order)
@@ -347,10 +345,10 @@ func TestElementaryQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	// create simulator
-	sim := litesimulator.NewLiteSimulator(clk)
-	simulator.AddPeers(sim, scheds...)
+	s := sim.NewLiteSimulator(clk)
+	sim.AddSchedulers(s, scheds...)
 	// run simulation
-	sim.Run(ctx)
+	s.Run(ctx)
 }
 
 func TestFailedQuery(t *testing.T) {
@@ -444,10 +442,10 @@ func TestFailedQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	// create simulator
-	sim := litesimulator.NewLiteSimulator(clk)
-	simulator.AddPeers(sim, scheds...)
+	s := sim.NewLiteSimulator(clk)
+	sim.AddSchedulers(s, scheds...)
 	// run simulation
-	sim.Run(ctx)
+	s.Run(ctx)
 
 	require.True(t, failed)
 }
@@ -559,8 +557,8 @@ func TestFailedQuery(t *testing.T) {
 //	require.NoError(t, err)
 //
 //	// create simulator
-//	sim := litesimulator.NewLiteSimulator(clk)
-//	simulator.AddPeers(sim, scheds...)
+//	sim := sim.NewLiteSimulator(clk)
+//	sim.AddPeers(sim, scheds...)
 //	// run simulation
 //	sim.Run(ctx)
 //}
@@ -622,10 +620,10 @@ func TestUnresponsivePeer(t *testing.T) {
 	require.NoError(t, err)
 
 	// create simulator
-	sim := litesimulator.NewLiteSimulator(clk)
-	simulator.AddPeers(sim, sched0, sched1)
+	s := sim.NewLiteSimulator(clk)
+	sim.AddSchedulers(s, sched0, sched1)
 	// run simulation
-	sim.Run(ctx)
+	s.Run(ctx)
 
 	// make sure the peer is marked as unreachable
 	require.Equal(t, unreachable, q.peerlist.closest.status)
@@ -709,10 +707,10 @@ func TestCornerCases(t *testing.T) {
 	}))
 
 	// create simulator
-	sim := litesimulator.NewLiteSimulator(clk)
-	simulator.AddPeers(sim, sched0)
+	s := sim.NewLiteSimulator(clk)
+	sim.AddSchedulers(s, sched0)
 	// run simulation
-	sim.Run(ctx)
+	s.Run(ctx)
 
 	require.True(t, q.done)
 }

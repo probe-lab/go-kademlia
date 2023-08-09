@@ -10,8 +10,6 @@ import (
 
 	"github.com/plprobelab/go-kademlia/events/scheduler"
 	ss "github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
-	"github.com/plprobelab/go-kademlia/events/simulator"
-	"github.com/plprobelab/go-kademlia/events/simulator/litesimulator"
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
@@ -138,9 +136,9 @@ func findNode(ctx context.Context) {
 	sq.NewSimpleQuery[key.Key8, net.IP](ctx, nodes[0].ID(), req, queryOpts...)
 
 	// create a simulator, simulating [A, B, C, D]'s simulators
-	sim := litesimulator.NewLiteSimulator(clk)
-	simulator.AddPeers(sim, schedulers...)
+	s := sim.NewLiteSimulator(clk)
+	sim.AddSchedulers(s, schedulers...)
 
 	// run the simulation until all events are processed
-	sim.Run(ctx)
+	s.Run(ctx)
 }

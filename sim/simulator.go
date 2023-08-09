@@ -1,22 +1,46 @@
-package litesimulator
+package sim
 
 import (
 	"context"
 	"time"
 
 	"github.com/benbjohnson/clock"
+
 	"github.com/plprobelab/go-kademlia/events/planner"
 	"github.com/plprobelab/go-kademlia/events/scheduler"
-	"github.com/plprobelab/go-kademlia/events/simulator"
 	"github.com/plprobelab/go-kademlia/util"
 )
+
+// Simulator is an interface for simulating a set of schedulers.
+type Simulator interface {
+	// Add adds a scheduler to the simulator
+	Add(scheduler.AwareScheduler)
+	// Remove removes a scheduler from the simulator
+	Remove(scheduler.AwareScheduler)
+	// Run runs the simulator until there are no more Actions to run
+	Run(context.Context)
+}
+
+// AddSchedulers adds a set of schedulers to a simulator
+func AddSchedulers(s Simulator, schedulers ...scheduler.AwareScheduler) {
+	for _, sched := range schedulers {
+		s.Add(sched)
+	}
+}
+
+// RemoveSchedulers removes a set of schedulers from a simulator
+func RemoveSchedulers(s Simulator, schedulers ...scheduler.AwareScheduler) {
+	for _, sched := range schedulers {
+		s.Remove(sched)
+	}
+}
 
 type LiteSimulator struct {
 	clk        *clock.Mock
 	schedulers []scheduler.AwareScheduler // replace with custom linked list
 }
 
-var _ simulator.Simulator = (*LiteSimulator)(nil)
+var _ Simulator = (*LiteSimulator)(nil)
 
 func NewLiteSimulator(clk *clock.Mock) *LiteSimulator {
 	return &LiteSimulator{
@@ -29,11 +53,11 @@ func (s *LiteSimulator) Clock() *clock.Mock {
 	return s.clk
 }
 
-func (s *LiteSimulator) AddPeer(sched scheduler.AwareScheduler) {
+func (s *LiteSimulator) Add(sched scheduler.AwareScheduler) {
 	s.schedulers = append(s.schedulers, sched)
 }
 
-func (s *LiteSimulator) RemovePeer(sched scheduler.AwareScheduler) {
+func (s *LiteSimulator) Remove(sched scheduler.AwareScheduler) {
 	for i, sch := range s.schedulers {
 		if sch == sched {
 			s.schedulers = append(s.schedulers[:i], s.schedulers[i+1:]...)

@@ -17,8 +17,6 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 
 	ss "github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
-	"github.com/plprobelab/go-kademlia/events/simulator"
-	"github.com/plprobelab/go-kademlia/events/simulator/litesimulator"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/libp2p"
@@ -144,10 +142,10 @@ func queryTest(ctx context.Context) {
 	sq.NewSimpleQuery[key.Key256, multiaddr.Multiaddr](ctx, selfA.NodeID(), req, queryOpts...)
 
 	// create simulator
-	sim := litesimulator.NewLiteSimulator(clk)
-	simulator.AddPeers(sim, schedA, schedB, schedC)
+	s := sim.NewLiteSimulator(clk)
+	sim.AddSchedulers(s, schedA, schedB, schedC)
 	// run simulation
-	sim.Run(ctx)
+	s.Run(ctx)
 }
 
 // tracerProvider returns an OpenTelemetry TracerProvider configured to use
