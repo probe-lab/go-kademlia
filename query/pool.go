@@ -7,6 +7,8 @@ import (
 
 	"github.com/benbjohnson/clock"
 
+	"github.com/plprobelab/go-kademlia/events/queue"
+	"github.com/plprobelab/go-kademlia/events/queue/chanqueue"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/kaderr"
 	"github.com/plprobelab/go-kademlia/network/address"
@@ -18,6 +20,7 @@ type Pool[K kad.Key[K], A kad.Address[A]] struct {
 	self       kad.NodeID[K]
 	queries    []*Query[K, A]
 	queryIndex map[QueryID]*Query[K, A]
+	queue      queue.EventQueue
 
 	// cfg is a copy of the optional configuration supplied to the pool
 	cfg PoolConfig
@@ -33,6 +36,7 @@ type PoolConfig struct {
 	Replication      int           // the 'k' parameter defined by Kademlia
 	QueryConcurrency int           // the maximum number of concurrent requests that each query may have in flight
 	RequestTimeout   time.Duration // the timeout queries should use for contacting a single node
+	QueueCapacity    int           // the size of the event queue
 	Clock            clock.Clock   // a clock that may replaced by a mock when testing
 }
 
@@ -77,6 +81,13 @@ func (cfg *PoolConfig) Validate() error {
 		}
 	}
 
+	if cfg.QueueCapacity < 1 {
+		return &kaderr.ConfigurationError{
+			Component: "PoolConfig",
+			Err:       fmt.Errorf("queue capacity must be greater than zero"),
+		}
+	}
+
 	return nil
 }
 
@@ -90,6 +101,7 @@ func DefaultPoolConfig() *PoolConfig {
 		Replication:      20,
 		QueryConcurrency: 3,
 		RequestTimeout:   time.Minute,
+		QueueCapacity:    128,
 	}
 }
 
@@ -103,13 +115,18 @@ func NewPool[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], cfg *PoolConfig
 	return &Pool[K, A]{
 		self:       self,
 		cfg:        *cfg,
+		queue:      chanqueue.NewChanQueue(cfg.QueueCapacity),
 		queries:    make([]*Query[K, A], 0),
 		queryIndex: make(map[QueryID]*Query[K, A]),
 	}, nil
 }
 
+func (p *Pool[K, A]) Enqueue(ctx context.Context, ev PoolEvent) {
+	p.queue.Enqueue(ctx, ev)
+}
+
 // Advance advances the state of the pool by attempting to advance one of its queries
-func (p *Pool[K, A]) Advance(ctx context.Context, ev PoolEvent) PoolState {
+func (p *Pool[K, A]) Advance(ctx context.Context) PoolState {
 	ctx, span := util.StartSpan(ctx, "Pool.Advance")
 	defer span.End()
 
@@ -119,6 +136,8 @@ func (p *Pool[K, A]) Advance(ctx context.Context, ev PoolEvent) PoolState {
 	// eventQueryID keeps track of a query that was advanced via a specific event, to avoid it
 	// being advanced twice
 	eventQueryID := InvalidQueryID
+
+	ev := p.queue.Dequeue(ctx)
 
 	switch tev := ev.(type) {
 	case *EventPoolAddQuery[K, A]:
@@ -279,7 +298,7 @@ type PoolState interface {
 // StatePoolIdle indicates that the pool is idle, i.e. there are no queries to process.
 type StatePoolIdle struct{}
 
-// StatePoolQueryMessage indicates that at a query is waiting to message a node.
+// StatePoolQueryMessage indicates that a pool query is waiting to message a node.
 type StatePoolQueryMessage[K kad.Key[K], A kad.Address[A]] struct {
 	QueryID    QueryID
 	NodeID     kad.NodeID[K]
@@ -302,7 +321,7 @@ type StatePoolQueryFinished struct {
 	Stats   QueryStats
 }
 
-// StatePoolQueryTimeout indicates that at a query has timed out.
+// StatePoolQueryTimeout indicates that a query has timed out.
 type StatePoolQueryTimeout struct {
 	QueryID QueryID
 	Stats   QueryStats
@@ -319,6 +338,7 @@ func (*StatePoolQueryTimeout) poolState()        {}
 // PoolEvent is an event intended to advance the state of a pool.
 type PoolEvent interface {
 	poolEvent()
+	Run(context.Context)
 }
 
 // EventPoolAddQuery is an event that attempts to add a new query
@@ -354,3 +374,9 @@ func (*EventPoolAddQuery[K, A]) poolEvent()        {}
 func (*EventPoolStopQuery) poolEvent()             {}
 func (*EventPoolMessageResponse[K, A]) poolEvent() {}
 func (*EventPoolMessageFailure[K]) poolEvent()     {}
+
+// Run(context.Context) ensures that Pool events can be assigned to the action.Action interface.
+func (*EventPoolAddQuery[K, A]) Run(context.Context)        {}
+func (*EventPoolStopQuery) Run(context.Context)             {}
+func (*EventPoolMessageResponse[K, A]) Run(context.Context) {}
+func (*EventPoolMessageFailure[K]) Run(context.Context)     {}

@@ -22,14 +22,6 @@ import (
 	"github.com/plprobelab/go-kademlia/sim"
 )
 
-var (
-	_ coordinatorInternalEvent = &eventUnroutablePeer[key.Key8]{}
-	_ coordinatorInternalEvent = &eventMessageFailed[key.Key8]{}
-	_ coordinatorInternalEvent = &eventMessageResponse[key.Key8, kadtest.StrAddr]{}
-	_ coordinatorInternalEvent = &eventAddQuery[key.Key8, kadtest.StrAddr]{}
-	_ coordinatorInternalEvent = &eventStopQuery[key.Key8]{}
-)
-
 func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key8, kadtest.StrAddr], []*sim.Endpoint[key.Key8, kadtest.StrAddr], []kad.RoutingTable[key.Key8, kad.NodeID[key.Key8]], *sim.LiteSimulator) {
 	// create node identifiers
 	nodeCount := 4
@@ -116,10 +108,12 @@ const peerstoreTTL = 10 * time.Minute
 var protoID = address.ProtocolID("/statemachine/1.0.0") // protocol ID for the test
 
 // expectEventType selects on the event channel until an event of the expected type is sent.
-func expectEventType(ctx context.Context, events <-chan KademliaEvent, expected KademliaEvent) (KademliaEvent, error) {
+func expectEventType(t *testing.T, ctx context.Context, events <-chan KademliaEvent, expected KademliaEvent) (KademliaEvent, error) {
+	t.Helper()
 	for {
 		select {
 		case ev := <-events:
+			t.Logf("saw event: %T\n", ev)
 			if reflect.TypeOf(ev) == reflect.TypeOf(expected) {
 				return ev, nil
 			}
@@ -127,23 +121,6 @@ func expectEventType(ctx context.Context, events <-chan KademliaEvent, expected 
 			return nil, fmt.Errorf("test deadline exceeded")
 		}
 	}
-}
-
-// Ctx returns a Context and a CancelFunc. The context will be
-// cancelled just before the test binary deadline (as
-// specified by the -timeout flag when running the test). The
-// CancelFunc may be called to cancel the context earlier than
-// the deadline.
-func Ctx(t *testing.T) (context.Context, context.CancelFunc) {
-	t.Helper()
-
-	deadline, ok := t.Deadline()
-	if !ok {
-		deadline = time.Now().Add(time.Minute)
-	} else {
-		deadline = deadline.Add(-time.Second)
-	}
-	return context.WithDeadline(context.Background(), deadline)
 }
 
 func TestConfigValidate(t *testing.T) {
@@ -160,7 +137,7 @@ func TestConfigValidate(t *testing.T) {
 }
 
 func TestExhaustiveQuery(t *testing.T) {
-	ctx, cancel := Ctx(t)
+	ctx, cancel := kadtest.Ctx(t)
 	defer cancel()
 
 	nodes, eps, rts, siml := setupSimulation(t, ctx)
@@ -201,7 +178,7 @@ func TestExhaustiveQuery(t *testing.T) {
 	}
 
 	// the query run by the coordinator should have received a response from nodes[1]
-	ev, err := expectEventType(ctx, events, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{})
+	ev, err := expectEventType(t, ctx, events, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{})
 	require.NoError(t, err)
 
 	tev := ev.(*KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr])
@@ -209,7 +186,7 @@ func TestExhaustiveQuery(t *testing.T) {
 	require.Equal(t, queryID, tev.QueryID)
 
 	// the query run by the coordinator should have received a response from nodes[2]
-	ev, err = expectEventType(ctx, events, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{})
+	ev, err = expectEventType(t, ctx, events, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{})
 	require.NoError(t, err)
 
 	tev = ev.(*KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr])
@@ -217,7 +194,7 @@ func TestExhaustiveQuery(t *testing.T) {
 	require.Equal(t, queryID, tev.QueryID)
 
 	// the query run by the coordinator should have received a response from nodes[3]
-	ev, err = expectEventType(ctx, events, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{})
+	ev, err = expectEventType(t, ctx, events, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{})
 	require.NoError(t, err)
 
 	tev = ev.(*KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr])
@@ -225,7 +202,7 @@ func TestExhaustiveQuery(t *testing.T) {
 	require.Equal(t, queryID, tev.QueryID)
 
 	// the query run by the coordinator should have completed
-	ev, err = expectEventType(ctx, events, &KademliaOutboundQueryFinishedEvent{})
+	ev, err = expectEventType(t, ctx, events, &KademliaOutboundQueryFinishedEvent{})
 	require.NoError(t, err)
 
 	require.IsType(t, &KademliaOutboundQueryFinishedEvent{}, ev)
@@ -237,7 +214,7 @@ func TestExhaustiveQuery(t *testing.T) {
 }
 
 func TestRoutingUpdatedEventEmittedForCloserNodes(t *testing.T) {
-	ctx, cancel := Ctx(t)
+	ctx, cancel := kadtest.Ctx(t)
 	defer cancel()
 
 	nodes, eps, rts, siml := setupSimulation(t, ctx)
@@ -279,7 +256,7 @@ func TestRoutingUpdatedEventEmittedForCloserNodes(t *testing.T) {
 
 	// the query run by the coordinator should have received a response from nodes[1] with closer nodes
 	// nodes[0] and nodes[2] which should trigger a routing table update
-	ev, err := expectEventType(ctx, events, &KademliaRoutingUpdatedEvent[key.Key8, kadtest.StrAddr]{})
+	ev, err := expectEventType(t, ctx, events, &KademliaRoutingUpdatedEvent[key.Key8, kadtest.StrAddr]{})
 	require.NoError(t, err)
 
 	tev := ev.(*KademliaRoutingUpdatedEvent[key.Key8, kadtest.StrAddr])
@@ -289,13 +266,93 @@ func TestRoutingUpdatedEventEmittedForCloserNodes(t *testing.T) {
 
 	// the query continues and should have received a response from nodes[2] with closer nodes
 	// nodes[1] and nodes[3] which should trigger a routing table update
-	ev, err = expectEventType(ctx, events, &KademliaRoutingUpdatedEvent[key.Key8, kadtest.StrAddr]{})
+	ev, err = expectEventType(t, ctx, events, &KademliaRoutingUpdatedEvent[key.Key8, kadtest.StrAddr]{})
 	require.NoError(t, err)
 
 	tev = ev.(*KademliaRoutingUpdatedEvent[key.Key8, kadtest.StrAddr])
 	require.Equal(t, nodes[3].ID(), tev.NodeInfo.ID())
 
 	// the query run by the coordinator should have completed
-	_, err = expectEventType(ctx, events, &KademliaOutboundQueryFinishedEvent{})
+	_, err = expectEventType(t, ctx, events, &KademliaOutboundQueryFinishedEvent{})
 	require.NoError(t, err)
+}
+
+var findNodeFn = func(n kad.NodeID[key.Key8]) (address.ProtocolID, kad.Request[key.Key8, kadtest.StrAddr]) {
+	return protoID, sim.NewRequest[key.Key8, kadtest.StrAddr](n.Key())
+}
+
+func TestBootstrap(t *testing.T) {
+	ctx, cancel := kadtest.Ctx(t)
+	defer cancel()
+
+	nodes, eps, rts, siml := setupSimulation(t, ctx)
+
+	clk := siml.Clock()
+
+	ccfg := DefaultConfig()
+	ccfg.Clock = clk
+	ccfg.PeerstoreTTL = peerstoreTTL
+
+	go func(ctx context.Context) {
+		for {
+			select {
+			case <-time.After(10 * time.Millisecond):
+				siml.Run(ctx)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}(ctx)
+
+	self := nodes[0].ID()
+	c, err := NewCoordinator[key.Key8, kadtest.StrAddr](self, eps[0], rts[0], ccfg)
+	if err != nil {
+		log.Fatalf("unexpected error creating coordinator: %v", err)
+	}
+	siml.Add(c)
+	events := c.Events()
+
+	queryID := query.QueryID("bootstrap")
+
+	seeds := []kad.NodeID[key.Key8]{
+		nodes[1].ID(),
+	}
+	err = c.Bootstrap(ctx, seeds, findNodeFn)
+	if err != nil {
+		t.Fatalf("failed to initiate bootstrap: %v", err)
+	}
+
+	// the query run by the coordinator should have received a response from nodes[1]
+	ev, err := expectEventType(t, ctx, events, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{})
+	require.NoError(t, err)
+
+	tev := ev.(*KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr])
+	require.Equal(t, nodes[1].ID(), tev.NodeID)
+	require.Equal(t, queryID, tev.QueryID)
+
+	// the query run by the coordinator should have received a response from nodes[2]
+	ev, err = expectEventType(t, ctx, events, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{})
+	require.NoError(t, err)
+
+	tev = ev.(*KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr])
+	require.Equal(t, nodes[2].ID(), tev.NodeID)
+	require.Equal(t, queryID, tev.QueryID)
+
+	// the query run by the coordinator should have received a response from nodes[3]
+	ev, err = expectEventType(t, ctx, events, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{})
+	require.NoError(t, err)
+
+	tev = ev.(*KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr])
+	require.Equal(t, nodes[3].ID(), tev.NodeID)
+	require.Equal(t, queryID, tev.QueryID)
+
+	// the query run by the coordinator should have completed
+	ev, err = expectEventType(t, ctx, events, &KademliaBootstrapFinishedEvent{})
+	require.NoError(t, err)
+
+	require.IsType(t, &KademliaBootstrapFinishedEvent{}, ev)
+	tevf := ev.(*KademliaBootstrapFinishedEvent)
+	require.Equal(t, 3, tevf.Stats.Requests)
+	require.Equal(t, 3, tevf.Stats.Success)
+	require.Equal(t, 0, tevf.Stats.Failure)
 }
