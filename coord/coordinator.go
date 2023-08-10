@@ -42,8 +42,6 @@ type Coordinator[K kad.Key[K], A kad.Address[A]] struct {
 	// ep is the message endpoint used to send requests
 	ep endpoint.Endpoint[K, A]
 
-	peerstoreTTL time.Duration
-
 	queue   queue.EventQueue
 	planner planner.AwareActionPlanner
 
@@ -331,7 +329,7 @@ func (c *Coordinator[K, A]) AddNodes(ctx context.Context, infos []kad.NodeInfo[K
 			continue
 		}
 		isNew := c.rt.AddNode(info.ID())
-		c.ep.MaybeAddToPeerstore(ctx, info, c.peerstoreTTL)
+		c.ep.MaybeAddToPeerstore(ctx, info, c.cfg.PeerstoreTTL)
 
 		if isNew {
 			c.outboundEvents <- &KademliaRoutingUpdatedEvent[K, A]{

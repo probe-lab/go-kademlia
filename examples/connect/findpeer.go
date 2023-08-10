@@ -68,8 +68,8 @@ func FindPeer(ctx context.Context) {
 	}
 	fmt.Println("connected to friend")
 
-	// target is the peer we want to find QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb
-	target, err := peer.Decode("QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb")
+	// target is the peer we want to find 12D3KooWK5eSiSMwvQk6v96JfXbuTFhuYYoCJaUUGXqJWj47HQVU
+	target, err := peer.Decode("12D3KooWK5eSiSMwvQk6v96JfXbuTFhuYYoCJaUUGXqJWj47HQVU")
 	if err != nil {
 		panic(err)
 	}
@@ -147,7 +147,7 @@ func FindPeer(ctx context.Context) {
 				fmt.Printf("  requests failed: %d\n", tev.Stats.Failure)
 				return
 			case *coord.KademliaRoutingUpdatedEvent[key.Key256, multiaddr.Multiaddr]:
-				fmt.Printf("updated routing to add node %v\n", tev.NodeInfo.ID())
+				fmt.Printf("routing updated for node %v\n", tev.NodeInfo.ID())
 			default:
 				fmt.Printf("got event: %#v\n", ev)
 			}
