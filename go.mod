@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/benbjohnson/clock v1.3.5
 	github.com/ipfs/go-cid v0.4.1
-	github.com/libp2p/go-libp2p v0.28.1
+	github.com/libp2p/go-libp2p v0.28.2
 	github.com/libp2p/go-msgio v0.3.0
 	github.com/multiformats/go-multiaddr v0.10.0
 	github.com/multiformats/go-multibase v0.2.0
@@ -81,7 +81,7 @@ require (
 	github.com/prometheus/common v0.44.0 // indirect
 	github.com/prometheus/procfs v0.11.0 // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
-	github.com/quic-go/qtls-go1-19 v0.3.2 // indirect
+	github.com/quic-go/qtls-go1-19 v0.3.3 // indirect
 	github.com/quic-go/qtls-go1-20 v0.3.0 // indirect
 	github.com/quic-go/quic-go v0.36.1 // indirect
 	github.com/quic-go/webtransport-go v0.5.3 // indirect
