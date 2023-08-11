@@ -12,7 +12,6 @@ import (
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/query"
-	"github.com/plprobelab/go-kademlia/sim"
 )
 
 func TestBootstrapConfigValidate(t *testing.T) {
@@ -58,11 +57,6 @@ func TestBootstrapConfigValidate(t *testing.T) {
 		cfg.QueueCapacity = -1
 		require.Error(t, cfg.Validate())
 	})
-}
-
-// simFindNodeRequest is a FindNodeRequestFunc that uses simulated messages
-func simFindNodeRequest(n kad.NodeID[key.Key8]) (address.ProtocolID, kad.Request[key.Key8, kadtest.StrAddr]) {
-	return address.ProtocolID("/sim/1.0.0"), sim.NewRequest[key.Key8, kadtest.StrAddr](n.Key())
 }
 
 func TestBootstrapStartsIdle(t *testing.T) {
