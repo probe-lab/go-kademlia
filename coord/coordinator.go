@@ -416,13 +416,6 @@ func (c *Coordinator[K, A]) RemovePlannedAction(ctx context.Context, a event.Pla
 	return c.planner.RemoveAction(ctx, a)
 }
 
-// moveOverdueActions moves all overdue actions from the planner to the queue.
-func (c *Coordinator[K, A]) moveOverdueActions(ctx context.Context) {
-	overdue := c.planner.PopOverdueActions(ctx)
-
-	event.EnqueueMany(ctx, c.queue, overdue)
-}
-
 // NextActionTime returns the time of the next action to run, or the current
 // time if there are actions to be run in the queue, or util.MaxTime if there
 // are no scheduled to run.
