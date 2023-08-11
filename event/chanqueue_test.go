@@ -1,20 +1,18 @@
-package chanqueue
+package event
 
 import (
 	"context"
 	"testing"
 
-	"github.com/plprobelab/go-kademlia/events/action"
-	ta "github.com/plprobelab/go-kademlia/events/action/testaction"
 	"github.com/stretchr/testify/require"
 )
 
 func TestChanQueue(t *testing.T) {
 	ctx := context.Background()
 	nEvents := 10
-	events := make([]action.Action, nEvents)
+	events := make([]Action, nEvents)
 	for i := 0; i < nEvents; i++ {
-		events[i] = ta.IntAction(i)
+		events[i] = IntAction(i)
 	}
 
 	q := NewChanQueue(nEvents)

@@ -3,8 +3,7 @@ package sim
 import (
 	"context"
 
-	ba "github.com/plprobelab/go-kademlia/events/action/basicaction"
-	"github.com/plprobelab/go-kademlia/events/scheduler"
+	"github.com/plprobelab/go-kademlia/event"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
@@ -13,18 +12,18 @@ import (
 type Router[K kad.Key[K], A kad.Address[A]] struct {
 	currStream endpoint.StreamID
 	peers      map[string]SimEndpoint[K, A]
-	scheds     map[string]scheduler.Scheduler
+	scheds     map[string]event.Scheduler
 }
 
 func NewRouter[K kad.Key[K], A kad.Address[A]]() *Router[K, A] {
 	return &Router[K, A]{
 		currStream: 1,
 		peers:      make(map[string]SimEndpoint[K, A]),
-		scheds:     make(map[string]scheduler.Scheduler),
+		scheds:     make(map[string]event.Scheduler),
 	}
 }
 
-func (r *Router[K, A]) AddPeer(id kad.NodeID[K], peer SimEndpoint[K, A], sched scheduler.Scheduler) {
+func (r *Router[K, A]) AddPeer(id kad.NodeID[K], peer SimEndpoint[K, A], sched event.Scheduler) {
 	r.peers[id.String()] = peer
 	r.scheds[id.String()] = sched
 }
@@ -45,7 +44,7 @@ func (r *Router[K, A]) SendMessage(ctx context.Context, from, to kad.NodeID[K],
 		sid = r.currStream
 		r.currStream++
 	}
-	r.scheds[to.String()].EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
+	r.scheds[to.String()].EnqueueAction(ctx, event.BasicAction(func(ctx context.Context) {
 		r.peers[to.String()].HandleMessage(ctx, from, protoID, sid, msg)
 	}))
 	return sid, nil

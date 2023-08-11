@@ -1,4 +1,4 @@
-package simpleplanner
+package event
 
 import (
 	"context"
@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/plprobelab/go-kademlia/events/action"
-	"github.com/plprobelab/go-kademlia/events/planner"
 )
 
 type SimplePlanner struct {
@@ -17,21 +15,21 @@ type SimplePlanner struct {
 	lock       sync.Mutex
 }
 
-var _ planner.AwareActionPlanner = (*SimplePlanner)(nil)
+var _ AwareActionPlanner = (*SimplePlanner)(nil)
 
 type simpleTimedAction struct {
-	action action.Action
+	action Action
 	time   time.Time
 	next   *simpleTimedAction
 }
 
-var _ planner.PlannedAction = (*simpleTimedAction)(nil)
+var _ PlannedAction = (*simpleTimedAction)(nil)
 
 func (a *simpleTimedAction) Time() time.Time {
 	return a.time
 }
 
-func (a *simpleTimedAction) Action() action.Action {
+func (a *simpleTimedAction) Action() Action {
 	return a.action
 }
 
@@ -41,7 +39,7 @@ func NewSimplePlanner(clk clock.Clock) *SimplePlanner {
 	}
 }
 
-func (p *SimplePlanner) ScheduleAction(ctx context.Context, t time.Time, a action.Action) planner.PlannedAction {
+func (p *SimplePlanner) ScheduleAction(ctx context.Context, t time.Time, a Action) PlannedAction {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -62,7 +60,7 @@ func (p *SimplePlanner) ScheduleAction(ctx context.Context, t time.Time, a actio
 	return curr.next
 }
 
-func (p *SimplePlanner) RemoveAction(ctx context.Context, pa planner.PlannedAction) bool {
+func (p *SimplePlanner) RemoveAction(ctx context.Context, pa PlannedAction) bool {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -90,11 +88,11 @@ func (p *SimplePlanner) RemoveAction(ctx context.Context, pa planner.PlannedActi
 	return false
 }
 
-func (p *SimplePlanner) PopOverdueActions(ctx context.Context) []action.Action {
+func (p *SimplePlanner) PopOverdueActions(ctx context.Context) []Action {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	var overdue []action.Action
+	var overdue []Action
 	now := p.Clock.Now()
 	curr := p.NextAction
 	for curr != nil && (curr.time.Before(now) || curr.time == now) {
@@ -110,7 +108,7 @@ func (p *SimplePlanner) NextActionTime(context.Context) time.Time {
 	defer p.lock.Unlock()
 
 	if p.NextAction == nil {
-		return planner.MaxTime
+		return MaxTime
 	}
 	return p.NextAction.time
 }

@@ -11,8 +11,7 @@ import (
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/stretchr/testify/require"
 
-	"github.com/plprobelab/go-kademlia/events/scheduler"
-	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	"github.com/plprobelab/go-kademlia/event"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
@@ -39,7 +38,7 @@ func TestEndpoint(t *testing.T) {
 	selfID := kadtest.StringID("self")
 
 	router := NewRouter[key.Key256, net.IP]()
-	sched := simplescheduler.NewSimpleScheduler(clk)
+	sched := event.NewSimpleScheduler(clk)
 
 	fakeEndpoint := NewEndpoint[key.Key256, net.IP](selfID.NodeID(), sched, router)
 
@@ -92,7 +91,7 @@ func TestEndpoint(t *testing.T) {
 	require.True(t, sched.RunOne(ctx))
 	require.False(t, sched.RunOne(ctx))
 
-	sched0 := simplescheduler.NewSimpleScheduler(clk)
+	sched0 := event.NewSimpleScheduler(clk)
 	fakeEndpoint0 := NewEndpoint[key.Key256, net.IP](node0.ID(), sched0, router)
 	rt0 := simplert.New[key.Key256, kad.NodeID[key.Key256]](node0.ID(), 2)
 	serv0 := NewServer[key.Key256, net.IP](rt0, fakeEndpoint0, DefaultServerConfig())
@@ -181,12 +180,12 @@ func TestRequestTimeout(t *testing.T) {
 	router := NewRouter[key.Key256, net.IP]()
 
 	nPeers := 2
-	scheds := make([]scheduler.AwareScheduler, nPeers)
+	scheds := make([]event.AwareScheduler, nPeers)
 	ids := make([]kad.NodeInfo[key.Key256, net.IP], nPeers)
 	fakeEndpoints := make([]*Endpoint[key.Key256, net.IP], nPeers)
 	for i := 0; i < nPeers; i++ {
 		ids[i] = kadtest.NewInfo[key.Key256, net.IP](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{byte(i)})), nil)
-		scheds[i] = simplescheduler.NewSimpleScheduler(clk)
+		scheds[i] = event.NewSimpleScheduler(clk)
 		fakeEndpoints[i] = NewEndpoint[key.Key256, net.IP](ids[i].ID(), scheds[i], router)
 	}
 

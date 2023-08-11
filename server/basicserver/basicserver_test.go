@@ -15,7 +15,7 @@ import (
 
 	"github.com/benbjohnson/clock"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	"github.com/plprobelab/go-kademlia/event"
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
@@ -47,7 +47,7 @@ func TestSimMessageHandling(t *testing.T) {
 	self := kadtest.NewInfo[key.Key256, net.IP](kadtest.NewID(key.ZeroKey256()), nil) // 0000 0000
 
 	router := sim.NewRouter[key.Key256, net.IP]()
-	sched := simplescheduler.NewSimpleScheduler(clk)
+	sched := event.NewSimpleScheduler(clk)
 	fakeEndpoint := sim.NewEndpoint[key.Key256, net.IP](self.ID(), sched, router)
 	rt := simplert.New[key.Key256, kad.NodeID[key.Key256]](self.ID(), 2)
 
@@ -131,7 +131,7 @@ func TestInvalidSimRequests(t *testing.T) {
 	self := kadtest.NewInfo[key.Key256, net.IP](kadtest.NewID(key.ZeroKey256()), nil) // 0000 0000
 
 	// create a valid server
-	sched := simplescheduler.NewSimpleScheduler(clk)
+	sched := event.NewSimpleScheduler(clk)
 	fakeEndpoint := sim.NewEndpoint[key.Key256, net.IP](self.ID(), sched, router)
 	rt := simplert.New[key.Key256, kad.NodeID[key.Key256]](self.ID(), 2)
 
@@ -176,7 +176,7 @@ func TestSimRequestNoNetworkAddress(t *testing.T) {
 	self := kadtest.NewInfo[key.Key256, net.IP](kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{0})), nil) // 0000 0000
 
 	// create a valid server
-	sched := simplescheduler.NewSimpleScheduler(clk)
+	sched := event.NewSimpleScheduler(clk)
 	fakeEndpoint := sim.NewEndpoint(self.ID(), sched, router)
 	rt := simplert.New[key.Key256, kad.NodeID[key.Key256]](self.ID(), 2)
 
@@ -324,7 +324,7 @@ func TestIPFSv1Handling(t *testing.T) {
 	self := libp2p.NewPeerID(selfPid)
 
 	router := sim.NewRouter[key.Key256, multiaddr.Multiaddr]()
-	sched := simplescheduler.NewSimpleScheduler(clk)
+	sched := event.NewSimpleScheduler(clk)
 	fakeEndpoint := sim.NewEndpoint[key.Key256, multiaddr.Multiaddr](self.NodeID(), sched, router)
 	rt := simplert.New[key.Key256, kad.NodeID[key.Key256]](self, 4)
 

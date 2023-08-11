@@ -1,16 +1,10 @@
-package simplescheduler
+package event
 
 import (
 	"context"
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/plprobelab/go-kademlia/events/action"
-	"github.com/plprobelab/go-kademlia/events/planner"
-	sp "github.com/plprobelab/go-kademlia/events/planner/simpleplanner"
-	"github.com/plprobelab/go-kademlia/events/queue"
-	"github.com/plprobelab/go-kademlia/events/queue/chanqueue"
-	"github.com/plprobelab/go-kademlia/events/scheduler"
 )
 
 const DefaultChanqueueCapacity = 1024
@@ -20,19 +14,19 @@ const DefaultChanqueueCapacity = 1024
 type SimpleScheduler struct {
 	clk clock.Clock
 
-	queue   queue.EventQueue
-	planner planner.AwareActionPlanner
+	queue   EventQueue
+	planner AwareActionPlanner
 }
 
-var _ scheduler.AwareScheduler = (*SimpleScheduler)(nil)
+var _ AwareScheduler = (*SimpleScheduler)(nil)
 
 // NewSimpleScheduler creates a new SimpleScheduler.
 func NewSimpleScheduler(clk clock.Clock) *SimpleScheduler {
 	return &SimpleScheduler{
 		clk: clk,
 
-		queue:   chanqueue.NewChanQueue(DefaultChanqueueCapacity),
-		planner: sp.NewSimplePlanner(clk),
+		queue:   NewChanQueue(DefaultChanqueueCapacity),
+		planner: NewSimplePlanner(clk),
 	}
 }
 
@@ -42,14 +36,14 @@ func (s *SimpleScheduler) Clock() clock.Clock {
 }
 
 // EnqueueAction enqueues an action to be run as soon as possible.
-func (s *SimpleScheduler) EnqueueAction(ctx context.Context, a action.Action) {
+func (s *SimpleScheduler) EnqueueAction(ctx context.Context, a Action) {
 	s.queue.Enqueue(ctx, a)
 }
 
 // ScheduleAction schedules an action to run at a specific time.
 func (s *SimpleScheduler) ScheduleAction(ctx context.Context, t time.Time,
-	a action.Action,
-) planner.PlannedAction {
+	a Action,
+) PlannedAction {
 	if s.clk.Now().After(t) {
 		s.EnqueueAction(ctx, a)
 		return nil
@@ -59,7 +53,7 @@ func (s *SimpleScheduler) ScheduleAction(ctx context.Context, t time.Time,
 
 // RemovePlannedAction removes an action from the scheduler planned actions
 // (not from the queue), does nothing if the action is not in the planner
-func (s *SimpleScheduler) RemovePlannedAction(ctx context.Context, a planner.PlannedAction) bool {
+func (s *SimpleScheduler) RemovePlannedAction(ctx context.Context, a PlannedAction) bool {
 	return s.planner.RemoveAction(ctx, a)
 }
 
@@ -67,7 +61,7 @@ func (s *SimpleScheduler) RemovePlannedAction(ctx context.Context, a planner.Pla
 func (s *SimpleScheduler) moveOverdueActions(ctx context.Context) {
 	overdue := s.planner.PopOverdueActions(ctx)
 
-	queue.EnqueueMany(ctx, s.queue, overdue)
+	EnqueueMany(ctx, s.queue, overdue)
 }
 
 // RunOne runs one action from the scheduler's queue, returning true if an
@@ -89,7 +83,7 @@ func (s *SimpleScheduler) NextActionTime(ctx context.Context) time.Time {
 	s.moveOverdueActions(ctx)
 	nextScheduled := s.planner.NextActionTime(ctx)
 
-	if !queue.Empty(s.queue) {
+	if !Empty(s.queue) {
 		return s.clk.Now()
 	}
 	return nextScheduled

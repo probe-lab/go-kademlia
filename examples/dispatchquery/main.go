@@ -16,7 +16,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 
-	ss "github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	"github.com/plprobelab/go-kademlia/event"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/libp2p"
@@ -54,7 +54,7 @@ func queryTest(ctx context.Context) {
 		Addrs: []multiaddr.Multiaddr{addrA},
 	})
 	rtA := simplert.New[key.Key256, kad.NodeID[key.Key256]](selfA, 2)
-	schedA := ss.NewSimpleScheduler(clk)
+	schedA := event.NewSimpleScheduler(clk)
 	endpointA := sim.NewEndpoint(selfA.NodeID(), schedA, router)
 	servA := basicserver.NewBasicServer[multiaddr.Multiaddr](rtA, endpointA)
 	err = endpointA.AddRequestHandler(protoID, nil, servA.HandleRequest)
@@ -74,7 +74,7 @@ func queryTest(ctx context.Context) {
 		Addrs: []multiaddr.Multiaddr{addrB},
 	})
 	rtB := simplert.New[key.Key256, kad.NodeID[key.Key256]](selfB, 2)
-	schedB := ss.NewSimpleScheduler(clk)
+	schedB := event.NewSimpleScheduler(clk)
 	endpointB := sim.NewEndpoint(selfB.NodeID(), schedB, router)
 	servB := basicserver.NewBasicServer[multiaddr.Multiaddr](rtB, endpointB)
 	err = endpointB.AddRequestHandler(protoID, nil, servB.HandleRequest)
@@ -94,7 +94,7 @@ func queryTest(ctx context.Context) {
 		Addrs: []multiaddr.Multiaddr{addrC},
 	})
 	rtC := simplert.New[key.Key256, kad.NodeID[key.Key256]](selfC, 2)
-	schedC := ss.NewSimpleScheduler(clk)
+	schedC := event.NewSimpleScheduler(clk)
 	endpointC := sim.NewEndpoint(selfC.NodeID(), schedC, router)
 	servC := basicserver.NewBasicServer[multiaddr.Multiaddr](rtC, endpointC)
 	err = endpointC.AddRequestHandler(protoID, nil, servC.HandleRequest)

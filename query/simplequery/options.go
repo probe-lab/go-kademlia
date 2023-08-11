@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/plprobelab/go-kademlia/events/scheduler"
+	"github.com/plprobelab/go-kademlia/event"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
@@ -42,7 +42,7 @@ type Config[K kad.Key[K], A kad.Address[A]] struct {
 	// Endpoint is the message endpoint used to send requests
 	Endpoint endpoint.Endpoint[K, A]
 	// Scheduler is the scheduler used to schedule events for the single worker
-	Scheduler scheduler.Scheduler
+	Scheduler event.Scheduler
 }
 
 // Apply applies the SimpleQuery options to this Option
@@ -172,7 +172,7 @@ func WithEndpoint[K kad.Key[K], A kad.Address[A]](ep endpoint.Endpoint[K, A]) Op
 	}
 }
 
-func WithScheduler[K kad.Key[K], A kad.Address[A]](sched scheduler.Scheduler) Option[K, A] {
+func WithScheduler[K kad.Key[K], A kad.Address[A]](sched event.Scheduler) Option[K, A] {
 	return func(cfg *Config[K, A]) error {
 		if sched == nil {
 			return fmt.Errorf("SimpleQuery option Scheduler cannot be nil")

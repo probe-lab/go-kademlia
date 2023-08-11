@@ -4,6 +4,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	mh "github.com/multiformats/go-multihash"
 	mhreg "github.com/multiformats/go-multihash/core"
+
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 )

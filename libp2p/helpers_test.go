@@ -6,12 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/plprobelab/go-kademlia/kad"
-
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 
+	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/sim"
 )

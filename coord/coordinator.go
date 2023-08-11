@@ -8,11 +8,7 @@ import (
 
 	"github.com/benbjohnson/clock"
 
-	"github.com/plprobelab/go-kademlia/events/action"
-	"github.com/plprobelab/go-kademlia/events/planner"
-	sp "github.com/plprobelab/go-kademlia/events/planner/simpleplanner"
-	"github.com/plprobelab/go-kademlia/events/queue"
-	"github.com/plprobelab/go-kademlia/events/queue/chanqueue"
+	"github.com/plprobelab/go-kademlia/event"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/kaderr"
 	"github.com/plprobelab/go-kademlia/key"
@@ -42,8 +38,8 @@ type Coordinator[K kad.Key[K], A kad.Address[A]] struct {
 
 	peerstoreTTL time.Duration
 
-	queue   queue.EventQueue
-	planner planner.AwareActionPlanner
+	queue   event.EventQueue
+	planner event.AwareActionPlanner
 
 	outboundEvents chan KademliaEvent
 }
@@ -97,8 +93,8 @@ func NewCoordinator[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], ep endpo
 		rt:             rt,
 		qp:             qp,
 		outboundEvents: make(chan KademliaEvent, 20),
-		queue:          chanqueue.NewChanQueue(DefaultChanqueueCapacity),
-		planner:        sp.NewSimplePlanner(cfg.Clock),
+		queue:          event.NewChanQueue(DefaultChanqueueCapacity),
+		planner:        event.NewSimplePlanner(cfg.Clock),
 	}, nil
 }
 
@@ -370,11 +366,11 @@ func (c *Coordinator[K, A]) Clock() clock.Clock {
 	return c.cfg.Clock
 }
 
-func (c *Coordinator[K, A]) EnqueueAction(ctx context.Context, a action.Action) {
+func (c *Coordinator[K, A]) EnqueueAction(ctx context.Context, a event.Action) {
 	c.queue.Enqueue(ctx, a)
 }
 
-func (c *Coordinator[K, A]) ScheduleAction(ctx context.Context, t time.Time, a action.Action) planner.PlannedAction {
+func (c *Coordinator[K, A]) ScheduleAction(ctx context.Context, t time.Time, a event.Action) event.PlannedAction {
 	if c.cfg.Clock.Now().After(t) {
 		c.EnqueueAction(ctx, a)
 		return nil
@@ -382,7 +378,7 @@ func (c *Coordinator[K, A]) ScheduleAction(ctx context.Context, t time.Time, a a
 	return c.planner.ScheduleAction(ctx, t, a)
 }
 
-func (c *Coordinator[K, A]) RemovePlannedAction(ctx context.Context, a planner.PlannedAction) bool {
+func (c *Coordinator[K, A]) RemovePlannedAction(ctx context.Context, a event.PlannedAction) bool {
 	return c.planner.RemoveAction(ctx, a)
 }
 
@@ -399,7 +395,7 @@ func (c *Coordinator[K, A]) RunOne(ctx context.Context) bool {
 func (c *Coordinator[K, A]) moveOverdueActions(ctx context.Context) {
 	overdue := c.planner.PopOverdueActions(ctx)
 
-	queue.EnqueueMany(ctx, c.queue, overdue)
+	event.EnqueueMany(ctx, c.queue, overdue)
 }
 
 // NextActionTime returns the time of the next action to run, or the current
@@ -409,7 +405,7 @@ func (c *Coordinator[K, A]) NextActionTime(ctx context.Context) time.Time {
 	c.moveOverdueActions(ctx)
 	nextScheduled := c.planner.NextActionTime(ctx)
 
-	if !queue.Empty(c.queue) {
+	if !event.Empty(c.queue) {
 		return c.cfg.Clock.Now()
 	}
 	return nextScheduled
