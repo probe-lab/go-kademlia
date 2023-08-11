@@ -147,6 +147,9 @@ func NewCoordinator[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], ep endpo
 
 	bootstrapCfg := routing.DefaultBootstrapConfig[K, A]()
 	bootstrapCfg.Clock = cfg.Clock
+	bootstrapCfg.Timeout = cfg.QueryTimeout
+	bootstrapCfg.RequestConcurrency = cfg.RequestConcurrency
+	bootstrapCfg.RequestTimeout = cfg.RequestTimeout
 
 	bootstrap, err := routing.NewBootstrap(self, bootstrapCfg)
 	if err != nil {
