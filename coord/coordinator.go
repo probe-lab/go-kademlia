@@ -66,10 +66,15 @@ type Coordinator[K kad.Key[K], A kad.Address[A]] struct {
 const DefaultChanqueueCapacity = 1024
 
 type Config struct {
-	// TODO: review if this is needed here
 	PeerstoreTTL time.Duration // duration for which a peer is kept in the peerstore
 
 	Clock clock.Clock // a clock that may replaced by a mock when testing
+
+	QueryConcurrency int           // the maximum number of queries that may be waiting for message responses at any one time
+	QueryTimeout     time.Duration // the time to wait before terminating a query that is not making progress
+
+	RequestConcurrency int           // the maximum number of concurrent requests that each query may have in flight
+	RequestTimeout     time.Duration // the timeout queries should use for contacting a single node
 }
 
 // Validate checks the configuration options and returns an error if any have invalid values.
@@ -81,13 +86,43 @@ func (cfg *Config) Validate() error {
 		}
 	}
 
+	if cfg.QueryConcurrency < 1 {
+		return &kaderr.ConfigurationError{
+			Component: "CoordinatorConfig",
+			Err:       fmt.Errorf("query concurrency must be greater than zero"),
+		}
+	}
+	if cfg.QueryTimeout < 1 {
+		return &kaderr.ConfigurationError{
+			Component: "CoordinatorConfig",
+			Err:       fmt.Errorf("query timeout must be greater than zero"),
+		}
+	}
+
+	if cfg.RequestConcurrency < 1 {
+		return &kaderr.ConfigurationError{
+			Component: "CoordinatorConfig",
+			Err:       fmt.Errorf("request concurrency must be greater than zero"),
+		}
+	}
+
+	if cfg.RequestTimeout < 1 {
+		return &kaderr.ConfigurationError{
+			Component: "CoordinatorConfig",
+			Err:       fmt.Errorf("request timeout must be greater than zero"),
+		}
+	}
 	return nil
 }
 
 func DefaultConfig() *Config {
 	return &Config{
-		Clock:        clock.New(), // use standard time
-		PeerstoreTTL: 10 * time.Minute,
+		Clock:              clock.New(), // use standard time
+		PeerstoreTTL:       10 * time.Minute,
+		QueryConcurrency:   3,
+		QueryTimeout:       5 * time.Minute,
+		RequestConcurrency: 3,
+		RequestTimeout:     time.Minute,
 	}
 }
 
@@ -100,6 +135,10 @@ func NewCoordinator[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], ep endpo
 
 	qpCfg := query.DefaultPoolConfig()
 	qpCfg.Clock = cfg.Clock
+	qpCfg.Concurrency = cfg.QueryConcurrency
+	qpCfg.Timeout = cfg.QueryTimeout
+	qpCfg.QueryConcurrency = cfg.RequestConcurrency
+	qpCfg.RequestTimeout = cfg.RequestTimeout
 
 	qp, err := query.NewPool[K, A](self, qpCfg)
 	if err != nil {
