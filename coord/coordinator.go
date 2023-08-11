@@ -176,7 +176,7 @@ func (c *Coordinator[K, A]) RunOne(ctx context.Context) bool {
 	bstate := c.bootstrap.Advance(ctx)
 	switch st := bstate.(type) {
 	case *routing.StateBootstrapMessage[K, A]:
-		c.attemptSendMessage(ctx, st.ProtocolID, st.NodeID, st.Message, st.QueryID, st.Stats)
+		c.sendBootstrapMessage(ctx, st.ProtocolID, st.NodeID, st.Message, st.QueryID, st.Stats)
 		return true
 
 	case *routing.StateBootstrapWaiting:
@@ -200,7 +200,7 @@ func (c *Coordinator[K, A]) RunOne(ctx context.Context) bool {
 	state := c.pool.Advance(ctx)
 	switch st := state.(type) {
 	case *query.StatePoolQueryMessage[K, A]:
-		c.attemptSendMessage(ctx, st.ProtocolID, st.NodeID, st.Message, st.QueryID, st.Stats)
+		c.sendQueryMessage(ctx, st.ProtocolID, st.NodeID, st.Message, st.QueryID, st.Stats)
 		return true
 	case *query.StatePoolWaitingAtCapacity:
 		// TODO
@@ -225,8 +225,8 @@ func (c *Coordinator[K, A]) RunOne(ctx context.Context) bool {
 	return false
 }
 
-func (c *Coordinator[K, A]) attemptSendMessage(ctx context.Context, protoID address.ProtocolID, to kad.NodeID[K], msg kad.Request[K, A], queryID query.QueryID, stats query.QueryStats) {
-	ctx, span := util.StartSpan(ctx, "Coordinator.attemptSendMessage")
+func (c *Coordinator[K, A]) sendQueryMessage(ctx context.Context, protoID address.ProtocolID, to kad.NodeID[K], msg kad.Request[K, A], queryID query.QueryID, stats query.QueryStats) {
+	ctx, span := util.StartSpan(ctx, "Coordinator.sendQueryMessage")
 	defer span.End()
 
 	onSendError := func(ctx context.Context, err error) {
@@ -266,20 +266,65 @@ func (c *Coordinator[K, A]) attemptSendMessage(ctx context.Context, protoID addr
 			Stats:    stats,
 		}
 
-		if queryID == query.QueryID("bootstrap") {
-			bev := &routing.EventBootstrapMessageResponse[K, A]{
-				NodeID:   to,
-				Response: resp,
-			}
-			c.bootstrap.Enqueue(ctx, bev)
-		}
-
 		qev := &query.EventPoolMessageResponse[K, A]{
 			NodeID:   to,
 			QueryID:  queryID,
 			Response: resp,
 		}
 		c.pool.Enqueue(ctx, qev)
+	}
+
+	err := c.ep.SendRequestHandleResponse(ctx, protoID, to, msg, msg.EmptyResponse(), 0, onMessageResponse)
+	if err != nil {
+		onSendError(ctx, err)
+	}
+}
+
+func (c *Coordinator[K, A]) sendBootstrapMessage(ctx context.Context, protoID address.ProtocolID, to kad.NodeID[K], msg kad.Request[K, A], queryID query.QueryID, stats query.QueryStats) {
+	ctx, span := util.StartSpan(ctx, "Coordinator.sendBootstrapMessage")
+	defer span.End()
+
+	onSendError := func(ctx context.Context, err error) {
+		if errors.Is(err, endpoint.ErrCannotConnect) {
+			// here we can notify that the peer is unroutable, which would feed into peerstore and routing table
+			// TODO: remove from routing table
+			return
+		}
+
+		bev := &routing.EventBootstrapMessageFailure[K]{
+			NodeID: to,
+			Error:  err,
+		}
+		c.bootstrap.Enqueue(ctx, bev)
+	}
+
+	onMessageResponse := func(ctx context.Context, resp kad.Response[K, A], err error) {
+		if err != nil {
+			onSendError(ctx, err)
+			return
+		}
+
+		if resp != nil {
+			candidates := resp.CloserNodes()
+			if len(candidates) > 0 {
+				// ignore error here
+				c.AddNodes(ctx, candidates)
+			}
+		}
+
+		// notify caller so they have chance to stop query
+		c.outboundEvents <- &KademliaOutboundQueryProgressedEvent[K, A]{
+			NodeID:   to,
+			QueryID:  queryID,
+			Response: resp,
+			Stats:    stats,
+		}
+
+		bev := &routing.EventBootstrapMessageResponse[K, A]{
+			NodeID:   to,
+			Response: resp,
+		}
+		c.bootstrap.Enqueue(ctx, bev)
 	}
 
 	err := c.ep.SendRequestHandleResponse(ctx, protoID, to, msg, msg.EmptyResponse(), 0, onMessageResponse)
