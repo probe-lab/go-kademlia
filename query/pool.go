@@ -7,8 +7,7 @@ import (
 
 	"github.com/benbjohnson/clock"
 
-	"github.com/plprobelab/go-kademlia/events/queue"
-	"github.com/plprobelab/go-kademlia/events/queue/chanqueue"
+	"github.com/plprobelab/go-kademlia/event"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/kaderr"
 	"github.com/plprobelab/go-kademlia/network/address"
@@ -20,7 +19,7 @@ type Pool[K kad.Key[K], A kad.Address[A]] struct {
 	self       kad.NodeID[K]
 	queries    []*Query[K, A]
 	queryIndex map[QueryID]*Query[K, A]
-	queue      queue.EventQueue
+	queue      event.EventQueue
 
 	// cfg is a copy of the optional configuration supplied to the pool
 	cfg PoolConfig
@@ -115,7 +114,7 @@ func NewPool[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], cfg *PoolConfig
 	return &Pool[K, A]{
 		self:       self,
 		cfg:        *cfg,
-		queue:      chanqueue.NewChanQueue(cfg.QueueCapacity),
+		queue:      event.NewChanQueue(cfg.QueueCapacity),
 		queries:    make([]*Query[K, A], 0),
 		queryIndex: make(map[QueryID]*Query[K, A]),
 	}, nil

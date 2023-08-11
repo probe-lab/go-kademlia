@@ -20,7 +20,7 @@ import (
 )
 
 // A StateMachine progresses through a set of states in response to transition events.
-type StateMachine[S any, E action.Action] interface {
+type StateMachine[S any, E event.Action] interface {
 	// Enqueue enqueues an event to be processed by the state machine.
 	Enqueue(context.Context, E)
 	// Advance advances the state of the state machine.
@@ -50,15 +50,10 @@ type Coordinator[K kad.Key[K], A kad.Address[A]] struct {
 	ep endpoint.Endpoint[K, A]
 
 	// queue not used
-	queue queue.EventQueue
+	queue event.EventQueue
 
-<<<<<<< HEAD
-	queue   event.EventQueue
-	planner event.AwareActionPlanner
-=======
 	// planner not used
-	planner planner.AwareActionPlanner
->>>>>>> 0579b79 (Integrate bootstrap into coordinator)
+	planner event.AwareActionPlanner
 
 	outboundEvents chan KademliaEvent
 }

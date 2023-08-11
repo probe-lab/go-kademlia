@@ -7,8 +7,7 @@ import (
 
 	"github.com/benbjohnson/clock"
 
-	"github.com/plprobelab/go-kademlia/events/queue"
-	"github.com/plprobelab/go-kademlia/events/queue/chanqueue"
+	"github.com/plprobelab/go-kademlia/event"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/kaderr"
 	"github.com/plprobelab/go-kademlia/network/address"
@@ -23,7 +22,7 @@ type Bootstrap[K kad.Key[K], A kad.Address[A]] struct {
 	// qry is the query used by the bootstrap process
 	qry *query.Query[K, A]
 
-	queue queue.EventQueue
+	queue event.EventQueue
 
 	// cfg is a copy of the optional configuration supplied to the Bootstrap
 	cfg BootstrapConfig[K, A]
@@ -100,7 +99,7 @@ func NewBootstrap[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], cfg *Boots
 	return &Bootstrap[K, A]{
 		self:  self,
 		cfg:   *cfg,
-		queue: chanqueue.NewChanQueue(cfg.QueueCapacity),
+		queue: event.NewChanQueue(cfg.QueueCapacity),
 	}, nil
 }
 
