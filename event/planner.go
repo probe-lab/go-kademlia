@@ -1,10 +1,8 @@
-package planner
+package event
 
 import (
 	"context"
 	"time"
-
-	"github.com/plprobelab/go-kademlia/events/action"
 )
 
 // MaxTime is the maximum time.Time value
@@ -16,19 +14,19 @@ type PlannedAction interface {
 	// Time returns the time at which the action is scheduled to run
 	Time() time.Time
 	// Action returns the action that is scheduled to run
-	Action() action.Action
+	Action() Action
 }
 
 // ActionPlanner is an interface for scheduling actions at a specific time.
 type ActionPlanner interface {
 	// ScheduleAction schedules an action to run at a specific time
-	ScheduleAction(context.Context, time.Time, action.Action) PlannedAction
+	ScheduleAction(context.Context, time.Time, Action) PlannedAction
 	// RemoveAction removes an action from the planner
 	RemoveAction(context.Context, PlannedAction) bool
 
 	// PopOverdueActions returns all actions that are overdue and removes them
 	// from the planner
-	PopOverdueActions(context.Context) []action.Action
+	PopOverdueActions(context.Context) []Action
 }
 
 // MultiActionPlanner is an interface for scheduling multiple actions at
@@ -37,15 +35,15 @@ type MultiActionPlanner interface {
 	ActionPlanner
 
 	// ScheduleActions schedules multiple actions at specific times
-	ScheduleActions(context.Context, []time.Time, []action.Action) []PlannedAction
+	ScheduleActions(context.Context, []time.Time, []Action) []PlannedAction
 	// RemoveActions removes multiple actions from the planner
 	RemoveActions(context.Context, []PlannedAction)
 }
 
 // ScheduleActions schedules multiple actions at specific times using a planner.
 func ScheduleActions(ctx context.Context, p ActionPlanner,
-	times []time.Time, actions []action.Action) []PlannedAction {
-
+	times []time.Time, actions []Action,
+) []PlannedAction {
 	if len(times) != len(actions) {
 		return nil
 	}

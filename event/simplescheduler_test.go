@@ -1,4 +1,4 @@
-package simplescheduler
+package event
 
 import (
 	"context"
@@ -6,9 +6,6 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	ta "github.com/plprobelab/go-kademlia/events/action/testaction"
-	"github.com/plprobelab/go-kademlia/events/planner"
-	"github.com/plprobelab/go-kademlia/events/scheduler"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,10 +18,10 @@ func TestSimpleScheduler(t *testing.T) {
 	require.Equal(t, clk.Now(), sched.Clock().Now())
 
 	nActions := 10
-	actions := make([]*ta.FuncAction, nActions)
+	actions := make([]*FuncAction, nActions)
 
 	for i := 0; i < nActions; i++ {
-		actions[i] = ta.NewFuncAction(i)
+		actions[i] = NewFuncAction(i)
 	}
 
 	sched.EnqueueAction(ctx, actions[0])
@@ -32,7 +29,7 @@ func TestSimpleScheduler(t *testing.T) {
 	sched.RunOne(ctx)
 	require.True(t, actions[0].Ran)
 
-	scheduler.ScheduleActionIn(ctx, sched, time.Second, actions[1])
+	ScheduleActionIn(ctx, sched, time.Second, actions[1])
 	require.False(t, actions[1].Ran)
 	sched.EnqueueAction(ctx, actions[2])
 	clk.Add(2 * time.Second)
@@ -44,7 +41,7 @@ func TestSimpleScheduler(t *testing.T) {
 	require.True(t, actions[1].Ran)
 	sched.RunOne(ctx)
 
-	scheduler.ScheduleActionIn(ctx, sched, -1*time.Second, actions[3])
+	ScheduleActionIn(ctx, sched, -1*time.Second, actions[3])
 	require.False(t, actions[3].Ran)
 	sched.RunOne(ctx)
 	require.True(t, actions[3].Ran)
@@ -70,6 +67,5 @@ func TestSimpleScheduler(t *testing.T) {
 	sched.RunOne(ctx)
 	require.False(t, actions[6].Ran)
 	// empty queue
-	require.Equal(t, planner.MaxTime, sched.NextActionTime(ctx))
-
+	require.Equal(t, MaxTime, sched.NextActionTime(ctx))
 }

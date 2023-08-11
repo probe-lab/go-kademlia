@@ -1,4 +1,4 @@
-package basicaction
+package event
 
 import (
 	"context"

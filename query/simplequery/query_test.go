@@ -11,9 +11,7 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/plprobelab/go-kademlia/events/action/basicaction"
-	"github.com/plprobelab/go-kademlia/events/scheduler"
-	ss "github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	"github.com/plprobelab/go-kademlia/event"
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
@@ -102,7 +100,7 @@ func TestInvalidQueryOptions(t *testing.T) {
 
 	router := sim.NewRouter[key.Key256, net.IP]()
 	node := kadtest.StringID("node0")
-	sched := ss.NewSimpleScheduler(clk)
+	sched := event.NewSimpleScheduler(clk)
 	fendpoint := sim.NewEndpoint[key.Key256, net.IP](node, sched, router)
 	rt := simplert.New[key.Key256, kad.NodeID[key.Key256]](node, 1)
 
@@ -195,13 +193,13 @@ func TestInvalidQueryOptions(t *testing.T) {
 func simulationSetup(t *testing.T, ctx context.Context, n, bucketSize int,
 	clk clock.Clock, protoID address.ProtocolID, peerstoreTTL time.Duration,
 	defaultQueryOpts []Option[key.Key8, net.IP]) (
-	[]kad.NodeInfo[key.Key8, net.IP], []scheduler.AwareScheduler, []sim.SimEndpoint[key.Key8, net.IP],
+	[]kad.NodeInfo[key.Key8, net.IP], []event.AwareScheduler, []sim.SimEndpoint[key.Key8, net.IP],
 	[]kad.RoutingTable[key.Key8, kad.NodeID[key.Key8]], []server.Server[key.Key8], [][]Option[key.Key8, net.IP],
 ) {
 	router := sim.NewRouter[key.Key8, net.IP]()
 
 	ids := make([]kad.NodeInfo[key.Key8, net.IP], n)
-	scheds := make([]scheduler.AwareScheduler, n)
+	scheds := make([]event.AwareScheduler, n)
 	fendpoints := make([]sim.SimEndpoint[key.Key8, net.IP], n)
 	rts := make([]kad.RoutingTable[key.Key8, kad.NodeID[key.Key8]], n)
 	servers := make([]server.Server[key.Key8], n)
@@ -209,7 +207,7 @@ func simulationSetup(t *testing.T, ctx context.Context, n, bucketSize int,
 	spacing := 256 / n
 
 	for i := 0; i < n; i++ {
-		scheds[i] = ss.NewSimpleScheduler(clk)
+		scheds[i] = event.NewSimpleScheduler(clk)
 		ids[i] = kadtest.NewInfo[key.Key8, net.IP](kadtest.NewID(key.Key8(uint8(i*spacing))), nil)
 		fendpoints[i] = sim.NewEndpoint[key.Key8, net.IP](ids[i].ID(), scheds[i], router)
 		rts[i] = simplert.New[key.Key8, kad.NodeID[key.Key8]](ids[i].ID(), bucketSize)
@@ -574,8 +572,8 @@ func TestUnresponsivePeer(t *testing.T) {
 	router := sim.NewRouter[key.Key8, net.IP]()
 	node0 := kadtest.NewInfo[key.Key8, net.IP](kadtest.NewID(key.Key8(0)), nil)
 	node1 := kadtest.NewInfo[key.Key8, net.IP](kadtest.NewID(key.Key8(1)), nil)
-	sched0 := ss.NewSimpleScheduler(clk)
-	sched1 := ss.NewSimpleScheduler(clk)
+	sched0 := event.NewSimpleScheduler(clk)
+	sched1 := event.NewSimpleScheduler(clk)
 	fendpoint0 := sim.NewEndpoint[key.Key8, net.IP](node0.ID(), sched0, router)
 	fendpoint1 := sim.NewEndpoint[key.Key8, net.IP](node1.ID(), sched1, router)
 	rt0 := simplert.New[key.Key8, kad.NodeID[key.Key8]](node0.ID(), bucketSize)
@@ -639,7 +637,7 @@ func TestCornerCases(t *testing.T) {
 
 	router := sim.NewRouter[key.Key8, net.IP]()
 	node0 := kadtest.NewInfo[key.Key8, net.IP](kadtest.NewID(key.Key8(0x00)), nil)
-	sched0 := ss.NewSimpleScheduler(clk)
+	sched0 := event.NewSimpleScheduler(clk)
 	fendpoint0 := sim.NewEndpoint(node0.ID(), sched0, router)
 	rt0 := simplert.New[key.Key8, kad.NodeID[key.Key8]](node0.ID(), bucketSize)
 
@@ -702,7 +700,7 @@ func TestCornerCases(t *testing.T) {
 
 	// cancel contex
 	cancel()
-	sched0.EnqueueAction(ctx, basicaction.BasicAction(func(context.Context) {
+	sched0.EnqueueAction(ctx, event.BasicAction(func(context.Context) {
 		q.requestError(ctx, node1.ID(), errors.New(""))
 	}))
 

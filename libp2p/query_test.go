@@ -5,20 +5,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/plprobelab/go-kademlia/kad"
-
 	"github.com/benbjohnson/clock"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
-	ss "github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	"github.com/stretchr/testify/require"
+
+	"github.com/plprobelab/go-kademlia/event"
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
+	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/query/simplequery"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
 	"github.com/plprobelab/go-kademlia/sim"
-	"github.com/stretchr/testify/require"
 )
 
 // TestLibp2pCornerCase tests that the newRequest(ctx) can fail fast if the
@@ -38,7 +38,7 @@ func TestLibp2pCornerCase(t *testing.T) {
 	h, err := libp2p.New()
 	require.NoError(t, err)
 	id := NewPeerID(h.ID())
-	sched := ss.NewSimpleScheduler(clk)
+	sched := event.NewSimpleScheduler(clk)
 	libp2pEndpoint := NewLibp2pEndpoint(ctx, h, sched)
 	rt := simplert.New[key.Key256, kad.NodeID[key.Key256]](id, bucketSize)
 

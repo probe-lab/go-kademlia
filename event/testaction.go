@@ -1,16 +1,14 @@
-package testaction
+package event
 
 import (
 	"context"
-
-	"github.com/plprobelab/go-kademlia/events/action"
 )
 
 // IntAction is an action that does nothing but is used to test the scheduler.
 // An IntAction is equal to another IntAction if they have the same integer
 type IntAction int
 
-var _ action.Action = (*IntAction)(nil)
+var _ Action = (*IntAction)(nil)
 
 // Run does nothing
 func (a IntAction) Run(context.Context) {}
@@ -22,7 +20,7 @@ type FuncAction struct {
 	Int int
 }
 
-var _ action.Action = (*FuncAction)(nil)
+var _ Action = (*FuncAction)(nil)
 
 // NewFuncAction returns a new FuncAction
 func NewFuncAction(i int) *FuncAction {

@@ -9,7 +9,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 
-	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	"github.com/plprobelab/go-kademlia/event"
 	tutil "github.com/plprobelab/go-kademlia/examples/util"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
@@ -40,7 +40,7 @@ func FindPeer(ctx context.Context) {
 	// create a simple routing table, with bucket size 20
 	rt := simplert.New[key.Key256, kad.NodeID[key.Key256]](pid, 20)
 	// create a scheduler using real time
-	sched := simplescheduler.NewSimpleScheduler(clk)
+	sched := event.NewSimpleScheduler(clk)
 	// create a message endpoint is used to communicate with other peers
 	msgEndpoint := libp2p.NewLibp2pEndpoint(ctx, h, sched)
 

@@ -6,16 +6,15 @@ import (
 	"strconv"
 	"time"
 
-	ba "github.com/plprobelab/go-kademlia/events/action/basicaction"
-	"github.com/plprobelab/go-kademlia/events/scheduler"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
+	"github.com/plprobelab/go-kademlia/event"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"github.com/plprobelab/go-kademlia/util"
-
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // note that the returned []kad.NodeID are expected to be of the same type
@@ -40,7 +39,7 @@ type SimpleQuery[K kad.Key[K], A kad.Address[A]] struct {
 
 	msgEndpoint endpoint.Endpoint[K, A]
 	rt          kad.RoutingTable[K, kad.NodeID[K]]
-	sched       scheduler.Scheduler
+	sched       event.Scheduler
 
 	inflightRequests int // requests that are either in flight or scheduled
 	peerlist         *PeerList[K, A]
@@ -147,7 +146,7 @@ func (q *SimpleQuery[K, A]) enqueueNewRequests(ctx context.Context) {
 
 	for i := 0; i < newRequestsToSend; i++ {
 		// add new pending request(s) for this query to eventqueue
-		q.sched.EnqueueAction(ctx, ba.BasicAction(q.newRequest))
+		q.sched.EnqueueAction(ctx, event.BasicAction(q.newRequest))
 	}
 	// increase number of inflight requests. Note that it counts both queued
 	// requests and requests in flight

@@ -8,8 +8,7 @@ import (
 
 	"github.com/benbjohnson/clock"
 
-	"github.com/plprobelab/go-kademlia/events/scheduler"
-	ss "github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	"github.com/plprobelab/go-kademlia/event"
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
@@ -64,14 +63,14 @@ func findNode(ctx context.Context) {
 
 	rts := make([]*simplert.SimpleRT[key.Key8, kad.NodeID[key.Key8]], len(nodes))
 	eps := make([]*sim.Endpoint[key.Key8, net.IP], len(nodes))
-	schedulers := make([]scheduler.AwareScheduler, len(nodes))
+	schedulers := make([]event.AwareScheduler, len(nodes))
 	servers := make([]server.Server[key.Key8], len(nodes))
 
 	for i := 0; i < len(nodes); i++ {
 		// create a routing table, with bucket size 2
 		rts[i] = simplert.New[key.Key8, kad.NodeID[key.Key8]](nodes[i].ID(), 2)
 		// create a scheduler based on the mock clock
-		schedulers[i] = ss.NewSimpleScheduler(clk)
+		schedulers[i] = event.NewSimpleScheduler(clk)
 		// create a fake endpoint for the node, communicating through the router
 		eps[i] = sim.NewEndpoint[key.Key8, net.IP](nodes[i].ID(), schedulers[i], router)
 		// create a server instance for the node

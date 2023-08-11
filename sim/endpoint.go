@@ -7,9 +7,7 @@ import (
 	"sync"
 	"time"
 
-	ba "github.com/plprobelab/go-kademlia/events/action/basicaction"
-	"github.com/plprobelab/go-kademlia/events/planner"
-	"github.com/plprobelab/go-kademlia/events/scheduler"
+	"github.com/plprobelab/go-kademlia/event"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
@@ -31,7 +29,7 @@ type SimEndpoint[K kad.Key[K], A kad.Address[A]] interface {
 // It simulates a network and handles message exchanges between multiple peers in a simulation.
 type Endpoint[K kad.Key[K], A kad.Address[A]] struct {
 	self  kad.NodeID[K]
-	sched scheduler.Scheduler // client
+	sched event.Scheduler // client
 
 	peerstore    map[string]kad.NodeInfo[K, A]
 	connStatus   map[string]endpoint.Connectedness
@@ -39,14 +37,14 @@ type Endpoint[K kad.Key[K], A kad.Address[A]] struct {
 
 	streamMu       sync.Mutex                                             // guards access to streamFollowup and streamTimeout
 	streamFollowup map[endpoint.StreamID]endpoint.ResponseHandlerFn[K, A] // client
-	streamTimeout  map[endpoint.StreamID]planner.PlannedAction            // client
+	streamTimeout  map[endpoint.StreamID]event.PlannedAction              // client
 
 	router *Router[K, A]
 }
 
 var _ SimEndpoint[key.Key256, net.IP] = (*Endpoint[key.Key256, net.IP])(nil)
 
-func NewEndpoint[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], sched scheduler.Scheduler, router *Router[K, A]) *Endpoint[K, A] {
+func NewEndpoint[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], sched event.Scheduler, router *Router[K, A]) *Endpoint[K, A] {
 	e := &Endpoint[K, A]{
 		self:         self,
 		sched:        sched,
@@ -56,7 +54,7 @@ func NewEndpoint[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], sched sched
 		connStatus: make(map[string]endpoint.Connectedness),
 
 		streamFollowup: make(map[endpoint.StreamID]endpoint.ResponseHandlerFn[K, A]),
-		streamTimeout:  make(map[endpoint.StreamID]planner.PlannedAction),
+		streamTimeout:  make(map[endpoint.StreamID]event.PlannedAction),
 
 		router: router,
 	}
@@ -118,7 +116,7 @@ func (e *Endpoint[K, A]) SendRequestHandleResponse(ctx context.Context,
 
 	if err := e.DialPeer(ctx, id); err != nil {
 		span.RecordError(err)
-		e.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
+		e.sched.EnqueueAction(ctx, event.BasicAction(func(ctx context.Context) {
 			handleResp(ctx, nil, err)
 		}))
 		return nil
@@ -131,7 +129,7 @@ func (e *Endpoint[K, A]) SendRequestHandleResponse(ctx context.Context,
 	sid, err := e.router.SendMessage(ctx, e.self, addr.ID(), protoID, 0, req)
 	if err != nil {
 		span.RecordError(err)
-		e.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
+		e.sched.EnqueueAction(ctx, event.BasicAction(func(ctx context.Context) {
 			handleResp(ctx, nil, err)
 		}))
 		return nil
@@ -142,8 +140,8 @@ func (e *Endpoint[K, A]) SendRequestHandleResponse(ctx context.Context,
 	e.streamFollowup[sid] = handleResp
 	// timeout
 	if timeout != 0 {
-		e.streamTimeout[sid] = scheduler.ScheduleActionIn(ctx, e.sched, timeout,
-			ba.BasicAction(func(ctx context.Context) {
+		e.streamTimeout[sid] = event.ScheduleActionIn(ctx, e.sched, timeout,
+			event.BasicAction(func(ctx context.Context) {
 				ctx, span := util.StartSpan(ctx, "SendRequestHandleResponse timeout",
 					trace.WithAttributes(attribute.Stringer("id", id)),
 				)
@@ -224,7 +222,7 @@ func (e *Endpoint[K, A]) HandleMessage(ctx context.Context, id kad.NodeID[K],
 			err = ErrInvalidResponseType
 		}
 		if followup != nil {
-			e.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
+			e.sched.EnqueueAction(ctx, event.BasicAction(func(ctx context.Context) {
 				followup(ctx, resp, err)
 			}))
 		}

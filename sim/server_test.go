@@ -10,7 +10,7 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	"github.com/plprobelab/go-kademlia/event"
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
@@ -40,7 +40,7 @@ func TestMessageHandling(t *testing.T) {
 	self := kadtest.NewInfo[key.Key8, net.IP](kadtest.NewID(key.Key8(0)), nil) // 0000 0000
 
 	router := NewRouter[key.Key8, net.IP]()
-	sched := simplescheduler.NewSimpleScheduler(clk)
+	sched := event.NewSimpleScheduler(clk)
 	fakeEndpoint := NewEndpoint[key.Key8, net.IP](self.ID(), sched, router)
 	rt := simplert.New[key.Key8, kad.NodeID[key.Key8]](self.ID(), 2)
 
@@ -127,7 +127,7 @@ func TestInvalidSimRequests(t *testing.T) {
 	self := kadtest.NewInfo[key.Key8, net.IP](kadtest.NewID(key.Key8(0)), nil) // 0000 0000
 
 	// create a valid server
-	sched := simplescheduler.NewSimpleScheduler(clk)
+	sched := event.NewSimpleScheduler(clk)
 	fakeEndpoint := NewEndpoint[key.Key8, net.IP](self.ID(), sched, router)
 	rt := simplert.New[key.Key8, kad.NodeID[key.Key8]](self.ID(), 2)
 
@@ -168,7 +168,7 @@ func TestRequestNoNetworkAddress(t *testing.T) {
 	self := kadtest.NewInfo[key.Key8, net.IP](kadtest.NewID(key.Key8(0)), nil) // 0000 0000
 
 	// create a valid server
-	sched := simplescheduler.NewSimpleScheduler(clk)
+	sched := event.NewSimpleScheduler(clk)
 	fakeEndpoint := NewEndpoint[key.Key8, net.IP](self.ID(), sched, router)
 	rt := simplert.New[key.Key8, kad.NodeID[key.Key8]](self.ID(), 2)
 

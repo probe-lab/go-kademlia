@@ -1,4 +1,4 @@
-package testaction
+package event
 
 import (
 	"context"

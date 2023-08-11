@@ -1,4 +1,4 @@
-package simpleplanner
+package event
 
 import (
 	"context"
@@ -6,9 +6,6 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/plprobelab/go-kademlia/events/action"
-	ta "github.com/plprobelab/go-kademlia/events/action/testaction"
-	"github.com/plprobelab/go-kademlia/events/planner"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,9 +15,9 @@ func TestSimplePlanner(t *testing.T) {
 	p := NewSimplePlanner(clk)
 
 	nActions := 10
-	actions := make([]action.Action, nActions)
+	actions := make([]Action, nActions)
 	for i := 0; i < nActions; i++ {
-		actions[i] = ta.IntAction(i)
+		actions[i] = IntAction(i)
 	}
 
 	a0 := p.ScheduleAction(ctx, clk.Now().Add(time.Millisecond), actions[0])
@@ -40,7 +37,7 @@ func TestSimplePlanner(t *testing.T) {
 	require.Equal(t, actions[2:3], p.PopOverdueActions(ctx))
 
 	clk.Add(2 * time.Minute)
-	require.Equal(t, []action.Action{actions[3], actions[1]}, p.PopOverdueActions(ctx))
+	require.Equal(t, []Action{actions[3], actions[1]}, p.PopOverdueActions(ctx))
 
 	p.ScheduleAction(ctx, clk.Now().Add(time.Second), actions[5])
 	clk.Add(time.Second)
@@ -69,8 +66,8 @@ func TestSimplePlanner(t *testing.T) {
 
 type otherPlannedAction int
 
-func (a otherPlannedAction) Action() action.Action {
-	return ta.IntAction(int(a))
+func (a otherPlannedAction) Action() Action {
+	return IntAction(int(a))
 }
 
 func (a otherPlannedAction) Time() time.Time {
@@ -82,8 +79,8 @@ func TestSimplePlannedAction(t *testing.T) {
 	clk := clock.NewMock()
 	p := NewSimplePlanner(clk)
 
-	a0 := p.ScheduleAction(ctx, clk.Now().Add(time.Millisecond), ta.IntAction(0))
-	require.Equal(t, ta.IntAction(0), a0.Action())
+	a0 := p.ScheduleAction(ctx, clk.Now().Add(time.Millisecond), IntAction(0))
+	require.Equal(t, IntAction(0), a0.Action())
 	require.Equal(t, clk.Now().Add(time.Millisecond), a0.Time())
 
 	a1 := otherPlannedAction(1)
@@ -103,13 +100,13 @@ func TestNextActionTime(t *testing.T) {
 	p := NewSimplePlanner(clk)
 
 	clk.Set(time.Unix(0, 0))
-	actions := make([]action.Action, 3)
+	actions := make([]Action, 3)
 	for i := 0; i < len(actions); i++ {
-		actions[i] = ta.IntAction(i)
+		actions[i] = IntAction(i)
 	}
 
 	ti := p.NextActionTime(ctx)
-	require.Equal(t, planner.MaxTime, ti)
+	require.Equal(t, MaxTime, ti)
 
 	t0 := clk.Now().Add(time.Second)
 	p.ScheduleAction(ctx, t0, actions[0])
@@ -139,5 +136,5 @@ func TestNextActionTime(t *testing.T) {
 	clk.Add(time.Hour)
 	require.Equal(t, 2, len(p.PopOverdueActions(ctx)))
 	ti = p.NextActionTime(ctx)
-	require.Equal(t, planner.MaxTime, ti)
+	require.Equal(t, MaxTime, ti)
 }

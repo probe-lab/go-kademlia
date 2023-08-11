@@ -7,24 +7,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/plprobelab/go-kademlia/sim"
-
-	"github.com/plprobelab/go-kademlia/kad"
-
-	"github.com/plprobelab/go-kademlia/internal/kadtest"
-
 	"github.com/benbjohnson/clock"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/net/swarm"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/plprobelab/go-kademlia/events/planner"
-	"github.com/plprobelab/go-kademlia/events/scheduler"
-	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	"github.com/stretchr/testify/require"
+
+	"github.com/plprobelab/go-kademlia/event"
+	"github.com/plprobelab/go-kademlia/internal/kadtest"
+	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
-	"github.com/stretchr/testify/require"
+	"github.com/plprobelab/go-kademlia/sim"
 )
 
 var (
@@ -34,16 +30,16 @@ var (
 
 func createEndpoints(t *testing.T, ctx context.Context, nPeers int) (
 	[]*Libp2pEndpoint, []*AddrInfo, []*PeerID,
-	[]scheduler.AwareScheduler,
+	[]event.AwareScheduler,
 ) {
 	clk := clock.New()
 
-	scheds := make([]scheduler.AwareScheduler, nPeers)
+	scheds := make([]event.AwareScheduler, nPeers)
 	ids := make([]*PeerID, nPeers)
 	addrinfos := make([]*AddrInfo, nPeers)
 	endpoints := make([]*Libp2pEndpoint, nPeers)
 	for i := 0; i < nPeers; i++ {
-		scheds[i] = simplescheduler.NewSimpleScheduler(clk)
+		scheds[i] = event.NewSimpleScheduler(clk)
 		host, err := libp2p.New()
 		require.NoError(t, err)
 		ids[i] = NewPeerID(host.ID())
@@ -192,7 +188,7 @@ func TestAsyncDial(t *testing.T) {
 	wg.Wait()
 	// nothing to run for both schedulers
 	for _, s := range scheds {
-		require.Equal(t, planner.MaxTime, s.NextActionTime(ctx))
+		require.Equal(t, event.MaxTime, s.NextActionTime(ctx))
 	}
 
 	// test async dial and report from 0 to 2 (already connected)
@@ -206,7 +202,7 @@ func TestAsyncDial(t *testing.T) {
 	require.NoError(t, err)
 	// nothing to run for both schedulers
 	for _, s := range scheds {
-		require.Equal(t, planner.MaxTime, s.NextActionTime(ctx))
+		require.Equal(t, event.MaxTime, s.NextActionTime(ctx))
 	}
 
 	// test async dial and report from 0 to 3 (unknown address)
@@ -227,7 +223,7 @@ func TestAsyncDial(t *testing.T) {
 	wg.Wait()
 	// nothing to run for both schedulers
 	for _, s := range scheds {
-		require.Equal(t, s.NextActionTime(ctx), planner.MaxTime)
+		require.Equal(t, s.NextActionTime(ctx), event.MaxTime)
 	}
 
 	// test asyc dial with invalid peerid
@@ -235,7 +231,7 @@ func TestAsyncDial(t *testing.T) {
 	require.Equal(t, endpoint.ErrInvalidPeer, err)
 	// nothing to run for both schedulers
 	for _, s := range scheds {
-		require.Equal(t, planner.MaxTime, s.NextActionTime(ctx))
+		require.Equal(t, event.MaxTime, s.NextActionTime(ctx))
 	}
 }
 
@@ -347,7 +343,7 @@ func TestSuccessfulRequest(t *testing.T) {
 	wg.Wait()
 	// nothing to run for both schedulers
 	for _, s := range scheds {
-		require.Equal(t, planner.MaxTime, s.NextActionTime(ctx))
+		require.Equal(t, event.MaxTime, s.NextActionTime(ctx))
 	}
 }
 
@@ -396,7 +392,7 @@ func TestReqUnknownPeer(t *testing.T) {
 	wg.Wait()
 	// nothing to run for both schedulers
 	for _, s := range scheds {
-		require.Equal(t, planner.MaxTime, s.NextActionTime(ctx))
+		require.Equal(t, event.MaxTime, s.NextActionTime(ctx))
 	}
 }
 
@@ -440,7 +436,7 @@ func TestReqTimeout(t *testing.T) {
 
 	// nothing to run for both schedulers
 	for _, s := range scheds {
-		require.Equal(t, planner.MaxTime, s.NextActionTime(ctx))
+		require.Equal(t, event.MaxTime, s.NextActionTime(ctx))
 	}
 }
 
@@ -494,7 +490,7 @@ func TestReqHandlerError(t *testing.T) {
 	wg.Wait()
 	// nothing to run for both schedulers
 	for _, s := range scheds {
-		require.Equal(t, planner.MaxTime, s.NextActionTime(ctx))
+		require.Equal(t, event.MaxTime, s.NextActionTime(ctx))
 	}
 }
 
@@ -548,6 +544,6 @@ func TestReqHandlerReturnsWrongType(t *testing.T) {
 	wg.Wait()
 	// nothing to run for both schedulers
 	for _, s := range scheds {
-		require.Equal(t, planner.MaxTime, s.NextActionTime(ctx))
+		require.Equal(t, event.MaxTime, s.NextActionTime(ctx))
 	}
 }

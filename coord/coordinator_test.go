@@ -11,8 +11,7 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/plprobelab/go-kademlia/events/scheduler"
-	ss "github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	"github.com/plprobelab/go-kademlia/event"
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
@@ -59,7 +58,7 @@ func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key8
 
 	rts := make([]kad.RoutingTable[key.Key8, kad.NodeID[key.Key8]], len(addrs))
 	eps := make([]*sim.Endpoint[key.Key8, kadtest.StrAddr], len(addrs))
-	schedulers := make([]scheduler.AwareScheduler, len(addrs))
+	schedulers := make([]event.AwareScheduler, len(addrs))
 	servers := make([]*sim.Server[key.Key8, kadtest.StrAddr], len(addrs))
 
 	for i := 0; i < len(addrs); i++ {
@@ -67,7 +66,7 @@ func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key8
 		// create a routing table, with bucket size 2
 		rts[i] = simplert.New[key.Key8, kad.NodeID[key.Key8]](addrs[i].ID(), 2)
 		// create a scheduler based on the mock clock
-		schedulers[i] = ss.NewSimpleScheduler(clk)
+		schedulers[i] = event.NewSimpleScheduler(clk)
 		// create a fake endpoint for the node, communicating through the router
 		eps[i] = sim.NewEndpoint[key.Key8, kadtest.StrAddr](addrs[i].ID(), schedulers[i], router)
 		// create a server instance for the node

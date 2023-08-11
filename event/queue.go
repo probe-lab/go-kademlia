@@ -1,14 +1,12 @@
-package queue
+package event
 
 import (
 	"context"
-
-	"github.com/plprobelab/go-kademlia/events/action"
 )
 
 type EventQueue interface {
-	Enqueue(context.Context, action.Action)
-	Dequeue(context.Context) action.Action
+	Enqueue(context.Context, Action)
+	Dequeue(context.Context) Action
 
 	Size() uint
 	Close()
@@ -16,10 +14,10 @@ type EventQueue interface {
 
 type EventQueueEnqueueMany interface {
 	EventQueue
-	EnqueueMany(context.Context, []action.Action)
+	EnqueueMany(context.Context, []Action)
 }
 
-func EnqueueMany(ctx context.Context, q EventQueue, actions []action.Action) {
+func EnqueueMany(ctx context.Context, q EventQueue, actions []Action) {
 	switch queue := q.(type) {
 	case EventQueueEnqueueMany:
 		queue.EnqueueMany(ctx, actions)
@@ -31,15 +29,15 @@ func EnqueueMany(ctx context.Context, q EventQueue, actions []action.Action) {
 }
 
 type EventQueueDequeueMany interface {
-	DequeueMany(context.Context, int) []action.Action
+	DequeueMany(context.Context, int) []Action
 }
 
-func DequeueMany(ctx context.Context, q EventQueue, n int) []action.Action {
+func DequeueMany(ctx context.Context, q EventQueue, n int) []Action {
 	switch queue := q.(type) {
 	case EventQueueDequeueMany:
 		return queue.DequeueMany(ctx, n)
 	default:
-		actions := make([]action.Action, 0, n)
+		actions := make([]Action, 0, n)
 		for i := 0; i < n; i++ {
 			if a := q.Dequeue(ctx); a != nil {
 				actions = append(actions, a)
@@ -52,15 +50,15 @@ func DequeueMany(ctx context.Context, q EventQueue, n int) []action.Action {
 }
 
 type EventQueueDequeueAll interface {
-	DequeueAll(context.Context) []action.Action
+	DequeueAll(context.Context) []Action
 }
 
-func DequeueAll(ctx context.Context, q EventQueue) []action.Action {
+func DequeueAll(ctx context.Context, q EventQueue) []Action {
 	switch queue := q.(type) {
 	case EventQueueDequeueAll:
 		return queue.DequeueAll(ctx)
 	default:
-		actions := make([]action.Action, 0, q.Size())
+		actions := make([]Action, 0, q.Size())
 		for a := q.Dequeue(ctx); a != nil; a = q.Dequeue(ctx) {
 			actions = append(actions, a)
 		}

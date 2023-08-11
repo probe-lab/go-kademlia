@@ -8,8 +8,7 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/plprobelab/go-kademlia/events/scheduler"
-	"github.com/plprobelab/go-kademlia/events/scheduler/simplescheduler"
+	"github.com/plprobelab/go-kademlia/event"
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
@@ -23,12 +22,12 @@ func TestRouter(t *testing.T) {
 	router := NewRouter[key.Key256, net.IP]()
 
 	nPeers := 5
-	scheds := make([]scheduler.AwareScheduler, nPeers)
+	scheds := make([]event.AwareScheduler, nPeers)
 	ids := make([]kad.NodeID[key.Key256], nPeers)
 	fakeEndpoints := make([]*Endpoint[key.Key256, net.IP], nPeers)
 	for i := 0; i < nPeers; i++ {
 		ids[i] = kadtest.NewID(kadtest.Key256WithLeadingBytes([]byte{byte(i)}))
-		scheds[i] = simplescheduler.NewSimpleScheduler(clk)
+		scheds[i] = event.NewSimpleScheduler(clk)
 		fakeEndpoints[i] = NewEndpoint[key.Key256, net.IP](ids[i], scheds[i], router)
 	}
 

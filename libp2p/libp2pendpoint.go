@@ -17,9 +17,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	ba "github.com/plprobelab/go-kademlia/events/action/basicaction"
-	"github.com/plprobelab/go-kademlia/events/planner"
-	"github.com/plprobelab/go-kademlia/events/scheduler"
+	"github.com/plprobelab/go-kademlia/event"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/network/address"
@@ -34,7 +32,7 @@ type DialReportFn func(context.Context, bool)
 type Libp2pEndpoint struct {
 	ctx   context.Context
 	host  host.Host
-	sched scheduler.Scheduler
+	sched event.Scheduler
 
 	// peer filters to be applied before adding peer to peerstore
 
@@ -48,7 +46,7 @@ var (
 )
 
 func NewLibp2pEndpoint(ctx context.Context, host host.Host,
-	sched scheduler.Scheduler,
+	sched event.Scheduler,
 ) *Libp2pEndpoint {
 	return &Libp2pEndpoint{
 		ctx:     ctx,
@@ -97,7 +95,7 @@ func (e *Libp2pEndpoint) AsyncDialAndReport(ctx context.Context,
 
 		if reportFn != nil {
 			// report dial result where it is needed
-			e.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
+			e.sched.EnqueueAction(ctx, event.BasicAction(func(ctx context.Context) {
 				reportFn(ctx, success)
 			}))
 		}
@@ -213,7 +211,7 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 		s, err = e.host.NewStream(ctx, p.ID, protocol.ID(protoID))
 		if err != nil {
 			span.RecordError(err, trace.WithAttributes(attribute.String("where", "stream creation")))
-			e.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
+			e.sched.EnqueueAction(ctx, event.BasicAction(func(ctx context.Context) {
 				responseHandlerFn(ctx, nil, err)
 			}))
 			return
@@ -223,18 +221,18 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 		err = WriteMsg(s, protoReq)
 		if err != nil {
 			span.RecordError(err, trace.WithAttributes(attribute.String("where", "write message")))
-			e.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
+			e.sched.EnqueueAction(ctx, event.BasicAction(func(ctx context.Context) {
 				responseHandlerFn(ctx, nil, err)
 			}))
 			return
 		}
 
-		var timeoutEvent planner.PlannedAction
+		var timeoutEvent event.PlannedAction
 		// handle timeout
 
 		if timeout != 0 {
-			timeoutEvent = scheduler.ScheduleActionIn(ctx, e.sched, timeout,
-				ba.BasicAction(func(ctx context.Context) {
+			timeoutEvent = event.ScheduleActionIn(ctx, e.sched, timeout,
+				event.BasicAction(func(ctx context.Context) {
 					cancel()
 					responseHandlerFn(ctx, nil, endpoint.ErrTimeout)
 				}))
@@ -251,14 +249,14 @@ func (e *Libp2pEndpoint) SendRequestHandleResponse(ctx context.Context,
 		}
 		if err != nil {
 			span.RecordError(err, trace.WithAttributes(attribute.String("where", "read message")))
-			e.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
+			e.sched.EnqueueAction(ctx, event.BasicAction(func(ctx context.Context) {
 				responseHandlerFn(ctx, protoResp, err)
 			}))
 			return
 		}
 
 		span.AddEvent("response received")
-		e.sched.EnqueueAction(ctx, ba.BasicAction(func(ctx context.Context) {
+		e.sched.EnqueueAction(ctx, event.BasicAction(func(ctx context.Context) {
 			responseHandlerFn(ctx, protoResp, err)
 		}))
 	}()
@@ -318,7 +316,7 @@ func (e *Libp2pEndpoint) AddRequestHandler(protoID address.ProtocolID,
 	}
 	// when a new request comes in, we need to queue it
 	streamHandler := func(s network.Stream) {
-		e.sched.EnqueueAction(e.ctx, ba.BasicAction(func(ctx context.Context) {
+		e.sched.EnqueueAction(e.ctx, event.BasicAction(func(ctx context.Context) {
 			ctx, span := util.StartSpan(ctx, "Libp2pEndpoint.AddRequestHandler",
 				trace.WithAttributes(
 					attribute.String("PeerID", s.Conn().RemotePeer().String()),
