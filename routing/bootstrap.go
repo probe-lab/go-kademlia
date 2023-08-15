@@ -7,7 +7,6 @@ import (
 
 	"github.com/benbjohnson/clock"
 
-	"github.com/plprobelab/go-kademlia/event"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/kaderr"
 	"github.com/plprobelab/go-kademlia/network/address"
@@ -22,8 +21,6 @@ type Bootstrap[K kad.Key[K], A kad.Address[A]] struct {
 	// qry is the query used by the bootstrap process
 	qry *query.Query[K, A]
 
-	queue event.EventQueue
-
 	// cfg is a copy of the optional configuration supplied to the Bootstrap
 	cfg BootstrapConfig[K, A]
 }
@@ -33,7 +30,6 @@ type BootstrapConfig[K kad.Key[K], A kad.Address[A]] struct {
 	Timeout            time.Duration // the time to wait before terminating a query that is not making progress
 	RequestConcurrency int           // the maximum number of concurrent requests that each query may have in flight
 	RequestTimeout     time.Duration // the timeout queries should use for contacting a single node
-	QueueCapacity      int           // the size of the event queue
 	Clock              clock.Clock   // a clock that may replaced by a mock when testing
 }
 
@@ -67,13 +63,6 @@ func (cfg *BootstrapConfig[K, A]) Validate() error {
 		}
 	}
 
-	if cfg.QueueCapacity < 1 {
-		return &kaderr.ConfigurationError{
-			Component: "PoolConfig",
-			Err:       fmt.Errorf("queue capacity must be greater than zero"),
-		}
-	}
-
 	return nil
 }
 
@@ -85,7 +74,6 @@ func DefaultBootstrapConfig[K kad.Key[K], A kad.Address[A]]() *BootstrapConfig[K
 		Timeout:            5 * time.Minute,
 		RequestConcurrency: 3,
 		RequestTimeout:     time.Minute,
-		QueueCapacity:      128,
 	}
 }
 
@@ -97,25 +85,15 @@ func NewBootstrap[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], cfg *Boots
 	}
 
 	return &Bootstrap[K, A]{
-		self:  self,
-		cfg:   *cfg,
-		queue: event.NewChanQueue(cfg.QueueCapacity),
+		self: self,
+		cfg:  *cfg,
 	}, nil
 }
 
-// Enqueue enqueues an event to be processed by the state machine.
-func (b *Bootstrap[K, A]) Enqueue(ctx context.Context, ev BootstrapEvent) {
-	ctx, span := util.StartSpan(ctx, "Bootstrap.Enqueue")
-	defer span.End()
-	b.queue.Enqueue(ctx, ev)
-}
-
 // Advance advances the state of the bootstrap by attempting to advance its query if running.
-func (b *Bootstrap[K, A]) Advance(ctx context.Context) BootstrapState {
+func (b *Bootstrap[K, A]) Advance(ctx context.Context, ev BootstrapEvent) BootstrapState {
 	ctx, span := util.StartSpan(ctx, "Bootstrap.Advance")
 	defer span.End()
-
-	ev := b.queue.Dequeue(ctx)
 
 	switch tev := ev.(type) {
 	case *EventBootstrapStart[K, A]:
@@ -149,7 +127,6 @@ func (b *Bootstrap[K, A]) Advance(ctx context.Context) BootstrapState {
 		})
 
 	case *EventBootstrapPoll:
-	case nil:
 	// ignore, nothing to do
 	default:
 		panic(fmt.Sprintf("unexpected event: %T", tev))
@@ -244,9 +221,9 @@ func (*StateBootstrapWaiting) bootstrapState()       {}
 // BootstrapEvent is an event intended to advance the state of a bootstrap.
 type BootstrapEvent interface {
 	bootstrapEvent()
-	Run(context.Context)
 }
 
+// EventBootstrapPoll is an event that signals the bootstrap that it can perform housekeeping work such as time out queries.
 type EventBootstrapPoll struct{}
 
 // EventBootstrapStart is an event that attempts to start a new bootstrap
@@ -273,9 +250,3 @@ func (*EventBootstrapPoll) bootstrapEvent()                  {}
 func (*EventBootstrapStart[K, A]) bootstrapEvent()           {}
 func (*EventBootstrapMessageResponse[K, A]) bootstrapEvent() {}
 func (*EventBootstrapMessageFailure[K]) bootstrapEvent()     {}
-
-// Run(context.Context) ensures that Bootstrap events can be assigned to the action.Action interface.
-func (*EventBootstrapPoll) Run(context.Context)                  {}
-func (*EventBootstrapStart[K, A]) Run(context.Context)           {}
-func (*EventBootstrapMessageResponse[K, A]) Run(context.Context) {}
-func (*EventBootstrapMessageFailure[K]) Run(context.Context)     {}

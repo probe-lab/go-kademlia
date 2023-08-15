@@ -20,11 +20,39 @@ import (
 )
 
 // A StateMachine progresses through a set of states in response to transition events.
-type StateMachine[S any, E event.Action] interface {
-	// Enqueue enqueues an event to be processed by the state machine.
-	Enqueue(context.Context, E)
+type StateMachine[S any, E any] interface {
 	// Advance advances the state of the state machine.
-	Advance(context.Context) S
+	Advance(context.Context, E) S
+}
+
+// eventQueue is a bounded, typed queue for events
+// NOTE: this type is incompatible with the semantics of event.Queue which blocks on Dequeue
+type eventQueue[E any] struct {
+	events chan E
+}
+
+func newEventQueue[E any](capacity int) *eventQueue[E] {
+	return &eventQueue[E]{
+		events: make(chan E, capacity),
+	}
+}
+
+// Enqueue adds an event to the queue. It blocks if the queue is at capacity.
+func (q *eventQueue[E]) Enqueue(ctx context.Context, e E) {
+	q.events <- e
+}
+
+// Dequeue reads an event from the queue. It returns the event and a true value
+// if an event was read or the zero value if the event type and false if no event
+// was read. This method is non-blocking.
+func (q *eventQueue[E]) Dequeue(ctx context.Context) (E, bool) {
+	select {
+	case e := <-q.events:
+		return e, true
+	default:
+		var v E
+		return v, false
+	}
 }
 
 // A Coordinator coordinates the state machines that comprise a Kademlia DHT
@@ -40,8 +68,14 @@ type Coordinator[K kad.Key[K], A kad.Address[A]] struct {
 	// pool is the query pool state machine, responsible for running user-submitted queries
 	pool StateMachine[query.PoolState, query.PoolEvent]
 
+	// poolEvents is a fifo queue of events that are to be processed by the pool state machine
+	poolEvents *eventQueue[query.PoolEvent]
+
 	// bootstrap is the bootstrap state machine, responsible for bootstrapping the routing table
 	bootstrap StateMachine[routing.BootstrapState, routing.BootstrapEvent]
+
+	// bootstrapEvents is a fifo queue of events that are to be processed by the bootstrap state machine
+	bootstrapEvents *eventQueue[routing.BootstrapEvent]
 
 	// rt is the routing table used to look up nodes by distance
 	rt kad.RoutingTable[K, kad.NodeID[K]]
@@ -151,15 +185,17 @@ func NewCoordinator[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], ep endpo
 		return nil, fmt.Errorf("query pool: %w", err)
 	}
 	return &Coordinator[K, A]{
-		self:           self,
-		cfg:            *cfg,
-		ep:             ep,
-		rt:             rt,
-		pool:           qp,
-		bootstrap:      bootstrap,
-		outboundEvents: make(chan KademliaEvent, 20),
-		queue:          event.NewChanQueue(DefaultChanqueueCapacity),
-		planner:        event.NewSimplePlanner(cfg.Clock),
+		self:            self,
+		cfg:             *cfg,
+		ep:              ep,
+		rt:              rt,
+		pool:            qp,
+		poolEvents:      newEventQueue[query.PoolEvent](20), // 20 is abitrary, move to config
+		bootstrap:       bootstrap,
+		bootstrapEvents: newEventQueue[routing.BootstrapEvent](20), // 20 is abitrary, move to config
+		outboundEvents:  make(chan KademliaEvent, 20),
+		queue:           event.NewChanQueue(DefaultChanqueueCapacity),
+		planner:         event.NewSimplePlanner(cfg.Clock),
 	}, nil
 }
 
@@ -173,7 +209,12 @@ func (c *Coordinator[K, A]) RunOne(ctx context.Context) bool {
 
 	// Give the bootstrap state machine priority
 	// No queries can be run while a bootstrap is in progress
-	bstate := c.bootstrap.Advance(ctx)
+	bev, ok := c.bootstrapEvents.Dequeue(ctx)
+	if !ok {
+		bev = &routing.EventBootstrapPoll{}
+	}
+
+	bstate := c.bootstrap.Advance(ctx, bev)
 	switch st := bstate.(type) {
 	case *routing.StateBootstrapMessage[K, A]:
 		c.sendBootstrapMessage(ctx, st.ProtocolID, st.NodeID, st.Message, st.QueryID, st.Stats)
@@ -197,7 +238,12 @@ func (c *Coordinator[K, A]) RunOne(ctx context.Context) bool {
 	}
 
 	// Attempt to advance an outbound query
-	state := c.pool.Advance(ctx)
+	pev, ok := c.poolEvents.Dequeue(ctx)
+	if !ok {
+		pev = &query.EventPoolPoll{}
+	}
+
+	state := c.pool.Advance(ctx, pev)
 	switch st := state.(type) {
 	case *query.StatePoolQueryMessage[K, A]:
 		c.sendQueryMessage(ctx, st.ProtocolID, st.NodeID, st.Message, st.QueryID, st.Stats)
@@ -241,7 +287,7 @@ func (c *Coordinator[K, A]) sendQueryMessage(ctx context.Context, protoID addres
 			QueryID: queryID,
 			Error:   err,
 		}
-		c.pool.Enqueue(ctx, qev)
+		c.poolEvents.Enqueue(ctx, qev)
 	}
 
 	onMessageResponse := func(ctx context.Context, resp kad.Response[K, A], err error) {
@@ -271,7 +317,7 @@ func (c *Coordinator[K, A]) sendQueryMessage(ctx context.Context, protoID addres
 			QueryID:  queryID,
 			Response: resp,
 		}
-		c.pool.Enqueue(ctx, qev)
+		c.poolEvents.Enqueue(ctx, qev)
 	}
 
 	err := c.ep.SendRequestHandleResponse(ctx, protoID, to, msg, msg.EmptyResponse(), 0, onMessageResponse)
@@ -295,7 +341,7 @@ func (c *Coordinator[K, A]) sendBootstrapMessage(ctx context.Context, protoID ad
 			NodeID: to,
 			Error:  err,
 		}
-		c.bootstrap.Enqueue(ctx, bev)
+		c.bootstrapEvents.Enqueue(ctx, bev)
 	}
 
 	onMessageResponse := func(ctx context.Context, resp kad.Response[K, A], err error) {
@@ -324,7 +370,7 @@ func (c *Coordinator[K, A]) sendBootstrapMessage(ctx context.Context, protoID ad
 			NodeID:   to,
 			Response: resp,
 		}
-		c.bootstrap.Enqueue(ctx, bev)
+		c.bootstrapEvents.Enqueue(ctx, bev)
 	}
 
 	err := c.ep.SendRequestHandleResponse(ctx, protoID, to, msg, msg.EmptyResponse(), 0, onMessageResponse)
@@ -343,7 +389,7 @@ func (c *Coordinator[K, A]) StartQuery(ctx context.Context, queryID query.QueryI
 		Message:           msg,
 		KnownClosestNodes: knownClosestPeers,
 	}
-	c.pool.Enqueue(ctx, qev)
+	c.poolEvents.Enqueue(ctx, qev)
 	return nil
 }
 
@@ -351,7 +397,7 @@ func (c *Coordinator[K, A]) StopQuery(ctx context.Context, queryID query.QueryID
 	qev := &query.EventPoolStopQuery{
 		QueryID: queryID,
 	}
-	c.pool.Enqueue(ctx, qev)
+	c.poolEvents.Enqueue(ctx, qev)
 	return nil
 }
 
@@ -390,7 +436,7 @@ func (c *Coordinator[K, A]) Bootstrap(ctx context.Context, seeds []kad.NodeID[K]
 		KnownClosestNodes: seeds,
 	}
 
-	c.bootstrap.Enqueue(ctx, bev)
+	c.bootstrapEvents.Enqueue(ctx, bev)
 
 	return nil
 }

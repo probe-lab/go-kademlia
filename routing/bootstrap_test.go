@@ -49,14 +49,6 @@ func TestBootstrapConfigValidate(t *testing.T) {
 		cfg.RequestTimeout = -1
 		require.Error(t, cfg.Validate())
 	})
-
-	t.Run("queue capacity positive", func(t *testing.T) {
-		cfg := DefaultBootstrapConfig[key.Key8, kadtest.StrAddr]()
-		cfg.QueueCapacity = 0
-		require.Error(t, cfg.Validate())
-		cfg.QueueCapacity = -1
-		require.Error(t, cfg.Validate())
-	})
 }
 
 func TestBootstrapStartsIdle(t *testing.T) {
@@ -69,8 +61,7 @@ func TestBootstrapStartsIdle(t *testing.T) {
 	bs, err := NewBootstrap[key.Key8, kadtest.StrAddr](self, cfg)
 	require.NoError(t, err)
 
-	bs.Enqueue(ctx, &EventBootstrapPoll{})
-	state := bs.Advance(ctx)
+	state := bs.Advance(ctx, &EventBootstrapPoll{})
 	require.IsType(t, &StateBootstrapIdle{}, state)
 }
 
@@ -90,12 +81,11 @@ func TestBootstrapStart(t *testing.T) {
 	protocolID := address.ProtocolID("testprotocol")
 
 	// start the bootstrap
-	bs.Enqueue(ctx, &EventBootstrapStart[key.Key8, kadtest.StrAddr]{
+	state := bs.Advance(ctx, &EventBootstrapStart[key.Key8, kadtest.StrAddr]{
 		ProtocolID:        protocolID,
 		Message:           msg,
 		KnownClosestNodes: []kad.NodeID[key.Key8]{a},
 	})
-	state := bs.Advance(ctx)
 	require.IsType(t, &StateBootstrapMessage[key.Key8, kadtest.StrAddr]{}, state)
 
 	// the query should attempt to contact the node it was given
@@ -114,8 +104,7 @@ func TestBootstrapStart(t *testing.T) {
 	require.Equal(t, msg, st.Message)
 
 	// now the bootstrap reports that it is waiting
-	bs.Enqueue(ctx, &EventBootstrapPoll{})
-	state = bs.Advance(ctx)
+	state = bs.Advance(ctx, &EventBootstrapPoll{})
 	require.IsType(t, &StateBootstrapWaiting{}, state)
 }
 
@@ -135,12 +124,11 @@ func TestBootstrapMessageResponse(t *testing.T) {
 	protocolID := address.ProtocolID("testprotocol")
 
 	// start the bootstrap
-	bs.Enqueue(ctx, &EventBootstrapStart[key.Key8, kadtest.StrAddr]{
+	state := bs.Advance(ctx, &EventBootstrapStart[key.Key8, kadtest.StrAddr]{
 		ProtocolID:        protocolID,
 		Message:           msg,
 		KnownClosestNodes: []kad.NodeID[key.Key8]{a},
 	})
-	state := bs.Advance(ctx)
 	require.IsType(t, &StateBootstrapMessage[key.Key8, kadtest.StrAddr]{}, state)
 
 	// the bootstrap should attempt to contact the node it was given
@@ -149,10 +137,9 @@ func TestBootstrapMessageResponse(t *testing.T) {
 	require.Equal(t, a, st.NodeID)
 
 	// notify bootstrap that node was contacted successfully, but no closer nodes
-	bs.Enqueue(ctx, &EventBootstrapMessageResponse[key.Key8, kadtest.StrAddr]{
+	state = bs.Advance(ctx, &EventBootstrapMessageResponse[key.Key8, kadtest.StrAddr]{
 		NodeID: a,
 	})
-	state = bs.Advance(ctx)
 
 	// bootstrap should respond that its query has finished
 	require.IsType(t, &StateBootstrapFinished{}, state)
@@ -187,71 +174,66 @@ func TestBootstrapProgress(t *testing.T) {
 	protocolID := address.ProtocolID("testprotocol")
 
 	// start the bootstrap
-	bs.Enqueue(ctx, &EventBootstrapStart[key.Key8, kadtest.StrAddr]{
+	state := bs.Advance(ctx, &EventBootstrapStart[key.Key8, kadtest.StrAddr]{
 		ProtocolID:        protocolID,
 		Message:           msg,
 		KnownClosestNodes: []kad.NodeID[key.Key8]{d, a, b, c},
 	})
 
 	// the bootstrap should attempt to contact the closest node it was given
-	state := bs.Advance(ctx)
 	require.IsType(t, &StateBootstrapMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st := state.(*StateBootstrapMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, query.QueryID("bootstrap"), st.QueryID)
 	require.Equal(t, a, st.NodeID)
 
 	// next the bootstrap attempts to contact second nearest node
-	state = bs.Advance(ctx)
+	state = bs.Advance(ctx, &EventBootstrapPoll{})
 	require.IsType(t, &StateBootstrapMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StateBootstrapMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, b, st.NodeID)
 
 	// next the bootstrap attempts to contact third nearest node
-	state = bs.Advance(ctx)
+	state = bs.Advance(ctx, &EventBootstrapPoll{})
 	require.IsType(t, &StateBootstrapMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StateBootstrapMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, c, st.NodeID)
 
 	// now the bootstrap should be waiting since it is at request capacity
-	state = bs.Advance(ctx)
+	state = bs.Advance(ctx, &EventBootstrapPoll{})
 	require.IsType(t, &StateBootstrapWaiting{}, state)
 
 	// notify bootstrap that node was contacted successfully, but no closer nodes
-	bs.Enqueue(ctx, &EventBootstrapMessageResponse[key.Key8, kadtest.StrAddr]{
+	state = bs.Advance(ctx, &EventBootstrapMessageResponse[key.Key8, kadtest.StrAddr]{
 		NodeID: a,
 	})
 
 	// now the bootstrap has capacity to contact fourth nearest node
-	state = bs.Advance(ctx)
 	require.IsType(t, &StateBootstrapMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StateBootstrapMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, d, st.NodeID)
 
-	// notify bootstrap that all remaining nodes were contacted successfully
-	bs.Enqueue(ctx, &EventBootstrapMessageResponse[key.Key8, kadtest.StrAddr]{
+	// notify bootstrap that a node was contacted successfully
+	state = bs.Advance(ctx, &EventBootstrapMessageResponse[key.Key8, kadtest.StrAddr]{
 		NodeID: b,
 	})
 
 	// bootstrap should respond that it is waiting for messages
-	state = bs.Advance(ctx)
 	require.IsType(t, &StateBootstrapWaiting{}, state)
 
-	// notify bootstrap that all remaining nodes were contacted successfully
-	bs.Enqueue(ctx, &EventBootstrapMessageResponse[key.Key8, kadtest.StrAddr]{
+	// notify bootstrap that a node was contacted successfully
+	state = bs.Advance(ctx, &EventBootstrapMessageResponse[key.Key8, kadtest.StrAddr]{
 		NodeID: c,
 	})
 
 	// bootstrap should respond that it is waiting for last message
-	state = bs.Advance(ctx)
 	require.IsType(t, &StateBootstrapWaiting{}, state)
 
-	// notify bootstrap that all remaining nodes were contacted successfully
-	bs.Enqueue(ctx, &EventBootstrapMessageResponse[key.Key8, kadtest.StrAddr]{
+	// notify bootstrap that the final node was contacted successfully
+	state = bs.Advance(ctx, &EventBootstrapMessageResponse[key.Key8, kadtest.StrAddr]{
 		NodeID: d,
 	})
 
 	// bootstrap should respond that its query has finished
-	state = bs.Advance(ctx)
 	require.IsType(t, &StateBootstrapFinished{}, state)
 
 	stf := state.(*StateBootstrapFinished)
