@@ -20,6 +20,7 @@ import (
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-kademlia/network/address"
 	"github.com/plprobelab/go-kademlia/network/endpoint"
 	"github.com/plprobelab/go-kademlia/routing/simplert"
 	"github.com/plprobelab/go-kademlia/sim"
@@ -60,7 +61,7 @@ func main() {
 	ccfg.Clock = siml.Clock()
 	ccfg.PeerstoreTTL = peerstoreTTL
 
-	kad, err := coord.NewCoordinator[key.Key256, net.IP](nodes[0].ID(), eps[0], rts[0], ccfg)
+	kad, err := coord.NewCoordinator[key.Key256, net.IP](nodes[0].ID(), eps[0], findNodeFn, rts[0], ccfg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -202,6 +203,10 @@ func connectNodes(ctx context.Context, n0, n1 kad.NodeInfo[key.Key256, net.IP], 
 
 func debug(f string, args ...any) {
 	fmt.Println(fmt.Sprintf(f, args...))
+}
+
+var findNodeFn = func(n kad.NodeID[key.Key256]) (address.ProtocolID, kad.Request[key.Key256, net.IP]) {
+	return protoID, sim.NewRequest[key.Key256, net.IP](n.Key())
 }
 
 type RoutingUpdate any

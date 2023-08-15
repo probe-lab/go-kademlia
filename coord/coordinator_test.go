@@ -22,7 +22,7 @@ import (
 	"github.com/plprobelab/go-kademlia/sim"
 )
 
-func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key8, kadtest.StrAddr], []*sim.Endpoint[key.Key8, kadtest.StrAddr], []kad.RoutingTable[key.Key8, kad.NodeID[key.Key8]], *sim.LiteSimulator) {
+func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key8, kadtest.StrAddr], []*sim.Endpoint[key.Key8, kadtest.StrAddr], []*simplert.SimpleRT[key.Key8, kad.NodeID[key.Key8]], *sim.LiteSimulator) {
 	// create node identifiers
 	nodeCount := 4
 	ids := make([]*kadtest.ID[key.Key8], nodeCount)
@@ -48,7 +48,7 @@ func setupSimulation(t *testing.T, ctx context.Context) ([]kad.NodeInfo[key.Key8
 	// create a fake router to virtually connect nodes
 	router := sim.NewRouter[key.Key8, kadtest.StrAddr]()
 
-	rts := make([]kad.RoutingTable[key.Key8, kad.NodeID[key.Key8]], len(addrs))
+	rts := make([]*simplert.SimpleRT[key.Key8, kad.NodeID[key.Key8]], len(addrs))
 	eps := make([]*sim.Endpoint[key.Key8, kadtest.StrAddr], len(addrs))
 	schedulers := make([]event.AwareScheduler, len(addrs))
 	servers := make([]*sim.Server[key.Key8, kadtest.StrAddr], len(addrs))
@@ -106,6 +106,10 @@ func connectNodes(t *testing.T, n0, n1 kad.NodeInfo[key.Key8, kadtest.StrAddr], 
 const peerstoreTTL = 10 * time.Minute
 
 var protoID = address.ProtocolID("/statemachine/1.0.0") // protocol ID for the test
+
+var findNodeFn = func(n kad.NodeID[key.Key8]) (address.ProtocolID, kad.Request[key.Key8, kadtest.StrAddr]) {
+	return protoID, sim.NewRequest[key.Key8, kadtest.StrAddr](n.Key())
+}
 
 // expectEventType selects on the event channel until an event of the expected type is sent.
 func expectEventType(t *testing.T, ctx context.Context, events <-chan KademliaEvent, expected KademliaEvent) (KademliaEvent, error) {
@@ -195,7 +199,7 @@ func TestExhaustiveQuery(t *testing.T) {
 	// A will first ask B, B will reply with C's address (and A's address)
 	// A will then ask C, C will reply with D's address (and B's address)
 	self := nodes[0].ID()
-	c, err := NewCoordinator[key.Key8, kadtest.StrAddr](self, eps[0], rts[0], ccfg)
+	c, err := NewCoordinator[key.Key8, kadtest.StrAddr](self, eps[0], findNodeFn, rts[0], ccfg)
 	if err != nil {
 		log.Fatalf("unexpected error creating coordinator: %v", err)
 	}
@@ -272,7 +276,7 @@ func TestRoutingUpdatedEventEmittedForCloserNodes(t *testing.T) {
 	// A will first ask B, B will reply with C's address (and A's address)
 	// A will then ask C, C will reply with D's address (and B's address)
 	self := nodes[0].ID()
-	c, err := NewCoordinator[key.Key8, kadtest.StrAddr](self, eps[0], rts[0], ccfg)
+	c, err := NewCoordinator[key.Key8, kadtest.StrAddr](self, eps[0], findNodeFn, rts[0], ccfg)
 	if err != nil {
 		log.Fatalf("unexpected error creating coordinator: %v", err)
 	}
@@ -309,10 +313,6 @@ func TestRoutingUpdatedEventEmittedForCloserNodes(t *testing.T) {
 	require.NoError(t, err)
 }
 
-var findNodeFn = func(n kad.NodeID[key.Key8]) (address.ProtocolID, kad.Request[key.Key8, kadtest.StrAddr]) {
-	return protoID, sim.NewRequest[key.Key8, kadtest.StrAddr](n.Key())
-}
-
 func TestBootstrap(t *testing.T) {
 	ctx, cancel := kadtest.Ctx(t)
 	defer cancel()
@@ -337,7 +337,7 @@ func TestBootstrap(t *testing.T) {
 	}(ctx)
 
 	self := nodes[0].ID()
-	c, err := NewCoordinator[key.Key8, kadtest.StrAddr](self, eps[0], rts[0], ccfg)
+	c, err := NewCoordinator[key.Key8, kadtest.StrAddr](self, eps[0], findNodeFn, rts[0], ccfg)
 	if err != nil {
 		log.Fatalf("unexpected error creating coordinator: %v", err)
 	}
@@ -349,10 +349,8 @@ func TestBootstrap(t *testing.T) {
 	seeds := []kad.NodeID[key.Key8]{
 		nodes[1].ID(),
 	}
-	err = c.Bootstrap(ctx, seeds, findNodeFn)
-	if err != nil {
-		t.Fatalf("failed to initiate bootstrap: %v", err)
-	}
+	err = c.Bootstrap(ctx, seeds)
+	require.NoError(t, err)
 
 	// the query run by the coordinator should have received a response from nodes[1]
 	ev, err := expectEventType(t, ctx, events, &KademliaOutboundQueryProgressedEvent[key.Key8, kadtest.StrAddr]{})
@@ -387,4 +385,59 @@ func TestBootstrap(t *testing.T) {
 	require.Equal(t, 3, tevf.Stats.Requests)
 	require.Equal(t, 3, tevf.Stats.Success)
 	require.Equal(t, 0, tevf.Stats.Failure)
+}
+
+func TestIncludeNode(t *testing.T) {
+	ctx, cancel := kadtest.Ctx(t)
+	defer cancel()
+
+	nodes, eps, rts, siml := setupSimulation(t, ctx)
+
+	clk := siml.Clock()
+
+	ccfg := DefaultConfig()
+	ccfg.Clock = clk
+	ccfg.PeerstoreTTL = peerstoreTTL
+
+	go func(ctx context.Context) {
+		for {
+			select {
+			case <-time.After(10 * time.Millisecond):
+				siml.Run(ctx)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}(ctx)
+
+	self := nodes[0].ID()
+	c, err := NewCoordinator[key.Key8, kadtest.StrAddr](self, eps[0], findNodeFn, rts[0], ccfg)
+	if err != nil {
+		log.Fatalf("unexpected error creating coordinator: %v", err)
+	}
+	siml.Add(c)
+	events := c.Events()
+
+	candidate := nodes[3] // not in nodes[0] routing table
+
+	// the routing table should not contain the node yet
+	foundNode, err := rts[0].Find(ctx, candidate.ID().Key())
+	require.NoError(t, err)
+	require.Nil(t, foundNode)
+
+	// inject a new node into the coordinator's includeEvents queue
+	err = c.AddNodes(ctx, []kad.NodeInfo[key.Key8, kadtest.StrAddr]{candidate})
+	require.NoError(t, err)
+
+	// the include state machine runs in the background and eventually should add the node to routing table
+	ev, err := expectEventType(t, ctx, events, &KademliaRoutingUpdatedEvent[key.Key8, kadtest.StrAddr]{})
+	require.NoError(t, err)
+
+	tev := ev.(*KademliaRoutingUpdatedEvent[key.Key8, kadtest.StrAddr])
+	require.Equal(t, candidate.ID(), tev.NodeInfo.ID())
+
+	// the routing table should contain the node
+	foundNode, err = rts[0].Find(ctx, candidate.ID().Key())
+	require.NoError(t, err)
+	require.NotNil(t, foundNode)
 }
