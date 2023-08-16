@@ -140,6 +140,8 @@ type RoutingProtocol[K Key[K], N NodeID[K], A Address[A]] interface {
 }
 
 type RecordProtocol[K Key[K], N NodeID[K]] interface {
-	Get(ctx context.Context, to N, target K) ([]any, []N, error)
-	Put(ctx context.Context, to N, record any) error
+	Get(ctx context.Context, to N, target K) ([]Record, []N, error)
+	Put(ctx context.Context, to N, record Record) error
 }
+
+type Record any
