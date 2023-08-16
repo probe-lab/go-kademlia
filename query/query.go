@@ -373,6 +373,7 @@ func (q *Query[K, A]) onMessageFailure(ctx context.Context, node kad.NodeID[K]) 
 	switch st := ni.State.(type) {
 	case *StateNodeWaiting:
 		q.inFlight--
+		q.stats.Failure++
 	case *StateNodeUnresponsive:
 		// update node state to failed
 		break

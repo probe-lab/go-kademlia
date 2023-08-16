@@ -76,7 +76,7 @@ func TestPoolStartsIdle(t *testing.T) {
 	p, err := NewPool[key.Key8, kadtest.StrAddr](self, cfg)
 	require.NoError(t, err)
 
-	state := p.Advance(ctx, nil)
+	state := p.Advance(ctx, &EventPoolPoll{})
 	require.IsType(t, &StatePoolIdle{}, state)
 }
 
@@ -90,7 +90,7 @@ func TestPoolStopWhenNoQueries(t *testing.T) {
 	p, err := NewPool[key.Key8, kadtest.StrAddr](self, cfg)
 	require.NoError(t, err)
 
-	state := p.Advance(ctx, &EventPoolStopQuery{})
+	state := p.Advance(ctx, &EventPoolPoll{})
 	require.IsType(t, &StatePoolIdle{}, state)
 }
 
@@ -137,7 +137,7 @@ func TestPoolAddQueryStartsIfCapacity(t *testing.T) {
 	require.Equal(t, msg, st.Message)
 
 	// now the pool reports that it is waiting
-	state = p.Advance(ctx, nil)
+	state = p.Advance(ctx, &EventPoolPoll{})
 	require.IsType(t, &StatePoolWaitingWithCapacity{}, state)
 }
 
@@ -244,14 +244,14 @@ func TestPoolPrefersRunningQueriesOverNewOnes(t *testing.T) {
 	require.Equal(t, b, st.NodeID)
 
 	// advance the pool again, the first query should continue its operation in preference to starting the new query
-	state = p.Advance(ctx, nil)
+	state = p.Advance(ctx, &EventPoolPoll{})
 	require.IsType(t, &StatePoolQueryMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StatePoolQueryMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, queryID1, st.QueryID)
 	require.Equal(t, c, st.NodeID)
 
 	// advance the pool again, the first query is at capacity so the second query can start
-	state = p.Advance(ctx, nil)
+	state = p.Advance(ctx, &EventPoolPoll{})
 	require.IsType(t, &StatePoolQueryMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StatePoolQueryMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, queryID2, st.QueryID)
@@ -362,7 +362,7 @@ func TestPoolRespectsConcurrency(t *testing.T) {
 	require.Equal(t, queryID1, stf.QueryID)
 
 	// advancing pool again allows query 3 to start
-	state = p.Advance(ctx, nil)
+	state = p.Advance(ctx, &EventPoolPoll{})
 	require.IsType(t, &StatePoolQueryMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StatePoolQueryMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, queryID3, st.QueryID)

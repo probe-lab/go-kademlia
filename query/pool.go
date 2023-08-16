@@ -154,9 +154,8 @@ func (p *Pool[K, A]) Advance(ctx context.Context, ev PoolEvent) PoolState {
 			}
 			eventQueryID = qry.id
 		}
-	case nil:
-		// TEMPORARY: no event to process
-		// TODO: introduce EventPoolPoll?
+	case *EventPoolPoll:
+		// no event to process
 	default:
 		panic(fmt.Sprintf("unexpected event: %T", tev))
 	}
@@ -279,7 +278,7 @@ type PoolState interface {
 // StatePoolIdle indicates that the pool is idle, i.e. there are no queries to process.
 type StatePoolIdle struct{}
 
-// StatePoolQueryMessage indicates that at a query is waiting to message a node.
+// StatePoolQueryMessage indicates that a pool query is waiting to message a node.
 type StatePoolQueryMessage[K kad.Key[K], A kad.Address[A]] struct {
 	QueryID    QueryID
 	NodeID     kad.NodeID[K]
@@ -302,7 +301,7 @@ type StatePoolQueryFinished struct {
 	Stats   QueryStats
 }
 
-// StatePoolQueryTimeout indicates that at a query has timed out.
+// StatePoolQueryTimeout indicates that a query has timed out.
 type StatePoolQueryTimeout struct {
 	QueryID QueryID
 	Stats   QueryStats
@@ -349,8 +348,12 @@ type EventPoolMessageFailure[K kad.Key[K]] struct {
 	Error   error         // the error that caused the failure, if any
 }
 
+// EventPoolPoll is an event that signals the pool that it can perform housekeeping work such as time out queries.
+type EventPoolPoll struct{}
+
 // poolEvent() ensures that only Pool events can be assigned to the PoolEvent interface.
 func (*EventPoolAddQuery[K, A]) poolEvent()        {}
 func (*EventPoolStopQuery) poolEvent()             {}
 func (*EventPoolMessageResponse[K, A]) poolEvent() {}
 func (*EventPoolMessageFailure[K]) poolEvent()     {}
+func (*EventPoolPoll) poolEvent()                  {}
