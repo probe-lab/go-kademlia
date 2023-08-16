@@ -90,7 +90,7 @@ func TestPoolStopWhenNoQueries(t *testing.T) {
 	p, err := NewPool[key.Key8, kadtest.StrAddr](self, cfg)
 	require.NoError(t, err)
 
-	state := p.Advance(ctx, &EventPoolStopQuery{})
+	state := p.Advance(ctx, &EventPoolPoll{})
 	require.IsType(t, &StatePoolIdle{}, state)
 }
 
