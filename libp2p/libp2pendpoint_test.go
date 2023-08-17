@@ -430,7 +430,7 @@ func TestReqTimeout(t *testing.T) {
 	go func() {
 		// timeout is queued in the scheduler 0
 		for !scheds[0].RunOne(ctx) {
-			time.Sleep(1 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 		}
 		require.False(t, scheds[0].RunOne(ctx))
 		wg.Done()
