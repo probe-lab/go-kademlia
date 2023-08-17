@@ -75,6 +75,11 @@ func (s *LiteSimulator) Run(ctx context.Context) {
 	}
 
 	for len(nextActions) > 0 {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 		// find the time of the next action to be run
 		minTime := event.MaxTime
 		for _, t := range nextActions {
@@ -101,6 +106,11 @@ func (s *LiteSimulator) Run(ctx context.Context) {
 		}
 
 		for len(upNext) > 0 {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
 			ongoing := make([]int, len(upNext))
 			copy(ongoing, upNext)
 

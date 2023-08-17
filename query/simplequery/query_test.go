@@ -704,11 +704,7 @@ func TestCornerCases(t *testing.T) {
 		q.requestError(ctx, node1.ID(), errors.New(""))
 	}))
 
-	// create simulator
-	s := sim.NewLiteSimulator(clk)
-	sim.AddSchedulers(s, sched0)
-	// run simulation
-	s.Run(ctx)
+	sched0.RunOne(ctx)
 
 	require.True(t, q.done)
 }

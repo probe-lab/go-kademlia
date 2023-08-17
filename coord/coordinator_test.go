@@ -399,17 +399,6 @@ func TestIncludeNode(t *testing.T) {
 	ccfg.Clock = clk
 	ccfg.PeerstoreTTL = peerstoreTTL
 
-	go func(ctx context.Context) {
-		for {
-			select {
-			case <-time.After(10 * time.Millisecond):
-				siml.Run(ctx)
-			case <-ctx.Done():
-				return
-			}
-		}
-	}(ctx)
-
 	self := nodes[0].ID()
 	c, err := NewCoordinator[key.Key8, kadtest.StrAddr](self, eps[0], findNodeFn, rts[0], ccfg)
 	if err != nil {
@@ -425,6 +414,21 @@ func TestIncludeNode(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, foundNode)
 
+	// Run the simulation
+	simctx, simcancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func(ctx context.Context) {
+		for {
+			select {
+			case <-time.After(10 * time.Millisecond):
+				siml.Run(ctx)
+			case <-ctx.Done():
+				close(done)
+				return
+			}
+		}
+	}(simctx)
+
 	// inject a new node into the coordinator's includeEvents queue
 	err = c.AddNodes(ctx, []kad.NodeInfo[key.Key8, kadtest.StrAddr]{candidate})
 	require.NoError(t, err)
@@ -435,6 +439,14 @@ func TestIncludeNode(t *testing.T) {
 
 	tev := ev.(*KademliaRoutingUpdatedEvent[key.Key8, kadtest.StrAddr])
 	require.Equal(t, candidate.ID(), tev.NodeInfo.ID())
+
+	// stop the simulation and wait for it to stop
+	simcancel()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		t.Fatalf("test deadline exceeded")
+	}
 
 	// the routing table should contain the node
 	foundNode, err = rts[0].Find(ctx, candidate.ID().Key())
