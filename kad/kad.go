@@ -134,13 +134,22 @@ type Response[K Key[K], A Address[A]] interface {
 	CloserNodes() []NodeInfo[K, A]
 }
 
+// RoutingProtocol defines the methods necessary for routing and pinging in a network.
 type RoutingProtocol[K Key[K], N NodeID[K], A Address[A]] interface {
+	// FindNode sends a message to a node requesting that it return the its closest nodes to the target key.
 	FindNode(ctx context.Context, to N, target K) ([]NodeInfo[K, A], error)
+
+	// Ping sends a message to a node to perform a liveness check.
 	Ping(ctx context.Context, to N) error
 }
 
-type RecordProtocol[K Key[K], N NodeID[K]] interface {
-	Get(ctx context.Context, to N, target K) ([]Record, []N, error)
+// RecordProtocol defines the methods for storing and retrieving records in a network.
+type RecordProtocol[K Key[K], N NodeID[K], A Address[A]] interface {
+	// Get sends a message to a node requesting that it return the records associated with the target key.
+	// The node may also return a list of closer nodes that may also store records for that key.
+	Get(ctx context.Context, to N, target K) ([]Record, []NodeInfo[K, A], error)
+
+	// Put sends a message to a node requesting that it store the record.
 	Put(ctx context.Context, to N, record Record) error
 }
 
