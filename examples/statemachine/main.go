@@ -33,7 +33,7 @@ func main() {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	nodes, eps, rts, siml := setupSimulation(ctx)
+	nodes, eps, rts, scheds, siml := setupSimulation(ctx)
 
 	tp, err := tracerProvider("http://localhost:14268/api/traces")
 	if err != nil {
@@ -61,11 +61,10 @@ func main() {
 	ccfg.Clock = siml.Clock()
 	ccfg.PeerstoreTTL = peerstoreTTL
 
-	kad, err := coord.NewCoordinator[key.Key256, net.IP](nodes[0].ID(), eps[0], findNodeFn, rts[0], ccfg)
+	kad, err := coord.NewCoordinator[key.Key256, net.IP](nodes[0].ID(), eps[0], findNodeFn, rts[0], scheds[0], ccfg)
 	if err != nil {
 		log.Fatal(err)
 	}
-	siml.Add(kad)
 
 	ih := NewIpfsDht(kad)
 	ih.Start(ctx)
@@ -97,7 +96,7 @@ func main() {
 
 const peerstoreTTL = 10 * time.Minute
 
-func setupSimulation(ctx context.Context) ([]kad.NodeInfo[key.Key256, net.IP], []*sim.Endpoint[key.Key256, net.IP], []kad.RoutingTable[key.Key256, kad.NodeID[key.Key256]], *sim.LiteSimulator) {
+func setupSimulation(ctx context.Context) ([]kad.NodeInfo[key.Key256, net.IP], []*sim.Endpoint[key.Key256, net.IP], []kad.RoutingTable[key.Key256, kad.NodeID[key.Key256]], []event.AwareScheduler, *sim.LiteSimulator) {
 	// create node identifiers
 	nodeCount := 4
 	ids := make([]*kadtest.ID[key.Key256], nodeCount)
@@ -183,7 +182,7 @@ func setupSimulation(ctx context.Context) ([]kad.NodeInfo[key.Key256, net.IP], [
 	siml := sim.NewLiteSimulator(clk)
 	sim.AddSchedulers(siml, schedulers...)
 
-	return addrs, eps, rts, siml
+	return addrs, eps, rts, schedulers, siml
 }
 
 // connectNodes adds nodes to each other's peerstores and routing tables

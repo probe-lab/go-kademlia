@@ -105,6 +105,24 @@ func (b *Include[K, A]) Advance(ctx context.Context, ev IncludeEvent) IncludeSta
 	switch tev := ev.(type) {
 
 	case *EventIncludeAddCandidate[K, A]:
+		// Ignore if already running a check
+		_, checking := b.checks[key.HexString(tev.NodeInfo.ID().Key())]
+		if checking {
+			break
+		}
+
+		// Ignore if node already in routing table
+		// TODO: promote this interface (or something similar) to kad.RoutingTable
+		if rtf, ok := b.rt.(interface {
+			Find(context.Context, kad.NodeID[K]) (kad.NodeInfo[K, A], error)
+		}); ok {
+			n, _ := rtf.Find(ctx, tev.NodeInfo.ID())
+			if n != nil {
+				// node already in routing table
+				break
+			}
+		}
+
 		// TODO: potentially time out a check and make room in the queue
 		if !b.candidates.HasCapacity() {
 			return &StateIncludeWaitingFull{}
