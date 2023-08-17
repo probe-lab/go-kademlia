@@ -38,36 +38,6 @@ func (a *StateMachineAction[E]) String() string {
 	return fmt.Sprintf("StateMachineAction[%T]", a.Event)
 }
 
-// eventQueue is a bounded, typed queue for events
-// NOTE: this type is incompatible with the semantics of event.Queue which blocks on Dequeue
-type eventQueue[E any] struct {
-	events chan E
-}
-
-func newEventQueue[E any](capacity int) *eventQueue[E] {
-	return &eventQueue[E]{
-		events: make(chan E, capacity),
-	}
-}
-
-// Enqueue adds an event to the queue. It blocks if the queue is at capacity.
-func (q *eventQueue[E]) Enqueue(ctx context.Context, e E) {
-	q.events <- e
-}
-
-// Dequeue reads an event from the queue. It returns the event and a true value
-// if an event was read or the zero value of the event type and false if no event
-// was read. This method is non-blocking.
-func (q *eventQueue[E]) Dequeue(ctx context.Context) (E, bool) {
-	select {
-	case e := <-q.events:
-		return e, true
-	default:
-		var v E
-		return v, false
-	}
-}
-
 // FindNodeRequestFunc is a function that creates a request to find the supplied node id
 // TODO: consider this being a first class method of the Endpoint
 type FindNodeRequestFunc[K kad.Key[K], A kad.Address[A]] func(kad.NodeID[K]) (address.ProtocolID, kad.Request[K, A])
