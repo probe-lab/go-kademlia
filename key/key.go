@@ -2,6 +2,7 @@ package key
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"math"
@@ -26,6 +27,12 @@ func NewKey256(data []byte) Key256 {
 	var b [32]byte
 	copy(b[:], data)
 	return Key256{b: &b}
+}
+
+// NewSha256 returns a 256-bit Kademlia key by SHA256 hashing the provided byte slice.
+func NewSha256(data []byte) Key256 {
+	h := sha256.Sum256(data)
+	return Key256{b: &h}
 }
 
 // ZeroKey256 returns a 256-bit Kademlia key with all bits zeroed.
