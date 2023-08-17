@@ -134,9 +134,9 @@ type Response[K Key[K], A Address[A]] interface {
 	CloserNodes() []NodeInfo[K, A]
 }
 
-// RoutingProtocol defines the methods necessary for routing and pinging in a network.
+// RoutingProtocol defines the methods necessary for routing in a network.
 type RoutingProtocol[K Key[K], N NodeID[K], A Address[A]] interface {
-	// FindNode sends a message to a node requesting that it return the its closest nodes to the target key.
+	// FindNode sends a message to a node requesting that it return its closest nodes to the target key.
 	FindNode(ctx context.Context, to N, target K) ([]NodeInfo[K, A], error)
 
 	// Ping sends a message to a node to perform a liveness check.
