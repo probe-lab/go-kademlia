@@ -42,6 +42,11 @@ func (a *StateMachineAction[E]) String() string {
 // TODO: consider this being a first class method of the Endpoint
 type FindNodeRequestFunc[K kad.Key[K], A kad.Address[A]] func(kad.NodeID[K]) (address.ProtocolID, kad.Request[K, A])
 
+// ActionQueue accepts actions and queues them for later execution
+type ActionQueue interface {
+	EnqueueAction(context.Context, event.Action)
+}
+
 // A Coordinator coordinates the state machines that comprise a Kademlia DHT
 // It is only one possible configuration of the DHT components, others are possible.
 // Currently this is only queries and bootstrapping but will expand to include other state machines such as
@@ -72,7 +77,7 @@ type Coordinator[K kad.Key[K], A kad.Address[A]] struct {
 	// TODO: thiis should be a function of the endpoint
 	findNodeFn FindNodeRequestFunc[K, A]
 
-	sched event.Scheduler
+	sched ActionQueue
 
 	outboundEvents chan KademliaEvent
 }
@@ -140,7 +145,7 @@ func DefaultConfig() *Config {
 	}
 }
 
-func NewCoordinator[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], ep endpoint.Endpoint[K, A], fn FindNodeRequestFunc[K, A], rt kad.RoutingTable[K, kad.NodeID[K]], sched event.Scheduler, cfg *Config) (*Coordinator[K, A], error) {
+func NewCoordinator[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], ep endpoint.Endpoint[K, A], fn FindNodeRequestFunc[K, A], rt kad.RoutingTable[K, kad.NodeID[K]], sched ActionQueue, cfg *Config) (*Coordinator[K, A], error) {
 	if cfg == nil {
 		cfg = DefaultConfig()
 	} else if err := cfg.Validate(); err != nil {
