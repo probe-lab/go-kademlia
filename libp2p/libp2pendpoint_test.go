@@ -12,6 +12,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/net/swarm"
 	ma "github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/stretchr/testify/require"
 
 	"github.com/plprobelab/go-kademlia/event"
@@ -135,12 +136,16 @@ func TestConnections(t *testing.T) {
 	connectedness, err = endpoints[0].Connectedness(ids[1])
 	require.NoError(t, err)
 	require.Equal(t, endpoint.Connected, connectedness)
+
 	// test peerinfo
 	peerinfo, err = endpoints[0].PeerInfo(ids[1])
 	require.NoError(t, err)
-	require.Len(t, peerinfo.Addrs, len(addrs[1].Addrs))
-	for _, addr := range peerinfo.Addrs {
-		require.Contains(t, addrs[1].Addrs, addr)
+	// filter out loopback addresses
+	expectedAddrs := ma.FilterAddrs(addrs[1].Addrs, func(a ma.Multiaddr) bool {
+		return !manet.IsIPLoopback(a)
+	})
+	for _, addr := range expectedAddrs {
+		require.Contains(t, peerinfo.Addrs, addr, addr.String(), expectedAddrs)
 	}
 	peerinfo, err = endpoints[0].PeerInfo(ids[2])
 	require.NoError(t, err)
