@@ -135,7 +135,7 @@ type Response[K Key[K], A Address[A]] interface {
 }
 
 type RoutingProtocol[K Key[K], N NodeID[K], A Address[A]] interface {
-	FindNode(ctx context.Context, to N, target K) (NodeInfo[K, A], []N, error)
+	FindNode(ctx context.Context, to N, target K) ([]NodeInfo[K, A], error)
 	Ping(ctx context.Context, to N) error
 }
 
