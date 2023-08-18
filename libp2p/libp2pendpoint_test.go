@@ -186,7 +186,7 @@ func TestAsyncDial(t *testing.T) {
 		// AsyncDialAndReport adds the dial action to the event queue, so we
 		// need to run the scheduler
 		for !scheds[0].RunOne(ctx) {
-			time.Sleep(time.Millisecond)
+			scheds[0].Clock().Sleep(time.Millisecond)
 		}
 		wg.Done()
 	}()
@@ -221,7 +221,7 @@ func TestAsyncDial(t *testing.T) {
 		// AsyncDialAndReport adds the dial action to the event queue, so we
 		// need to run the scheduler
 		for !scheds[0].RunOne(ctx) {
-			time.Sleep(time.Millisecond)
+			scheds[0].Clock().Sleep(time.Millisecond)
 		}
 		wg.Done()
 	}()
@@ -332,7 +332,7 @@ func TestSuccessfulRequest(t *testing.T) {
 	go func() {
 		// run server 1
 		for !scheds[1].RunOne(ctx) {
-			time.Sleep(time.Millisecond)
+			scheds[1].Clock().Sleep(time.Millisecond)
 		}
 		require.False(t, scheds[1].RunOne(ctx)) // only 1 action should run on server
 		wg.Done()
@@ -340,7 +340,7 @@ func TestSuccessfulRequest(t *testing.T) {
 	go func() {
 		// timeout is queued in the scheduler 0
 		for !scheds[0].RunOne(ctx) {
-			time.Sleep(time.Millisecond)
+			scheds[0].Clock().Sleep(time.Millisecond)
 		}
 		require.False(t, scheds[0].RunOne(ctx))
 		wg.Done()
@@ -389,7 +389,7 @@ func TestReqUnknownPeer(t *testing.T) {
 	go func() {
 		// timeout is queued in the scheduler 0
 		for !scheds[0].RunOne(ctx) {
-			time.Sleep(time.Millisecond)
+			scheds[0].Clock().Sleep(time.Millisecond)
 		}
 		require.False(t, scheds[0].RunOne(ctx))
 		wg.Done()
@@ -430,7 +430,7 @@ func TestReqTimeout(t *testing.T) {
 	go func() {
 		// timeout is queued in the scheduler 0
 		for !scheds[0].RunOne(ctx) {
-			time.Sleep(10 * time.Millisecond)
+			scheds[0].Clock().Sleep(time.Millisecond)
 		}
 		require.False(t, scheds[0].RunOne(ctx))
 		wg.Done()
@@ -478,7 +478,7 @@ func TestReqHandlerError(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		for !scheds[1].RunOne(ctx) {
-			time.Sleep(time.Millisecond)
+			scheds[1].Clock().Sleep(time.Millisecond)
 		}
 		require.False(t, scheds[1].RunOne(ctx))
 		cancel()
@@ -487,7 +487,7 @@ func TestReqHandlerError(t *testing.T) {
 	go func() {
 		// timeout is queued in the scheduler 0
 		for !scheds[0].RunOne(ctx) {
-			time.Sleep(time.Millisecond)
+			scheds[0].Clock().Sleep(time.Millisecond)
 		}
 		require.False(t, scheds[0].RunOne(ctx))
 		wg.Done()
@@ -532,7 +532,7 @@ func TestReqHandlerReturnsWrongType(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		for !scheds[1].RunOne(ctx) {
-			time.Sleep(time.Millisecond)
+			scheds[1].Clock().Sleep(time.Millisecond)
 		}
 		require.False(t, scheds[1].RunOne(ctx))
 		cancel()
@@ -541,7 +541,7 @@ func TestReqHandlerReturnsWrongType(t *testing.T) {
 	go func() {
 		// timeout is queued in the scheduler 0
 		for !scheds[0].RunOne(ctx) {
-			time.Sleep(time.Millisecond)
+			scheds[0].Clock().Sleep(time.Millisecond)
 		}
 		require.False(t, scheds[0].RunOne(ctx))
 		wg.Done()
