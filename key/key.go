@@ -3,11 +3,15 @@ package key
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 
 	"github.com/plprobelab/go-kademlia/kad"
 )
+
+// ErrInvalidDataLength is the error returned when attempting to construct a key from binary data of the wrong length.
+var ErrInvalidDataLength = errors.New("invalid data length")
 
 const bitPanicMsg = "bit index out of range"
 
@@ -21,7 +25,7 @@ var _ kad.Key[Key256] = Key256{}
 // NewKey256 returns a 256-bit Kademlia key whose bits are set from the supplied bytes.
 func NewKey256(data []byte) Key256 {
 	if len(data) != 32 {
-		panic("invalid data length for key")
+		panic(ErrInvalidDataLength)
 	}
 	var b [32]byte
 	copy(b[:], data)
@@ -86,7 +90,15 @@ func (k Key256) CommonPrefixLength(o Key256) int {
 
 // Compare compares the numeric value of the key with another key of the same type.
 func (k Key256) Compare(o Key256) int {
-	return bytes.Compare(k.b[:], o.b[:])
+	if k.b != nil && o.b != nil {
+		return bytes.Compare(k.b[:], o.b[:])
+	}
+
+	var zero [32]byte
+	if k.b == nil {
+		return bytes.Compare(zero[:], o.b[:])
+	}
+	return bytes.Compare(zero[:], k.b[:])
 }
 
 // HexString returns a string containing the hexadecimal representation of the key.
@@ -95,6 +107,16 @@ func (k Key256) HexString() string {
 		return ""
 	}
 	return hex.EncodeToString(k.b[:])
+}
+
+// MarshalBinary marshals the key into a byte slice.
+// The bytes may be passed to NewKey256 to construct a new key with the same value.
+func (k Key256) MarshalBinary() ([]byte, error) {
+	buf := make([]byte, 32)
+	if k.b != nil {
+		copy(buf, (*k.b)[:])
+	}
+	return buf, nil
 }
 
 // Key32 is a 32-bit Kademlia key, suitable for testing and simulation of small networks.
