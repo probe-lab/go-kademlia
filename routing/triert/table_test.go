@@ -1,7 +1,6 @@
 package triert
 
 import (
-	"context"
 	"math/rand"
 	"testing"
 
@@ -110,7 +109,7 @@ func TestRemovePeer(t *testing.T) {
 	})
 }
 
-func TestFindPeer(t *testing.T) {
+func TestGetNode(t *testing.T) {
 	t.Run("known peer", func(t *testing.T) {
 		rt, err := New[key.Key32](node0, nil)
 		require.NoError(t, err)
@@ -118,17 +117,17 @@ func TestFindPeer(t *testing.T) {
 		require.True(t, success)
 
 		want := node1
-		got, err := rt.Find(context.Background(), key1)
-		require.NoError(t, err)
+		got, found := rt.GetNode(key1)
+		require.True(t, found)
 		require.Equal(t, want, got)
 	})
 
 	t.Run("unknown peer", func(t *testing.T) {
 		rt, err := New[key.Key32](node0, nil)
 		require.NoError(t, err)
-		got, err := rt.Find(context.Background(), key2)
-		require.NoError(t, err)
-		require.Nil(t, got)
+		got, found := rt.GetNode(key2)
+		require.False(t, found)
+		require.Zero(t, got)
 	})
 
 	t.Run("removed peer", func(t *testing.T) {
@@ -138,16 +137,16 @@ func TestFindPeer(t *testing.T) {
 		require.True(t, success)
 
 		want := node1
-		got, err := rt.Find(context.Background(), key1)
-		require.NoError(t, err)
+		got, found := rt.GetNode(key1)
+		require.True(t, found)
 		require.Equal(t, want, got)
 
 		success = rt.RemoveKey(key1)
 		require.True(t, success)
 
-		got, err = rt.Find(context.Background(), key1)
-		require.NoError(t, err)
-		require.Nil(t, got)
+		got, found = rt.GetNode(key1)
+		require.False(t, found)
+		require.Zero(t, got)
 	})
 }
 
@@ -287,7 +286,6 @@ func TestCplSize(t *testing.T) {
 }
 
 func TestKeyFilter(t *testing.T) {
-	ctx := context.Background()
 	cfg := DefaultConfig[key.Key32, node[key.Key32]]()
 	cfg.KeyFilter = func(rt *TrieRT[key.Key32, node[key.Key32]], kk key.Key32) bool {
 		return !key.Equal(kk, key2) // don't allow key2 to be added
@@ -300,9 +298,9 @@ func TestKeyFilter(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, success)
 
-	got, err := rt.Find(ctx, key2)
-	require.NoError(t, err)
-	require.Nil(t, got)
+	got, found := rt.GetNode(key2)
+	require.False(t, found)
+	require.Zero(t, got)
 
 	// can add other key
 	success = rt.AddNode(node1)
@@ -310,8 +308,8 @@ func TestKeyFilter(t *testing.T) {
 	require.True(t, success)
 
 	want := node1
-	got, err = rt.Find(ctx, key1)
-	require.NoError(t, err)
+	got, found = rt.GetNode(key1)
+	require.True(t, found)
 	require.Equal(t, want, got)
 }
 
@@ -382,7 +380,7 @@ func benchmarkFindPositive(n int) func(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			rt.Find(context.Background(), keys[i%len(keys)])
+			rt.GetNode(keys[i%len(keys)])
 		}
 	}
 }
@@ -404,7 +402,7 @@ func benchmarkFindNegative(n int) func(b *testing.B) {
 		unknown := make([]key.Key32, n)
 		for i := 0; i < n; i++ {
 			kk := kadtest.RandomKey()
-			if found, _ := rt.Find(context.Background(), kk); found != nil {
+			if found, _ := rt.GetNode(kk); found != nil {
 				continue
 			}
 			unknown[i] = kk
@@ -413,7 +411,7 @@ func benchmarkFindNegative(n int) func(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			rt.Find(context.Background(), unknown[i%len(unknown)])
+			rt.GetNode(unknown[i%len(unknown)])
 		}
 	}
 }
@@ -459,8 +457,8 @@ func benchmarkChurn(n int) func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			node := universe[i%len(universe)]
-			found, _ := rt.Find(context.Background(), node.Key())
-			if found == nil {
+			_, found := rt.GetNode(node.Key())
+			if !found {
 				// add new peer
 				rt.AddNode(universe[i%len(universe)])
 			} else {

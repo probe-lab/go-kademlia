@@ -373,9 +373,9 @@ func TestIncludeNode(t *testing.T) {
 	candidate := nodes[3] // not in nodes[0] routing table
 
 	// the routing table should not contain the node yet
-	foundNode, err := rts[0].Find(ctx, candidate.ID().Key())
-	require.NoError(t, err)
-	require.Nil(t, foundNode)
+	foundNode, found := rts[0].GetNode(candidate.ID().Key())
+	require.False(t, found)
+	require.Zero(t, foundNode)
 
 	self := nodes[0].ID()
 	c, err := NewCoordinator[key.Key8, kadtest.StrAddr](self, eps[0], findNodeFn, rts[0], scheds[0], ccfg)
@@ -399,7 +399,7 @@ func TestIncludeNode(t *testing.T) {
 	require.Equal(t, candidate.ID(), tev.NodeInfo.ID())
 
 	// the routing table should contain the node
-	foundNode, err = rts[0].Find(ctx, candidate.ID().Key())
-	require.NoError(t, err)
-	require.NotNil(t, foundNode)
+	foundNode, found = rts[0].GetNode(candidate.ID().Key())
+	require.True(t, found)
+	require.NotZero(t, foundNode)
 }

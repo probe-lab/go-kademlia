@@ -112,15 +112,8 @@ func (b *Include[K, A]) Advance(ctx context.Context, ev IncludeEvent) IncludeSta
 		}
 
 		// Ignore if node already in routing table
-		// TODO: promote this interface (or something similar) to kad.RoutingTable
-		if rtf, ok := b.rt.(interface {
-			Find(context.Context, kad.NodeID[K]) (kad.NodeInfo[K, A], error)
-		}); ok {
-			n, _ := rtf.Find(ctx, tev.NodeInfo.ID())
-			if n != nil {
-				// node already in routing table
-				break
-			}
+		if _, exists := b.rt.GetNode(tev.NodeInfo.ID().Key()); exists {
+			break
 		}
 
 		// TODO: potentially time out a check and make room in the queue

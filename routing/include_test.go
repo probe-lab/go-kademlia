@@ -263,8 +263,8 @@ func TestIncludeMessageResponse(t *testing.T) {
 	require.Equal(t, kadtest.NewID(key.Key8(4)), st.NodeInfo.ID())
 
 	// the routing table should contain the node
-	foundNode, err := rt.Find(ctx, key.Key8(4))
-	require.NoError(t, err)
+	foundNode, found := rt.GetNode(key.Key8(4))
+	require.True(t, found)
 	require.NotNil(t, foundNode)
 
 	require.True(t, key.Equal(foundNode.Key(), key.Key8(4)))
@@ -306,8 +306,8 @@ func TestIncludeMessageResponseInvalid(t *testing.T) {
 	require.IsType(t, &StateIncludeIdle{}, state)
 
 	// the routing table should not contain the node
-	foundNode, err := rt.Find(ctx, key.Key8(4))
-	require.NoError(t, err)
+	foundNode, found := rt.GetNode(key.Key8(4))
+	require.False(t, found)
 	require.Nil(t, foundNode)
 }
 
@@ -344,7 +344,7 @@ func TestIncludeMessageFailure(t *testing.T) {
 	require.IsType(t, &StateIncludeIdle{}, state)
 
 	// the routing table should not contain the node
-	foundNode, err := rt.Find(ctx, key.Key8(4))
-	require.NoError(t, err)
+	foundNode, found := rt.GetNode(key.Key8(4))
+	require.False(t, found)
 	require.Nil(t, foundNode)
 }

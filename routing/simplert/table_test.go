@@ -1,7 +1,6 @@
 package simplert
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -117,7 +116,7 @@ func TestAddPeer(t *testing.T) {
 	require.False(t, success)
 }
 
-func TestRemovePeer(t *testing.T) {
+func TestRemoveKey(t *testing.T) {
 	p := kt.NewID(key0) // irrelevant
 
 	rt := New[key.Key256](kt.NewID(key0), 2)
@@ -128,29 +127,27 @@ func TestRemovePeer(t *testing.T) {
 	require.True(t, success)
 }
 
-func TestFindPeer(t *testing.T) {
-	ctx := context.Background()
+func TestGetNode(t *testing.T) {
 	p := kt.NewID(key0)
 
 	rt := New[key.Key256](kt.NewID(key0), 2)
 	success := rt.addPeer(key1, p)
 	require.True(t, success)
 
-	peerid, err := rt.Find(ctx, key1)
-	require.NoError(t, err)
+	peerid, found := rt.GetNode(key1)
+	require.True(t, found)
 	require.Equal(t, p, peerid)
 
-	peerid, err = rt.Find(ctx, key2)
-	require.NoError(t, err)
-	require.Nil(t, peerid)
+	peerid, found = rt.GetNode(key2)
+	require.False(t, found)
+	require.Zero(t, peerid)
 
 	success = rt.RemoveKey(key1)
-	require.NoError(t, err)
 	require.True(t, success)
 
-	peerid, err = rt.Find(ctx, key1)
-	require.NoError(t, err)
-	require.Nil(t, peerid)
+	peerid, found = rt.GetNode(key1)
+	require.False(t, found)
+	require.Zero(t, peerid)
 }
 
 func TestNearestPeers(t *testing.T) {

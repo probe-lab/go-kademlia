@@ -1,7 +1,6 @@
 package triert
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
@@ -80,13 +79,13 @@ func (rt *TrieRT[K, N]) NearestNodes(target K, n int) []N {
 	return nodes
 }
 
-func (rt *TrieRT[K, N]) Find(ctx context.Context, kk K) (kad.NodeID[K], error) {
+func (rt *TrieRT[K, N]) GetNode(kk K) (N, bool) {
 	found, node := trie.Find(rt.keys, kk)
-	if found {
-		return node, nil
+	if !found {
+		var zero N
+		return zero, false
 	}
-
-	return nil, nil
+	return node, true
 }
 
 // Size returns the number of peers contained in the table.
