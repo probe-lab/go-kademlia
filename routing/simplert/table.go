@@ -1,16 +1,12 @@
 package simplert
 
 import (
-	"context"
 	"sort"
 
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
 
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/util"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 type peerInfo[K kad.Key[K], N kad.NodeID[K]] struct {
@@ -174,19 +170,15 @@ func (rt *SimpleRT[K, N]) RemoveKey(kadId K) bool {
 	return false
 }
 
-func (rt *SimpleRT[K, N]) Find(ctx context.Context, kadId K) (N, error) {
-	_, span := util.StartSpan(ctx, "routing.simple.find", trace.WithAttributes(
-		attribute.String("KadID", key.HexString(kadId)),
-	))
-	defer span.End()
-
+func (rt *SimpleRT[K, N]) GetNode(kadId K) (N, bool) {
 	bid, _ := rt.BucketIdForKey(kadId)
 	for _, p := range rt.buckets[bid] {
 		if key.Equal(kadId, p.kadId) {
-			return p.id, nil
+			return p.id, true
 		}
 	}
-	return *new(N), nil // TODO: can't return nil
+	var zero N
+	return zero, false
 }
 
 // TODO: not exactly working as expected

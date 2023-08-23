@@ -68,6 +68,11 @@ type RoutingTable[K Key[K], N NodeID[K]] interface {
 	// contain at maximum the given number of entries, but also possibly less
 	// if the number exceeds the number of nodes in the routing table.
 	NearestNodes(K, int) []N
+
+	// GetNode returns the node identified by the supplied Kademlia key or a zero
+	// value if the node is not present in the routing table. The boolean second
+	// return value indicates whether the node was found in the table.
+	GetNode(K) (N, bool)
 }
 
 // NodeID is a generic node identifier and not equal to a Kademlia key. Some
