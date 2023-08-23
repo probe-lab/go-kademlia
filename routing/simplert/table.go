@@ -232,3 +232,19 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// Cpl returns the longest common prefix length the supplied key shares with the table's key.
+func (rt *SimpleRT[K, N]) Cpl(kk K) int {
+	return rt.self.CommonPrefixLength(kk)
+}
+
+// CplSize returns the number of nodes in the table whose longest common prefix with the table's key is of length cpl.
+func (rt *SimpleRT[K, N]) CplSize(cpl int) int {
+	bid := cpl // cpl is simply the bucket id
+	nBuckets := len(rt.buckets)
+	if bid >= nBuckets {
+		bid = nBuckets - 1
+	}
+
+	return len(rt.buckets[bid])
+}

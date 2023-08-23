@@ -97,6 +97,7 @@ func (b *Bootstrap[K, A]) Advance(ctx context.Context, ev BootstrapEvent) Bootst
 
 	switch tev := ev.(type) {
 	case *EventBootstrapStart[K, A]:
+
 		// TODO: ignore start event if query is already in progress
 		iter := query.NewClosestNodesIter(b.self.Key())
 
