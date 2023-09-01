@@ -33,7 +33,7 @@ type RoutingTableCpl[K kad.Key[K], N kad.NodeID[K]] interface {
 // interval.
 //
 // Connectivity checks are performed in time order, so older nodes are processed first. The connectivity check performed
-// is the same as for the Include state machine: ask the node for closest nodes to itself and confirm that the node
+// is the same as for the [Include] state machine: ask the node for closest nodes to itself and confirm that the node
 // returns at least one node in the list of closer nodes. The state machine emits the [StateProbeConnectivityCheck]
 // state when it wants to check the status of a node.
 //
@@ -42,7 +42,7 @@ type RoutingTableCpl[K kad.Key[K], N kad.NodeID[K]] interface {
 // configurable timeout the node is marked as failed.
 //
 // Nodes that receive a successful response have their next check time updated to the current time plus the configured
-// check interval.
+// [ProbeConfig.CheckInterval].
 //
 // Nodes that fail a connectivity check, or are timed out, are removed from the routing table and from the list of nodes
 // to check. The state machine emits the [StateProbeNodeFailure] state to notify callers of this event.
@@ -58,7 +58,8 @@ type RoutingTableCpl[K kad.Key[K], N kad.NodeID[K]] interface {
 type Probe[K kad.Key[K], A kad.Address[A]] struct {
 	rt RoutingTableCpl[K, kad.NodeID[K]]
 
-	// nvl is a list of nodes with scoring values
+	// nvl is a list of nodes with information about their connectivity checks
+	// TODO: this will be expanded with more general scoring information related to their utility
 	nvl *nodeValueList[K]
 
 	// cfg is a copy of the optional configuration supplied to the Probe
@@ -70,7 +71,7 @@ type ProbeConfig struct {
 	CheckInterval time.Duration // the minimum time interval between checks for a node
 	Concurrency   int           // the maximum number of probe checks that may be in progress at any one time
 	Timeout       time.Duration // the time to wait before terminating a check that is not making progress
-	Clock         clock.Clock   // a clock that may replaced by a mock when testing
+	Clock         clock.Clock   // a clock that may be replaced by a mock when testing
 }
 
 // Validate checks the configuration options and returns an error if any have invalid values.
@@ -110,10 +111,10 @@ func (cfg *ProbeConfig) Validate() error {
 // Options may be overridden before passing to NewProbe
 func DefaultProbeConfig() *ProbeConfig {
 	return &ProbeConfig{
-		Clock:         clock.New(), // use standard time
-		Concurrency:   3,
-		Timeout:       time.Minute,
-		CheckInterval: 6 * time.Hour,
+		Clock:         clock.New(),   // use standard time
+		Concurrency:   3,             // MAGIC
+		Timeout:       time.Minute,   // MAGIC
+		CheckInterval: 6 * time.Hour, // MAGIC
 	}
 }
 
@@ -125,7 +126,6 @@ func NewProbe[K kad.Key[K], A kad.Address[A]](rt RoutingTableCpl[K, kad.NodeID[K
 	}
 
 	return &Probe[K, A]{
-		// candidates: newNodeQueue[K, A](cfg.QueueCapacity),
 		cfg: *cfg,
 		rt:  rt,
 		nvl: NewNodeValueList[K](),
@@ -156,6 +156,7 @@ func (p *Probe[K, A]) Advance(ctx context.Context, ev ProbeEvent) ProbeState {
 			NextCheckDue: p.cfg.Clock.Now().Add(p.cfg.CheckInterval),
 			Cpl:          p.rt.Cpl(tev.NodeID.Key()),
 		}
+		// TODO: if node was in ongoing list return a state that can signal the caller to cancel any prior outbound message
 		p.nvl.Put(nv)
 	case *EventProbeRemove[K]:
 		span.SetAttributes(attribute.String("event", "EventProbeRemove"), attribute.String("nodeid", tev.NodeID.String()))
@@ -180,15 +181,14 @@ func (p *Probe[K, A]) Advance(ctx context.Context, ev ProbeEvent) ProbeState {
 		span.RecordError(tev.Error)
 		p.rt.RemoveKey(tev.NodeInfo.ID().Key())
 		p.nvl.Remove(tev.NodeInfo.ID())
-		return &StateProbeNodeFailure[K, A]{
-			NodeInfo: tev.NodeInfo,
+		return &StateProbeNodeFailure[K]{
+			NodeID: tev.NodeInfo.ID(),
 		}
 	case *EventProbeNotifyConnectivity[K]:
 		span.SetAttributes(attribute.String("event", "EventProbeNotifyConnectivity"), attribute.String("nodeid", tev.NodeID.String()))
 		nv, found := p.nvl.Get(tev.NodeID)
 		if !found {
 			// ignore message for unknown node, which might have been removed
-			span.RecordError(errors.New("node not in node value list"))
 			break
 		}
 		// update next check time
@@ -213,10 +213,8 @@ func (p *Probe[K, A]) Advance(ctx context.Context, ev ProbeEvent) ProbeState {
 		// mark the node as failed since it timed out
 		p.rt.RemoveKey(candidate.Key())
 		p.nvl.Remove(candidate)
-		return &StateProbeNodeFailure[K, A]{
-			NodeInfo: unaddressedNodeInfo[K, A]{
-				NodeID: candidate,
-			},
+		return &StateProbeNodeFailure[K]{
+			NodeID: candidate,
 		}
 
 	}
@@ -235,29 +233,20 @@ func (p *Probe[K, A]) Advance(ctx context.Context, ev ProbeEvent) ProbeState {
 	p.nvl.MarkOngoing(next.NodeID, p.cfg.Clock.Now().Add(p.cfg.Timeout))
 
 	// Ask the node to find itself
-	return &StateProbeConnectivityCheck[K, A]{
-		NodeInfo: unaddressedNodeInfo[K, A]{
-			NodeID: next.NodeID,
-		},
+	return &StateProbeConnectivityCheck[K]{
+		NodeID: next.NodeID,
 	}
 }
 
-type unaddressedNodeInfo[K kad.Key[K], A kad.Address[A]] struct {
-	NodeID kad.NodeID[K]
-}
-
-func (u unaddressedNodeInfo[K, A]) ID() kad.NodeID[K] { return u.NodeID }
-func (u unaddressedNodeInfo[K, A]) Addresses() []A    { return nil }
-
-// ProbeState is the state of a probe.
+// ProbeState is the state of the [Probe] state machine.
 type ProbeState interface {
 	probeState()
 }
 
 // StateProbeConnectivityCheck indicates that the probe subsystem is waiting to send a connectivity check to a node.
 // A find node message should be sent to the node, with the target being the node's key.
-type StateProbeConnectivityCheck[K kad.Key[K], A kad.Address[A]] struct {
-	NodeInfo kad.NodeInfo[K, A] // the node to send the mssage to
+type StateProbeConnectivityCheck[K kad.Key[K]] struct {
+	NodeID kad.NodeID[K] // the node to send the message to
 }
 
 // StateProbeIdle indicates that the probe state machine is not running any checks.
@@ -272,16 +261,16 @@ type StateProbeWaitingAtCapacity struct{}
 type StateProbeWaitingWithCapacity struct{}
 
 // StateProbeNodeFailure indicates a node has failed a connectivity check been removed from the routing table and the probe list
-type StateProbeNodeFailure[K kad.Key[K], A kad.Address[A]] struct {
-	NodeInfo kad.NodeInfo[K, A]
+type StateProbeNodeFailure[K kad.Key[K]] struct {
+	NodeID kad.NodeID[K]
 }
 
 // probeState() ensures that only Probe states can be assigned to the ProbeState interface.
-func (*StateProbeConnectivityCheck[K, A]) probeState() {}
-func (*StateProbeIdle) probeState()                    {}
-func (*StateProbeWaitingAtCapacity) probeState()       {}
-func (*StateProbeWaitingWithCapacity) probeState()     {}
-func (*StateProbeNodeFailure[K, A]) probeState()       {}
+func (*StateProbeConnectivityCheck[K]) probeState() {}
+func (*StateProbeIdle) probeState()                 {}
+func (*StateProbeWaitingAtCapacity) probeState()    {}
+func (*StateProbeWaitingWithCapacity) probeState()  {}
+func (*StateProbeNodeFailure[K]) probeState()       {}
 
 // ProbeEvent is an event intended to advance the state of a probe.
 type ProbeEvent interface {

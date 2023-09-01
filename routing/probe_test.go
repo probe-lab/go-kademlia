@@ -17,6 +17,13 @@ import (
 
 var _ heap.Interface = (*nodeValuePendingList[key.Key8])(nil)
 
+type unaddressedNodeInfo[K kad.Key[K], A kad.Address[A]] struct {
+	NodeID kad.NodeID[K]
+}
+
+func (u unaddressedNodeInfo[K, A]) ID() kad.NodeID[K] { return u.NodeID }
+func (u unaddressedNodeInfo[K, A]) Addresses() []A    { return nil }
+
 func TestProbeConfigValidate(t *testing.T) {
 	t.Run("default is valid", func(t *testing.T) {
 		cfg := DefaultProbeConfig()
@@ -129,13 +136,13 @@ func TestProbeAddStartsCheckIfCapacity(t *testing.T) {
 	// advance time by one revisit interval
 	clk.Add(cfg.CheckInterval)
 	state = sm.Advance(ctx, &EventProbePoll{})
-	require.IsType(t, &StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr]{}, state)
+	require.IsType(t, &StateProbeConnectivityCheck[key.Key8]{}, state)
 
 	// the probe state machine should attempt to contact the next node
-	st := state.(*StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr])
+	st := state.(*StateProbeConnectivityCheck[key.Key8])
 
 	// the connectivity check should be for the right node
-	require.True(t, key.Equal(key.Key8(4), st.NodeInfo.ID().Key()))
+	require.True(t, key.Equal(key.Key8(4), st.NodeID.Key()))
 }
 
 func TestProbeAddManyStartsChecksIfCapacity(t *testing.T) {
@@ -183,19 +190,19 @@ func TestProbeAddManyStartsChecksIfCapacity(t *testing.T) {
 
 	// Poll the state machine, it should now attempt to contact a node
 	state = sm.Advance(ctx, &EventProbePoll{})
-	require.IsType(t, &StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr]{}, state)
+	require.IsType(t, &StateProbeConnectivityCheck[key.Key8]{}, state)
 
 	// the connectivity check should be for the right node
-	st := state.(*StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr])
-	require.True(t, key.Equal(key.Key8(4), st.NodeInfo.ID().Key()))
+	st := state.(*StateProbeConnectivityCheck[key.Key8])
+	require.True(t, key.Equal(key.Key8(4), st.NodeID.Key()))
 
 	// Poll the state machine, it should now attempt to contact another node
 	state = sm.Advance(ctx, &EventProbePoll{})
-	require.IsType(t, &StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr]{}, state)
+	require.IsType(t, &StateProbeConnectivityCheck[key.Key8]{}, state)
 
 	// the connectivity check should be for the right node
-	st = state.(*StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr])
-	require.True(t, key.Equal(key.Key8(2), st.NodeInfo.ID().Key()))
+	st = state.(*StateProbeConnectivityCheck[key.Key8])
+	require.True(t, key.Equal(key.Key8(2), st.NodeID.Key()))
 
 	// Poll the state machine, it should now be at capacity
 	state = sm.Advance(ctx, &EventProbePoll{})
@@ -233,13 +240,13 @@ func TestProbeAddReportsCapacity(t *testing.T) {
 	// advance time by one revisit interval
 	clk.Add(cfg.CheckInterval)
 	state = sm.Advance(ctx, &EventProbePoll{})
-	require.IsType(t, &StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr]{}, state)
+	require.IsType(t, &StateProbeConnectivityCheck[key.Key8]{}, state)
 
 	// the probe state machine should attempt to contact the next node
-	st := state.(*StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr])
+	st := state.(*StateProbeConnectivityCheck[key.Key8])
 
 	// the connectivity check should be for the right node
-	require.True(t, key.Equal(key.Key8(4), st.NodeInfo.ID().Key()))
+	require.True(t, key.Equal(key.Key8(4), st.NodeID.Key()))
 
 	state = sm.Advance(ctx, &EventProbePoll{})
 	require.IsType(t, &StateProbeWaitingWithCapacity{}, state)
@@ -303,7 +310,7 @@ func TestNodeValueList(t *testing.T) {
 		require.True(t, key.Equal(got.NodeID.Key(), key.Key8(4)))
 	})
 
-	t.Run("put replace", func(t *testing.T) {
+	t.Run("put replace before", func(t *testing.T) {
 		t.Parallel()
 
 		clk := clock.NewMock()
@@ -318,6 +325,30 @@ func TestNodeValueList(t *testing.T) {
 		nv2 := &nodeValue[key.Key8]{
 			NodeID:       kadtest.NewID(key.Key8(4)),
 			NextCheckDue: clk.Now().Add(-time.Minute),
+		}
+		l.Put(nv2)
+
+		got, found := l.Get(kadtest.NewID(key.Key8(4)))
+		require.True(t, found)
+		require.True(t, key.Equal(got.NodeID.Key(), key.Key8(4)))
+		require.Equal(t, nv2.NextCheckDue, got.NextCheckDue)
+	})
+
+	t.Run("put replace after", func(t *testing.T) {
+		t.Parallel()
+
+		clk := clock.NewMock()
+		l := NewNodeValueList[key.Key8]()
+		nv1 := &nodeValue[key.Key8]{
+			NodeID:       kadtest.NewID(key.Key8(4)),
+			NextCheckDue: clk.Now(),
+		}
+
+		l.Put(nv1)
+
+		nv2 := &nodeValue[key.Key8]{
+			NodeID:       kadtest.NewID(key.Key8(4)),
+			NextCheckDue: clk.Now().Add(time.Minute),
 		}
 		l.Put(nv2)
 
@@ -588,14 +619,16 @@ func TestProbeMessageResponse(t *testing.T) {
 	// advance time by one revisit interval
 	clk.Add(cfg.CheckInterval)
 	state = sm.Advance(ctx, &EventProbePoll{})
-	require.IsType(t, &StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr]{}, state)
+	require.IsType(t, &StateProbeConnectivityCheck[key.Key8]{}, state)
 
 	// the probe state machine should attempt to contact the next node
-	st := state.(*StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr])
+	st := state.(*StateProbeConnectivityCheck[key.Key8])
 
 	// notify that node was contacted successfully, with no closer nodes
 	state = sm.Advance(ctx, &EventProbeMessageResponse[key.Key8, kadtest.StrAddr]{
-		NodeInfo: st.NodeInfo,
+		NodeInfo: unaddressedNodeInfo[key.Key8, kadtest.StrAddr]{
+			NodeID: st.NodeID,
+		},
 		Response: kadtest.NewResponse("resp", []kad.NodeInfo[key.Key8, kadtest.StrAddr]{
 			kadtest.NewInfo(kadtest.NewID(key.Key8(4)), []kadtest.StrAddr{"addr_4"}),
 			kadtest.NewInfo(kadtest.NewID(key.Key8(6)), []kadtest.StrAddr{"addr_6"}),
@@ -614,10 +647,10 @@ func TestProbeMessageResponse(t *testing.T) {
 
 	// the probe state machine should attempt to contact node again, now it is time
 	state = sm.Advance(ctx, &EventProbePoll{})
-	require.IsType(t, &StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr]{}, state)
+	require.IsType(t, &StateProbeConnectivityCheck[key.Key8]{}, state)
 
 	// the connectivity check should be for the right node
-	require.True(t, key.Equal(key.Key8(4), st.NodeInfo.ID().Key()))
+	require.True(t, key.Equal(key.Key8(4), st.NodeID.Key()))
 
 	state = sm.Advance(ctx, &EventProbePoll{})
 	require.IsType(t, &StateProbeWaitingWithCapacity{}, state)
@@ -650,22 +683,24 @@ func TestProbeMessageFailure(t *testing.T) {
 	// advance time by one revisit interval
 	clk.Add(cfg.CheckInterval)
 	state = sm.Advance(ctx, &EventProbePoll{})
-	require.IsType(t, &StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr]{}, state)
+	require.IsType(t, &StateProbeConnectivityCheck[key.Key8]{}, state)
 
 	// the probe state machine should attempt to contact the next node
-	st := state.(*StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr])
+	st := state.(*StateProbeConnectivityCheck[key.Key8])
 
 	// notify that node was contacted successfully, with no closer nodes
 	state = sm.Advance(ctx, &EventProbeMessageFailure[key.Key8, kadtest.StrAddr]{
-		NodeInfo: st.NodeInfo,
+		NodeInfo: unaddressedNodeInfo[key.Key8, kadtest.StrAddr]{
+			NodeID: st.NodeID,
+		},
 	})
 
 	// state machine announces node failure
-	require.IsType(t, &StateProbeNodeFailure[key.Key8, kadtest.StrAddr]{}, state)
-	stf := state.(*StateProbeNodeFailure[key.Key8, kadtest.StrAddr])
+	require.IsType(t, &StateProbeNodeFailure[key.Key8]{}, state)
+	stf := state.(*StateProbeNodeFailure[key.Key8])
 
 	// the failure should be for the right node
-	require.True(t, key.Equal(key.Key8(4), stf.NodeInfo.ID().Key()))
+	require.True(t, key.Equal(key.Key8(4), stf.NodeID.Key()))
 
 	// node has been removed from routing table
 	_, found := rt.GetNode(key.Key8(4))
@@ -736,12 +771,12 @@ func TestProbeNotifyConnectivity(t *testing.T) {
 
 	// Poll the state machine, it should now attempt to contact a node
 	state = sm.Advance(ctx, &EventProbePoll{})
-	require.IsType(t, &StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr]{}, state)
+	require.IsType(t, &StateProbeConnectivityCheck[key.Key8]{}, state)
 
 	// the connectivity check should be for the right node, which is the one
 	// that did not get a connectivity notification
-	st := state.(*StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr])
-	require.True(t, key.Equal(key.Key8(3), st.NodeInfo.ID().Key()))
+	st := state.(*StateProbeConnectivityCheck[key.Key8])
+	require.True(t, key.Equal(key.Key8(3), st.NodeID.Key()))
 
 	// Poll the state machine, it should now waiting for a response but still have capacity
 	state = sm.Advance(ctx, &EventProbePoll{})
@@ -791,9 +826,9 @@ func TestProbeTimeout(t *testing.T) {
 	state = sm.Advance(ctx, &EventProbePoll{})
 
 	// the connectivity check should start
-	require.IsType(t, &StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr]{}, state)
-	stm := state.(*StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr])
-	require.True(t, key.Equal(key.Key8(4), stm.NodeInfo.ID().Key()))
+	require.IsType(t, &StateProbeConnectivityCheck[key.Key8]{}, state)
+	stm := state.(*StateProbeConnectivityCheck[key.Key8])
+	require.True(t, key.Equal(key.Key8(4), stm.NodeID.Key()))
 
 	// Poll the state machine, it should now waiting for a response with no capacity
 	state = sm.Advance(ctx, &EventProbePoll{})
@@ -804,11 +839,11 @@ func TestProbeTimeout(t *testing.T) {
 
 	// state machine announces node failure
 	state = sm.Advance(ctx, &EventProbePoll{})
-	require.IsType(t, &StateProbeNodeFailure[key.Key8, kadtest.StrAddr]{}, state)
-	stf := state.(*StateProbeNodeFailure[key.Key8, kadtest.StrAddr])
+	require.IsType(t, &StateProbeNodeFailure[key.Key8]{}, state)
+	stf := state.(*StateProbeNodeFailure[key.Key8])
 
 	// the failure should be for the right node
-	require.True(t, key.Equal(key.Key8(4), stf.NodeInfo.ID().Key()))
+	require.True(t, key.Equal(key.Key8(4), stf.NodeID.Key()))
 
 	// node has been removed from routing table
 	_, found := rt.GetNode(key.Key8(4))
@@ -816,7 +851,7 @@ func TestProbeTimeout(t *testing.T) {
 
 	// state machine starts check for next node now there is capacity
 	state = sm.Advance(ctx, &EventProbePoll{})
-	require.IsType(t, &StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr]{}, state)
-	stm = state.(*StateProbeConnectivityCheck[key.Key8, kadtest.StrAddr])
-	require.True(t, key.Equal(key.Key8(3), stm.NodeInfo.ID().Key()))
+	require.IsType(t, &StateProbeConnectivityCheck[key.Key8]{}, state)
+	stm = state.(*StateProbeConnectivityCheck[key.Key8])
+	require.True(t, key.Equal(key.Key8(3), stm.NodeID.Key()))
 }
