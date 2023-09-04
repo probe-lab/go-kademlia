@@ -374,27 +374,31 @@ func TestReqUnknownPeer(t *testing.T) {
 	}
 
 	req := FindPeerRequest(ids[1])
-	wg := sync.WaitGroup{}
+	done := make(chan struct{})
+
 	responseHandler := func(_ context.Context, _ kad.Response[key.Key256, ma.Multiaddr], err error) {
-		wg.Done()
-		require.Equal(t, swarm.ErrNoGoodAddresses, err)
+		defer close(done)
+		require.ErrorIs(t, err, swarm.ErrNoGoodAddresses)
 	}
 
 	// unknown valid peerid (address not stored in peerstore)
-	wg.Add(1)
 	err = endpoints[0].SendRequestHandleResponse(ctx, protoID, ids[1], req,
 		&Message{}, time.Second, responseHandler)
 	require.NoError(t, err)
-	wg.Add(1)
 	go func() {
 		// timeout is queued in the scheduler 0
 		for !scheds[0].RunOne(ctx) {
 			scheds[0].Clock().Sleep(time.Millisecond)
 		}
 		require.False(t, scheds[0].RunOne(ctx))
-		wg.Done()
 	}()
-	wg.Wait()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout")
+	}
+
 	// nothing to run for both schedulers
 	for _, s := range scheds {
 		require.Equal(t, event.MaxTime, s.NextActionTime(ctx))
