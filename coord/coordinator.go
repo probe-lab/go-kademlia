@@ -8,15 +8,15 @@ import (
 
 	"github.com/benbjohnson/clock"
 
-	"github.com/plprobelab/go-kademlia/event"
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/kaderr"
-	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/network/endpoint"
-	"github.com/plprobelab/go-kademlia/query"
-	"github.com/plprobelab/go-kademlia/routing"
-	"github.com/plprobelab/go-kademlia/util"
+	"github.com/plprobelab/go-libdht/event"
+	"github.com/plprobelab/go-libdht/kad"
+	"github.com/plprobelab/go-libdht/kaderr"
+	"github.com/plprobelab/go-libdht/key"
+	"github.com/plprobelab/go-libdht/network/address"
+	"github.com/plprobelab/go-libdht/network/endpoint"
+	"github.com/plprobelab/go-libdht/query"
+	"github.com/plprobelab/go-libdht/routing"
+	"github.com/plprobelab/go-libdht/util"
 )
 
 // A StateMachine progresses through a set of states in response to transition events.

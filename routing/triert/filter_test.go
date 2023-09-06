@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/plprobelab/go-kademlia/internal/kadtest"
-	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-libdht/internal/kadtest"
+	"github.com/plprobelab/go-libdht/key"
 	"github.com/stretchr/testify/require"
 )
 

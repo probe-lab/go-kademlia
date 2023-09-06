@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-libdht/kad"
+	"github.com/plprobelab/go-libdht/network/address"
 )
 
 // Connectedness signals the capacity for a connection with a given node.
@@ -35,7 +35,7 @@ type RequestHandlerFn[K kad.Key[K]] func(context.Context, kad.NodeID[K],
 // request previously sent to a remote peer.
 type ResponseHandlerFn[K kad.Key[K], A kad.Address[A]] func(context.Context, kad.Response[K, A], error)
 
-// Endpoint defines how Kademlia nodes interacts with each other.
+// Endpoint defines how DHT nodes interacts with each other.
 type Endpoint[K kad.Key[K], A kad.Address[A]] interface {
 	// MaybeAddToPeerstore adds the given address to the peerstore if it is
 	// valid and if it is not already there.
@@ -54,7 +54,7 @@ type Endpoint[K kad.Key[K], A kad.Address[A]] interface {
 	NetworkAddress(kad.NodeID[K]) (kad.NodeInfo[K, A], error)
 }
 
-// ServerEndpoint is a Kademlia endpoint that can handle requests from remote
+// ServerEndpoint is a DHT endpoint that can handle requests from remote
 // peers.
 type ServerEndpoint[K kad.Key[K], A kad.Address[A]] interface {
 	Endpoint[K, A]

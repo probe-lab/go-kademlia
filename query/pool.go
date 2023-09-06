@@ -7,10 +7,10 @@ import (
 
 	"github.com/benbjohnson/clock"
 
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/kaderr"
-	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/util"
+	"github.com/plprobelab/go-libdht/kad"
+	"github.com/plprobelab/go-libdht/kaderr"
+	"github.com/plprobelab/go-libdht/network/address"
+	"github.com/plprobelab/go-libdht/util"
 )
 
 type Pool[K kad.Key[K], A kad.Address[A]] struct {

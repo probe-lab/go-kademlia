@@ -9,18 +9,18 @@ import (
 	"time"
 
 	"github.com/multiformats/go-multiaddr"
-	"github.com/plprobelab/go-kademlia/libp2p"
-	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/network/endpoint"
+	"github.com/plprobelab/go-libdht/libp2p"
+	"github.com/plprobelab/go-libdht/network/address"
+	"github.com/plprobelab/go-libdht/network/endpoint"
 
 	"github.com/benbjohnson/clock"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/plprobelab/go-kademlia/event"
-	"github.com/plprobelab/go-kademlia/internal/kadtest"
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/routing/simplert"
-	"github.com/plprobelab/go-kademlia/sim"
+	"github.com/plprobelab/go-libdht/event"
+	"github.com/plprobelab/go-libdht/internal/kadtest"
+	"github.com/plprobelab/go-libdht/kad"
+	"github.com/plprobelab/go-libdht/key"
+	"github.com/plprobelab/go-libdht/routing/simplert"
+	"github.com/plprobelab/go-libdht/sim"
 	"github.com/stretchr/testify/require"
 )
 

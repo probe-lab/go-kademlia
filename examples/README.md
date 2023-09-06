@@ -1,6 +1,6 @@
 # Examples
 
-This folder contains Kademlia examples built with this repository.
+This folder contains DHT examples built with this repository.
 
 ## Featured examples
 

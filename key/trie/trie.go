@@ -2,8 +2,8 @@
 package trie
 
 import (
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-libdht/kad"
+	"github.com/plprobelab/go-libdht/key"
 )
 
 // Trie is a trie for equal-length bit vectors, which stores values only in the leaves.

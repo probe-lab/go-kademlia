@@ -5,8 +5,8 @@ import (
 	mh "github.com/multiformats/go-multihash"
 	mhreg "github.com/multiformats/go-multihash/core"
 
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-libdht/kad"
+	"github.com/plprobelab/go-libdht/key"
 )
 
 type PeerID struct {

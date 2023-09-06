@@ -16,15 +16,15 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 
-	"github.com/plprobelab/go-kademlia/event"
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/libp2p"
-	sq "github.com/plprobelab/go-kademlia/query/simplequery"
-	"github.com/plprobelab/go-kademlia/routing/simplert"
-	"github.com/plprobelab/go-kademlia/server/basicserver"
-	"github.com/plprobelab/go-kademlia/sim"
-	"github.com/plprobelab/go-kademlia/util"
+	"github.com/plprobelab/go-libdht/event"
+	"github.com/plprobelab/go-libdht/kad"
+	"github.com/plprobelab/go-libdht/key"
+	"github.com/plprobelab/go-libdht/libp2p"
+	sq "github.com/plprobelab/go-libdht/query/simplequery"
+	"github.com/plprobelab/go-libdht/routing/simplert"
+	"github.com/plprobelab/go-libdht/server/basicserver"
+	"github.com/plprobelab/go-libdht/sim"
+	"github.com/plprobelab/go-libdht/util"
 )
 
 const (
@@ -164,7 +164,7 @@ func tracerProvider(url string) (*trace.TracerProvider, error) {
 		// Record information about this application in a Resource.
 		trace.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
-			semconv.ServiceName("Kademlia-Test"),
+			semconv.ServiceName("DHT-Test"),
 			semconv.ServiceVersion("v0.1.0"),
 			attribute.String("environment", "demo"),
 		)),

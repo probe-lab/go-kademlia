@@ -4,17 +4,17 @@ import (
 	"math/rand"
 	"strconv"
 
-	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-libdht/key"
 )
 
 var rng = rand.New(rand.NewSource(299792458))
 
-// RandomKey returns a random 32-bit Kademlia key.
+// RandomKey returns a random 32-bit binary key.
 func RandomKey() key.Key32 {
 	return key.Key32(rng.Uint32())
 }
 
-// RandomKeyWithPrefix returns a 32-bit Kademlia key having a prefix equal to the bit pattern held in s and
+// RandomKeyWithPrefix returns a 32-bit binary key having a prefix equal to the bit pattern held in s and
 // random following bits. A prefix of up to 32 bits is supported.
 func RandomKeyWithPrefix(s string) key.Key32 {
 	kk := RandomKey()
@@ -38,7 +38,7 @@ func RandomKeyWithPrefix(s string) key.Key32 {
 	return key.Key32(v | prefix)
 }
 
-// Key256WithLeadingBytes returns a 256-bit Kademlia key consisting of the given leading bytes padded by
+// Key256WithLeadingBytes returns a 256-bit binary key consisting of the given leading bytes padded by
 // zero bytes to the end of the key.
 func Key256WithLeadingBytes(in []byte) key.Key256 {
 	return key.NewKey256(append(in, make([]byte, 32-len(in))...))

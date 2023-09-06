@@ -4,8 +4,8 @@ import (
 	"crypto/sha256"
 	"net"
 
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-libdht/kad"
+	"github.com/plprobelab/go-libdht/key"
 )
 
 // ID is a concrete implementation of the NodeID interface.
@@ -19,12 +19,12 @@ var _ kad.NodeID[key.Key8] = (*ID[key.Key8])(nil)
 
 // NewID returns a new Kademlia identifier that implements the NodeID interface.
 // Instead of deriving the Kademlia key from a NodeID, this method directly takes
-// the Kademlia key.
+// the binary key.
 func NewID[K kad.Key[K]](k K) *ID[K] {
 	return &ID[K]{key: k}
 }
 
-// Key returns the Kademlia key that is used by, e.g., the routing table
+// Key returns the binary key that is used by, e.g., the routing table
 // implementation to group nodes into buckets. The returned key was manually
 // defined in the ID constructor NewID and not derived via, e.g., hashing
 // a preimage.

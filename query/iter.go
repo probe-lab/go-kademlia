@@ -3,9 +3,9 @@ package query
 import (
 	"context"
 
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/key/trie"
+	"github.com/plprobelab/go-libdht/kad"
+	"github.com/plprobelab/go-libdht/key"
+	"github.com/plprobelab/go-libdht/key/trie"
 )
 
 // A NodeIter iterates nodes according to some strategy.
@@ -13,7 +13,7 @@ type NodeIter[K kad.Key[K]] interface {
 	// Add adds node information to the iterator
 	Add(*NodeStatus[K])
 
-	// Find returns the node information corresponding to the given Kademlia key
+	// Find returns the node information corresponding to the given key
 	Find(K) (*NodeStatus[K], bool)
 
 	// Each applies fn to each entry in the iterator in order. Each stops and returns true if fn returns true.
@@ -81,7 +81,7 @@ func (iter *SequentialIter[K]) Add(ni *NodeStatus[K]) {
 	iter.nodes = append(iter.nodes, ni)
 }
 
-// Find returns the node information corresponding to the given Kademlia key. It uses a linear
+// Find returns the node information corresponding to the given key. It uses a linear
 // search which makes it unsuitable for large numbers of entries.
 func (iter *SequentialIter[K]) Find(k K) (*NodeStatus[K], bool) {
 	for i := range iter.nodes {

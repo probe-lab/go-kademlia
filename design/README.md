@@ -4,7 +4,7 @@ Author: [Guillaume Michel](https://github.com/guillaumemichel)
 
 ## Design overview & rationale
 
-This Kademlia implementation allows a sequential execution, providing many benefits (such as stable testing, better debuggability, reproducible simulations, etc.). The Kademlia query process is most efficient when multiple requests are sent concurrently. In order to reach both sequential execution and concurrency, this implementation follows a same thread concurrency pattern. As much work as possible will be carried out by the single worker.
+This DHT implementation allows a sequential execution, providing many benefits (such as stable testing, better debuggability, reproducible simulations, etc.). The Kademlia query process is most efficient when multiple requests are sent concurrently. In order to reach both sequential execution and concurrency, this implementation follows a same thread concurrency pattern. As much work as possible will be carried out by the single worker.
 
 In some cases, it is required that the implementation deals with multiple threads. For instance, callers may call this implementation from multiple threads. Some message endpoint implementations (such as [`libp2p`](../network/endpoint/libp2pendpoint/)), need to have a dedicated thread for sending a request and receiving an answer.
 

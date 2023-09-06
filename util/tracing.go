@@ -9,5 +9,5 @@ import (
 )
 
 func StartSpan(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
-	return otel.Tracer("go-kademlia").Start(ctx, fmt.Sprintf("KademliaDHT.%s", name), opts...)
+	return otel.Tracer("go-libdht").Start(ctx, fmt.Sprintf("DHT.%s", name), opts...)
 }

@@ -1,6 +1,6 @@
 # Server
 
-A Kademlia `Server` is responsible for answering requests from remote peers. It implements a single `HandleRequest` function producing a response from the provided request message.
+A DHT `Server` is responsible for answering requests from remote peers. It implements a single `HandleRequest` function producing a response from the provided request message.
 
 ```go
 // Server is the interface for handling requests from remote nodes.

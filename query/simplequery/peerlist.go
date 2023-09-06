@@ -3,9 +3,9 @@ package simplequery
 import (
 	"sort"
 
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/network/endpoint"
+	"github.com/plprobelab/go-libdht/kad"
+	"github.com/plprobelab/go-libdht/key"
+	"github.com/plprobelab/go-libdht/network/endpoint"
 )
 
 type NodeStatus uint8

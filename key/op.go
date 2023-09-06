@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/plprobelab/go-libdht/kad"
 )
 
 // Equal reports whether two keys have equal numeric values.

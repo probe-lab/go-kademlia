@@ -15,13 +15,13 @@ import (
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/stretchr/testify/require"
 
-	"github.com/plprobelab/go-kademlia/event"
-	"github.com/plprobelab/go-kademlia/internal/kadtest"
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/network/endpoint"
-	"github.com/plprobelab/go-kademlia/sim"
+	"github.com/plprobelab/go-libdht/event"
+	"github.com/plprobelab/go-libdht/internal/kadtest"
+	"github.com/plprobelab/go-libdht/kad"
+	"github.com/plprobelab/go-libdht/key"
+	"github.com/plprobelab/go-libdht/network/address"
+	"github.com/plprobelab/go-libdht/network/endpoint"
+	"github.com/plprobelab/go-libdht/sim"
 )
 
 var (
@@ -81,7 +81,7 @@ func TestConnections(t *testing.T) {
 
 	invalidID := kadtest.NewInfo[key.Key256, ma.Multiaddr](kadtest.NewID(kadtest.NewStringID("invalid").Key()), nil)
 
-	// test that the endpoint's kademlia key is as expected
+	// test that the endpoint's binary key is as expected
 	for i, ep := range endpoints {
 		require.Equal(t, ids[i].Key(), ep.Key())
 	}

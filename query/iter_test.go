@@ -6,8 +6,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/plprobelab/go-kademlia/internal/kadtest"
-	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-libdht/internal/kadtest"
+	"github.com/plprobelab/go-libdht/key"
 )
 
 func TestClosestNodesIter(t *testing.T) {

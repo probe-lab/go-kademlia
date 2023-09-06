@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/plprobelab/go-kademlia/coord"
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/query"
-	"github.com/plprobelab/go-kademlia/util"
+	"github.com/plprobelab/go-libdht/coord"
+	"github.com/plprobelab/go-libdht/kad"
+	"github.com/plprobelab/go-libdht/key"
+	"github.com/plprobelab/go-libdht/query"
+	"github.com/plprobelab/go-libdht/util"
 )
 
 type IpfsDht struct {
@@ -63,7 +63,7 @@ func (d *IpfsDht) registerQueryWaiter(queryID query.QueryID, ch chan<- kad.Respo
 }
 
 // Initiates an iterative query for the the address of the given peer.
-// FindNode is a fundamental Kademlia operation so this logic should be on KademliaHandler
+// FindNode is a fundamental DHT operation so this logic should be on KademliaHandler
 func (d *IpfsDht) FindNode(ctx context.Context, node kad.NodeID[key.Key256]) (kad.NodeInfo[key.Key256, net.IP], error) {
 	// TODO: look in local peer store first
 

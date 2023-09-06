@@ -3,7 +3,7 @@ package event
 import (
 	"context"
 
-	"github.com/plprobelab/go-kademlia/util"
+	"github.com/plprobelab/go-libdht/util"
 )
 
 // ChanQueue is a trivial queue implementation using a channel

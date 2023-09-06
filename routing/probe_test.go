@@ -9,10 +9,10 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/plprobelab/go-kademlia/internal/kadtest"
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/routing/simplert"
+	"github.com/plprobelab/go-libdht/internal/kadtest"
+	"github.com/plprobelab/go-libdht/kad"
+	"github.com/plprobelab/go-libdht/key"
+	"github.com/plprobelab/go-libdht/routing/simplert"
 )
 
 var _ heap.Interface = (*nodeValuePendingList[key.Key8])(nil)

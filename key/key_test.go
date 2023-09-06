@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/plprobelab/go-libdht/kad"
 )
 
 func TestKey256(t *testing.T) {
@@ -66,7 +66,7 @@ func TestKey8(t *testing.T) {
 	tester.RunTests(t)
 }
 
-// TestBitStrKey7 tests a strange 7-bit Kademlia key
+// TestBitStrKey7 tests a strange 7-bit binary key
 func TestBitStrKey7(t *testing.T) {
 	tester := &KeyTester[BitStrKey]{
 		Key0:     BitStrKey("0000000"),

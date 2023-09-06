@@ -10,10 +10,10 @@ import (
 	"github.com/benbjohnson/clock"
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/kaderr"
-	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/util"
+	"github.com/plprobelab/go-libdht/kad"
+	"github.com/plprobelab/go-libdht/kaderr"
+	"github.com/plprobelab/go-libdht/key"
+	"github.com/plprobelab/go-libdht/util"
 )
 
 type RoutingTableCpl[K kad.Key[K], N kad.NodeID[K]] interface {

@@ -1,6 +1,6 @@
 # Addressing
 
-The `NodeID` is the Kademlia node identifier. It must implement a `Key()` method mapping the `NodeID` to a Kademlia Key. It can also contain additional information such as the node's network addresses.
+The `NodeID` is the DHT node identifier. It must implement a `Key()` method mapping the `NodeID` to a DHT binary Key. It can also contain additional information such as the node's network addresses.
 
 ```go
 // NodeID is a generic node identifier. It is used to identify a node and can

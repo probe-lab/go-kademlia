@@ -55,7 +55,7 @@ func tracerProvider(url string) (*trace.TracerProvider, error) {
 		// Record information about this application in a Resource.
 		trace.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
-			semconv.ServiceName("Kademlia-Test"),
+			semconv.ServiceName("DHT-Test"),
 			semconv.ServiceVersion("v0.1.0"),
 			attribute.String("environment", "demo"),
 		)),

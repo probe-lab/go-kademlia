@@ -34,7 +34,7 @@ In addition, the state machine model enforces a structured and controlled execut
 ### The Coordinator (`coord` package)
 
 Kademlia is inherently an asynchronous protocol dependent on variability of network latency and responsiveness of peers.
-We shouldn't hide this complexity from users of go-kademlia but we can confine its API surface.
+We shouldn't hide this complexity from users of go-libdht but we can confine its API surface.
 
 The `Coordinator` plays this role. Users of the `Coordinator` subscribe to a channel of Kademlia events to receive notificationof the progress of queries as well as other things including updates to routing tables. 
 Users call methods on the Coordinator to initiate operations such a starting a query. They receive an error response immediately if the operation could not be started, perhaps due to invalid arguments passed by the caller. Otherwise, if no error is returned, the caller must wait for events on the channel to monitor the outcome of their request.

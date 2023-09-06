@@ -4,7 +4,7 @@ import (
 	"context"
 )
 
-// A BasicAction is the default Action used for event scheduling in the Kademlia implementation.
+// A BasicAction is the default Action used for event scheduling in the DHT implementation.
 type BasicAction func(context.Context)
 
 var _ Action = (*BasicAction)(nil)

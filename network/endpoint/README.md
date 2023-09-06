@@ -1,11 +1,11 @@
 # Message Endpoint
 
-A message `Endpoint` handles everything about communications with remote Kademlia peers. They implement the abstraction of an address book to keep track of remote peers, and handle sending and receiving message.
+A message `Endpoint` handles everything about communications with remote DHT peers. They implement the abstraction of an address book to keep track of remote peers, and handle sending and receiving message.
 
 In order to have a `Server` node (responding to requests from other peers), a node must add `RequestHandler`s for specific `ProtocolID`s, and it will only answer requests for the supported protocols. A node is said to be in `Client` mode if it doesn't have request handlers for any `ProtocolID`.
 
 ```go
-// Endpoint defines how Kademlia nodes interacts with each other.
+// Endpoint defines how DHT nodes interacts with each other.
 type Endpoint interface {
 	// MaybeAddToPeerstore adds the given address to the peerstore if it is
 	// valid and if it is not already there.
@@ -21,7 +21,7 @@ type Endpoint interface {
 	NetworkAddress(kad.NodeID) (kad.NodeID, error)
 }
 
-// ServerEndpoint is a Kademlia endpoint that can handle requests from remote
+// ServerEndpoint is a DHT endpoint that can handle requests from remote
 // peers.
 type ServerEndpoint interface {
 	Endpoint

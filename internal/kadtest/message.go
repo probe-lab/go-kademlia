@@ -1,8 +1,8 @@
 package kadtest
 
 import (
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
+	"github.com/plprobelab/go-libdht/kad"
+	"github.com/plprobelab/go-libdht/key"
 )
 
 // StrAddr is a simple implementation of kad.Address that uses a string to represent the address.

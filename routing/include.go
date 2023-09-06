@@ -7,10 +7,10 @@ import (
 
 	"github.com/benbjohnson/clock"
 
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/kaderr"
-	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/util"
+	"github.com/plprobelab/go-libdht/kad"
+	"github.com/plprobelab/go-libdht/kaderr"
+	"github.com/plprobelab/go-libdht/key"
+	"github.com/plprobelab/go-libdht/util"
 )
 
 type check[K kad.Key[K], A kad.Address[A]] struct {

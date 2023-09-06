@@ -1,11 +1,11 @@
 package sim
 
 import (
-	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/plprobelab/go-libdht/kad"
 )
 
 // Message is a simple implementation of `Request` and `Response`.
-// It only contains the minimal fields that are required by Kademlia to operate.
+// It only contains the minimal fields that are required by a DHT to operate.
 type Message[K kad.Key[K], A kad.Address[A]] struct {
 	target      K
 	closerPeers []kad.NodeInfo[K, A]

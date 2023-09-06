@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/plprobelab/go-libdht/kad"
+	"github.com/plprobelab/go-libdht/network/address"
 )
 
 var protoID = address.ProtocolID("/statemachine/1.0.0") // protocol ID for the test

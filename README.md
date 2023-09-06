@@ -1,9 +1,9 @@
-go-kademlia
+go-libdht
 =======================
 
-> A Generic Go Kademlia Implementation
+> A Generic Go DHT Toolbox
 
-Generic Kademlia implementation in Go that can be used to build DHT Protocols. This repository is **NOT** meant to be the home of the Go IPFS DHT implementation, it is meant to provide generic Kademlia building blocks that could be used in multiple Kademlia implementations and simulations. This Kademlia implementation was built to be reproducible: most of the modules are single threaded, allowing sequential execution. This repository enables deterministic testing, and stable simulations.
+Generic DHT Toolbox in Go that can be used to build DHT Protocols. This repository is **NOT** meant to be the home of the Go IPFS DHT implementation, it is meant to provide generic DHT building blocks that could be used in multiple DHT implementations and simulations. This library was built to be reproducible: most of the modules are single threaded, allowing sequential execution. This repository enables deterministic testing, and stable simulations.
 
 ## Documentation
 

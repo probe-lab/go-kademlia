@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/plprobelab/go-libdht/kad"
 )
 
 // ErrInvalidDataLength is the error returned when attempting to construct a key from binary data of the wrong length.
@@ -15,14 +15,14 @@ var ErrInvalidDataLength = errors.New("invalid data length")
 
 const bitPanicMsg = "bit index out of range"
 
-// Key256 is a 256-bit Kademlia key.
+// Key256 is a 256-bit binary key.
 type Key256 struct {
 	b *[32]byte // this is a pointer to keep the size of Key256 small since it is often passed as argument
 }
 
 var _ kad.Key[Key256] = Key256{}
 
-// NewKey256 returns a 256-bit Kademlia key whose bits are set from the supplied bytes.
+// NewKey256 returns a 256-bit binary key whose bits are set from the supplied bytes.
 func NewKey256(data []byte) Key256 {
 	if len(data) != 32 {
 		panic(ErrInvalidDataLength)
@@ -32,7 +32,7 @@ func NewKey256(data []byte) Key256 {
 	return Key256{b: &b}
 }
 
-// ZeroKey256 returns a 256-bit Kademlia key with all bits zeroed.
+// ZeroKey256 returns a 256-bit binary key with all bits zeroed.
 func ZeroKey256() Key256 {
 	var b [32]byte
 	return Key256{b: &b}
@@ -119,7 +119,7 @@ func (k Key256) MarshalBinary() ([]byte, error) {
 	return buf, nil
 }
 
-// Key32 is a 32-bit Kademlia key, suitable for testing and simulation of small networks.
+// Key32 is a 32-bit binary key, suitable for testing and simulation of small networks.
 type Key32 uint32
 
 var _ kad.Key[Key32] = Key32(0)
@@ -180,7 +180,7 @@ func (k Key32) String() string {
 	return k.HexString()
 }
 
-// Key8 is an 8-bit Kademlia key, suitable for testing and simulation of very small networks.
+// Key8 is an 8-bit binary key, suitable for testing and simulation of very small networks.
 type Key8 uint8
 
 var _ kad.Key[Key8] = Key8(0)
@@ -241,7 +241,7 @@ func (k Key8) BitString() string {
 	return fmt.Sprintf("%08b", uint8(k))
 }
 
-// KeyList is a list of Kademlia keys. It implements sort.Interface.
+// KeyList is a list of binary keys. It implements sort.Interface.
 type KeyList[K kad.Key[K]] []K
 
 func (ks KeyList[K]) Len() int           { return len(ks) }
