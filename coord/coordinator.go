@@ -218,7 +218,7 @@ func (c *Coordinator[K, A]) advanceBootstrap(ctx context.Context, ev routing.Boo
 	bstate := c.bootstrap.Advance(ctx, ev)
 	switch st := bstate.(type) {
 	case *routing.StateBootstrapMessage[K, A]:
-		c.sendBootstrapFindNode(ctx, st.NodeID, st.QueryID, st.Stats)
+		c.sendBootstrapFindNode(ctx, st.Node, st.QueryID, st.Stats)
 
 	case *routing.StateBootstrapWaiting:
 		// bootstrap waiting for a message response, nothing to do
@@ -277,7 +277,7 @@ func (c *Coordinator[K, A]) advancePool(ctx context.Context, ev query.PoolEvent)
 	state := c.pool.Advance(ctx, ev)
 	switch st := state.(type) {
 	case *query.StatePoolQueryMessage[K, A]:
-		c.sendQueryMessage(ctx, st.ProtocolID, st.NodeID, st.Message, st.QueryID, st.Stats)
+		c.sendQueryMessage(ctx, st.ProtocolID, st.Node, st.Message, st.QueryID, st.Stats)
 	case *query.StatePoolWaitingAtCapacity:
 		// nothing to do except wait for message response or timeout
 	case *query.StatePoolWaitingWithCapacity:
@@ -296,7 +296,7 @@ func (c *Coordinator[K, A]) advancePool(ctx context.Context, ev query.PoolEvent)
 	}
 }
 
-func (c *Coordinator[K, A]) sendQueryMessage(ctx context.Context, protoID address.ProtocolID, to kad.NodeID[K], msg kad.Request[K, A], queryID query.QueryID, stats query.QueryStats) {
+func (c *Coordinator[K, A]) sendQueryMessage(ctx context.Context, protoID address.ProtocolID, to kad.NodeInfo[K, A], msg kad.Request[K, A], queryID query.QueryID, stats query.QueryStats) {
 	ctx, span := util.StartSpan(ctx, "Coordinator.sendQueryMessage")
 	defer span.End()
 
@@ -308,7 +308,7 @@ func (c *Coordinator[K, A]) sendQueryMessage(ctx context.Context, protoID addres
 		}
 
 		c.advancePool(ctx, &query.EventPoolMessageFailure[K]{
-			NodeID:  to,
+			NodeID:  to.ID(),
 			QueryID: queryID,
 			Error:   err,
 		})
@@ -337,19 +337,19 @@ func (c *Coordinator[K, A]) sendQueryMessage(ctx context.Context, protoID addres
 		}
 
 		c.advancePool(ctx, &query.EventPoolMessageResponse[K, A]{
-			NodeID:   to,
+			Node:     to,
 			QueryID:  queryID,
 			Response: resp,
 		})
 	}
 
-	err := c.ep.SendRequestHandleResponse(ctx, protoID, to, msg, msg.EmptyResponse(), 0, onMessageResponse)
+	err := c.ep.SendRequestHandleResponse(ctx, protoID, to.ID(), msg, msg.EmptyResponse(), 0, onMessageResponse)
 	if err != nil {
 		onSendError(ctx, err)
 	}
 }
 
-func (c *Coordinator[K, A]) sendBootstrapFindNode(ctx context.Context, to kad.NodeID[K], queryID query.QueryID, stats query.QueryStats) {
+func (c *Coordinator[K, A]) sendBootstrapFindNode(ctx context.Context, to kad.NodeInfo[K, A], queryID query.QueryID, stats query.QueryStats) {
 	ctx, span := util.StartSpan(ctx, "Coordinator.sendBootstrapFindNode")
 	defer span.End()
 
@@ -361,7 +361,7 @@ func (c *Coordinator[K, A]) sendBootstrapFindNode(ctx context.Context, to kad.No
 		}
 
 		c.advanceBootstrap(ctx, &routing.EventBootstrapMessageFailure[K]{
-			NodeID: to,
+			NodeID: to.ID(),
 			Error:  err,
 		})
 	}
@@ -389,13 +389,13 @@ func (c *Coordinator[K, A]) sendBootstrapFindNode(ctx context.Context, to kad.No
 		}
 
 		c.advanceBootstrap(ctx, &routing.EventBootstrapMessageResponse[K, A]{
-			NodeID:   to,
+			Node:     to,
 			Response: resp,
 		})
 	}
 
 	protoID, msg := c.findNodeFn(c.self)
-	err := c.ep.SendRequestHandleResponse(ctx, protoID, to, msg, msg.EmptyResponse(), 0, onMessageResponse)
+	err := c.ep.SendRequestHandleResponse(ctx, protoID, to.ID(), msg, msg.EmptyResponse(), 0, onMessageResponse)
 	if err != nil {
 		onSendError(ctx, err)
 	}
@@ -443,14 +443,14 @@ func (c *Coordinator[K, A]) sendIncludeFindNode(ctx context.Context, to kad.Node
 func (c *Coordinator[K, A]) StartQuery(ctx context.Context, queryID query.QueryID, protocolID address.ProtocolID, msg kad.Request[K, A]) error {
 	ctx, span := util.StartSpan(ctx, "Coordinator.StartQuery")
 	defer span.End()
-	knownClosestPeers := c.rt.NearestNodes(msg.Target(), 20)
+	// knownClosestPeers := c.rt.NearestNodes(msg.Target(), 20)
 
 	c.schedulePoolEvent(ctx, &query.EventPoolAddQuery[K, A]{
 		QueryID:           queryID,
 		Target:            msg.Target(),
 		ProtocolID:        protocolID,
 		Message:           msg,
-		KnownClosestNodes: knownClosestPeers,
+		KnownClosestNodes: nil,
 	})
 
 	return nil
@@ -488,7 +488,7 @@ func (c *Coordinator[K, A]) AddNodes(ctx context.Context, infos []kad.NodeInfo[K
 
 // Bootstrap instructs the coordinator to begin bootstrapping the routing table.
 // While bootstrap is in progress, no other queries will make progress.
-func (c *Coordinator[K, A]) Bootstrap(ctx context.Context, seeds []kad.NodeID[K]) error {
+func (c *Coordinator[K, A]) Bootstrap(ctx context.Context, seeds []kad.NodeInfo[K, A]) error {
 	protoID, msg := c.findNodeFn(c.self)
 
 	c.scheduleBootstrapEvent(ctx, &routing.EventBootstrapStart[K, A]{
@@ -510,7 +510,7 @@ type KademliaEvent interface {
 // response from a node.
 type KademliaOutboundQueryProgressedEvent[K kad.Key[K], A kad.Address[A]] struct {
 	QueryID  query.QueryID
-	NodeID   kad.NodeID[K]
+	NodeID   kad.NodeInfo[K, A]
 	Response kad.Response[K, A]
 	Stats    query.QueryStats
 }

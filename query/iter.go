@@ -3,53 +3,55 @@ package query
 import (
 	"context"
 
+	"github.com/plprobelab/go-kademlia/internal/kadtest"
+
 	"github.com/plprobelab/go-kademlia/kad"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/plprobelab/go-kademlia/key/trie"
 )
 
 // A NodeIter iterates nodes according to some strategy.
-type NodeIter[K kad.Key[K]] interface {
+type NodeIter[K kad.Key[K], A kad.Address[A]] interface {
 	// Add adds node information to the iterator
-	Add(*NodeStatus[K])
+	Add(*NodeStatus[K, A])
 
 	// Find returns the node information corresponding to the given Kademlia key
-	Find(K) (*NodeStatus[K], bool)
+	Find(K) (*NodeStatus[K, A], bool)
 
 	// Each applies fn to each entry in the iterator in order. Each stops and returns true if fn returns true.
 	// Otherwise Each returns false when there are no further entries.
-	Each(ctx context.Context, fn func(context.Context, *NodeStatus[K]) bool) bool
+	Each(ctx context.Context, fn func(context.Context, *NodeStatus[K, A]) bool) bool
 }
 
 // A ClosestNodesIter iterates nodes in order of ascending distance from a key.
-type ClosestNodesIter[K kad.Key[K]] struct {
+type ClosestNodesIter[K kad.Key[K], A kad.Address[A]] struct {
 	// target is the key whose distance to a node determines the position of that node in the iterator.
 	target K
 
 	// nodelist holds the nodes discovered so far, ordered by increasing distance from the target.
-	nodes *trie.Trie[K, *NodeStatus[K]]
+	nodes *trie.Trie[K, *NodeStatus[K, A]]
 }
 
-var _ NodeIter[key.Key8] = (*ClosestNodesIter[key.Key8])(nil)
+var _ NodeIter[key.Key8, kadtest.StrAddr] = (*ClosestNodesIter[key.Key8, kadtest.StrAddr])(nil)
 
 // NewClosestNodesIter creates a new ClosestNodesIter
-func NewClosestNodesIter[K kad.Key[K]](target K) *ClosestNodesIter[K] {
-	return &ClosestNodesIter[K]{
+func NewClosestNodesIter[K kad.Key[K], A kad.Address[A]](target K) *ClosestNodesIter[K, A] {
+	return &ClosestNodesIter[K, A]{
 		target: target,
-		nodes:  trie.New[K, *NodeStatus[K]](),
+		nodes:  trie.New[K, *NodeStatus[K, A]](),
 	}
 }
 
-func (iter *ClosestNodesIter[K]) Add(ni *NodeStatus[K]) {
-	iter.nodes.Add(ni.NodeID.Key(), ni)
+func (iter *ClosestNodesIter[K, A]) Add(ni *NodeStatus[K, A]) {
+	iter.nodes.Add(ni.Node.ID().Key(), ni)
 }
 
-func (iter *ClosestNodesIter[K]) Find(k K) (*NodeStatus[K], bool) {
+func (iter *ClosestNodesIter[K, A]) Find(k K) (*NodeStatus[K, A], bool) {
 	found, ni := trie.Find(iter.nodes, k)
 	return ni, found
 }
 
-func (iter *ClosestNodesIter[K]) Each(ctx context.Context, fn func(context.Context, *NodeStatus[K]) bool) bool {
+func (iter *ClosestNodesIter[K, A]) Each(ctx context.Context, fn func(context.Context, *NodeStatus[K, A]) bool) bool {
 	// get all the nodes in order of distance from the target
 	// TODO: turn this into a walk or iterator on trie.Trie
 	entries := trie.Closest(iter.nodes, iter.target, iter.nodes.Size())
@@ -63,29 +65,29 @@ func (iter *ClosestNodesIter[K]) Each(ctx context.Context, fn func(context.Conte
 }
 
 // A SequentialIter iterates nodes in the order they were added to the iterator.
-type SequentialIter[K kad.Key[K]] struct {
+type SequentialIter[K kad.Key[K], A kad.Address[A]] struct {
 	// nodelist holds the nodes discovered so far, ordered by increasing distance from the target.
-	nodes []*NodeStatus[K]
+	nodes []*NodeStatus[K, A]
 }
 
-var _ NodeIter[key.Key8] = (*SequentialIter[key.Key8])(nil)
+var _ NodeIter[key.Key8, kadtest.StrAddr] = (*SequentialIter[key.Key8, kadtest.StrAddr])(nil)
 
 // NewSequentialIter creates a new SequentialIter
-func NewSequentialIter[K kad.Key[K]]() *SequentialIter[K] {
-	return &SequentialIter[K]{
-		nodes: make([]*NodeStatus[K], 0),
+func NewSequentialIter[K kad.Key[K], A kad.Address[A]]() *SequentialIter[K, A] {
+	return &SequentialIter[K, A]{
+		nodes: make([]*NodeStatus[K, A], 0),
 	}
 }
 
-func (iter *SequentialIter[K]) Add(ni *NodeStatus[K]) {
+func (iter *SequentialIter[K, A]) Add(ni *NodeStatus[K, A]) {
 	iter.nodes = append(iter.nodes, ni)
 }
 
 // Find returns the node information corresponding to the given Kademlia key. It uses a linear
 // search which makes it unsuitable for large numbers of entries.
-func (iter *SequentialIter[K]) Find(k K) (*NodeStatus[K], bool) {
+func (iter *SequentialIter[K, A]) Find(k K) (*NodeStatus[K, A], bool) {
 	for i := range iter.nodes {
-		if key.Equal(k, iter.nodes[i].NodeID.Key()) {
+		if key.Equal(k, iter.nodes[i].Node.ID().Key()) {
 			return iter.nodes[i], true
 		}
 	}
@@ -93,7 +95,7 @@ func (iter *SequentialIter[K]) Find(k K) (*NodeStatus[K], bool) {
 	return nil, false
 }
 
-func (iter *SequentialIter[K]) Each(ctx context.Context, fn func(context.Context, *NodeStatus[K]) bool) bool {
+func (iter *SequentialIter[K, A]) Each(ctx context.Context, fn func(context.Context, *NodeStatus[K, A]) bool) bool {
 	for _, ns := range iter.nodes {
 		if fn(ctx, ns) {
 			return true

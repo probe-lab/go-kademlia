@@ -314,9 +314,7 @@ func TestBootstrap(t *testing.T) {
 
 	queryID := query.QueryID("bootstrap")
 
-	seeds := []kad.NodeID[key.Key8]{
-		nodes[1].ID(),
-	}
+	seeds := []kad.NodeInfo[key.Key8, kadtest.StrAddr]{nodes[1]}
 	err = c.Bootstrap(ctx, seeds)
 	require.NoError(t, err)
 
