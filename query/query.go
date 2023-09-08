@@ -40,7 +40,7 @@ type StateQueryFinished struct {
 type StateQueryWaitingMessage[K kad.Key[K], A kad.Address[A]] struct {
 	QueryID    QueryID
 	Stats      QueryStats
-	NodeID     kad.NodeID[K]
+	Node       kad.NodeInfo[K, A]
 	ProtocolID address.ProtocolID
 	Message    kad.Request[K, A]
 }
@@ -72,7 +72,7 @@ type EventQueryCancel struct{}
 
 // EventQueryMessageResponse notifies a query that an attempt to send a message has received a successful response.
 type EventQueryMessageResponse[K kad.Key[K], A kad.Address[A]] struct {
-	NodeID   kad.NodeID[K]      // the node the message was sent to
+	Node     kad.NodeInfo[K, A] // the node the message was sent to
 	Response kad.Response[K, A] // the message response sent by the node
 }
 
@@ -142,19 +142,19 @@ type Query[K kad.Key[K], A kad.Address[A]] struct {
 	// cfg is a copy of the optional configuration supplied to the query
 	cfg QueryConfig[K]
 
-	iter       NodeIter[K]
+	iter       NodeIter[K, A]
 	protocolID address.ProtocolID
 	msg        kad.Request[K, A]
 	stats      QueryStats
 
-	// finished indicates that that the query has completed its work or has been stopped.
+	// finished indicates that the query has completed its work or has been stopped.
 	finished bool
 
 	// inFlight is number of requests in flight, will be <= concurrency
 	inFlight int
 }
 
-func NewQuery[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], id QueryID, protocolID address.ProtocolID, msg kad.Request[K, A], iter NodeIter[K], knownClosestNodes []kad.NodeID[K], cfg *QueryConfig[K]) (*Query[K, A], error) {
+func NewQuery[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], id QueryID, protocolID address.ProtocolID, msg kad.Request[K, A], iter NodeIter[K, A], knownClosestNodes []kad.NodeInfo[K, A], cfg *QueryConfig[K]) (*Query[K, A], error) {
 	if cfg == nil {
 		cfg = DefaultQueryConfig[K]()
 	} else if err := cfg.Validate(); err != nil {
@@ -163,12 +163,13 @@ func NewQuery[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], id QueryID, pr
 
 	for _, node := range knownClosestNodes {
 		// exclude self from closest nodes
-		if key.Equal(node.Key(), self.Key()) {
+		if key.Equal(node.ID().Key(), self.Key()) {
 			continue
 		}
-		iter.Add(&NodeStatus[K]{
-			NodeID: node,
-			State:  &StateNodeNotContacted{},
+
+		iter.Add(&NodeStatus[K, A]{
+			Node:  node,
+			State: &StateNodeNotContacted{},
 		})
 	}
 
@@ -200,7 +201,7 @@ func (q *Query[K, A]) Advance(ctx context.Context, ev QueryEvent) QueryState {
 			Stats:   q.stats,
 		}
 	case *EventQueryMessageResponse[K, A]:
-		q.onMessageResponse(ctx, tev.NodeID, tev.Response)
+		q.onMessageResponse(ctx, tev.Node, tev.Response)
 	case *EventQueryMessageFailure[K]:
 		q.onMessageFailure(ctx, tev.NodeID)
 	case nil:
@@ -225,7 +226,7 @@ func (q *Query[K, A]) Advance(ctx context.Context, ev QueryEvent) QueryState {
 
 	var returnState QueryState
 
-	q.iter.Each(ctx, func(ctx context.Context, ni *NodeStatus[K]) bool {
+	q.iter.Each(ctx, func(ctx context.Context, ni *NodeStatus[K, A]) bool {
 		switch st := ni.State.(type) {
 		case *StateNodeWaiting:
 			if q.cfg.Clock.Now().After(st.Deadline) {
@@ -267,7 +268,7 @@ func (q *Query[K, A]) Advance(ctx context.Context, ev QueryEvent) QueryState {
 					q.stats.Start = q.cfg.Clock.Now()
 				}
 				returnState = &StateQueryWaitingMessage[K, A]{
-					NodeID:     ni.NodeID,
+					Node:       ni.Node,
 					QueryID:    q.id,
 					Stats:      q.stats,
 					ProtocolID: q.protocolID,
@@ -321,8 +322,8 @@ func (q *Query[K, A]) markFinished() {
 }
 
 // onMessageResponse processes the result of a successful response received from a node.
-func (q *Query[K, A]) onMessageResponse(ctx context.Context, node kad.NodeID[K], resp kad.Response[K, A]) {
-	ni, found := q.iter.Find(node.Key())
+func (q *Query[K, A]) onMessageResponse(ctx context.Context, node kad.NodeInfo[K, A], resp kad.Response[K, A]) {
+	ni, found := q.iter.Find(node.ID().Key())
 	if !found {
 		// got a rogue message
 		return
@@ -354,9 +355,9 @@ func (q *Query[K, A]) onMessageResponse(ctx context.Context, node kad.NodeID[K],
 			if key.Equal(info.ID().Key(), q.self.Key()) {
 				continue
 			}
-			q.iter.Add(&NodeStatus[K]{
-				NodeID: info.ID(),
-				State:  &StateNodeNotContacted{},
+			q.iter.Add(&NodeStatus[K, A]{
+				Node:  info,
+				State: &StateNodeNotContacted{},
 			})
 		}
 	}

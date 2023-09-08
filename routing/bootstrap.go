@@ -99,7 +99,7 @@ func (b *Bootstrap[K, A]) Advance(ctx context.Context, ev BootstrapEvent) Bootst
 	case *EventBootstrapStart[K, A]:
 
 		// TODO: ignore start event if query is already in progress
-		iter := query.NewClosestNodesIter(b.self.Key())
+		iter := query.NewClosestNodesIter[K, A](b.self.Key())
 
 		qryCfg := query.DefaultQueryConfig[K]()
 		qryCfg.Clock = b.cfg.Clock
@@ -108,7 +108,7 @@ func (b *Bootstrap[K, A]) Advance(ctx context.Context, ev BootstrapEvent) Bootst
 
 		queryID := query.QueryID("bootstrap")
 
-		qry, err := query.NewQuery[K](b.self, queryID, tev.ProtocolID, tev.Message, iter, tev.KnownClosestNodes, qryCfg)
+		qry, err := query.NewQuery[K, A](b.self, queryID, tev.ProtocolID, tev.Message, iter, tev.KnownClosestNodes, qryCfg)
 		if err != nil {
 			// TODO: don't panic
 			panic(err)
@@ -118,7 +118,7 @@ func (b *Bootstrap[K, A]) Advance(ctx context.Context, ev BootstrapEvent) Bootst
 
 	case *EventBootstrapMessageResponse[K, A]:
 		return b.advanceQuery(ctx, &query.EventQueryMessageResponse[K, A]{
-			NodeID:   tev.NodeID,
+			Node:     tev.Node,
 			Response: tev.Response,
 		})
 	case *EventBootstrapMessageFailure[K]:
@@ -147,7 +147,7 @@ func (b *Bootstrap[K, A]) advanceQuery(ctx context.Context, qev query.QueryEvent
 		return &StateBootstrapMessage[K, A]{
 			QueryID:    st.QueryID,
 			Stats:      st.Stats,
-			NodeID:     st.NodeID,
+			Node:       st.Node,
 			ProtocolID: st.ProtocolID,
 			Message:    st.Message,
 		}
@@ -188,7 +188,7 @@ type BootstrapState interface {
 // StateBootstrapMessage indicates that the bootstrap query is waiting to message a node.
 type StateBootstrapMessage[K kad.Key[K], A kad.Address[A]] struct {
 	QueryID    query.QueryID
-	NodeID     kad.NodeID[K]
+	Node       kad.NodeInfo[K, A]
 	ProtocolID address.ProtocolID
 	Message    kad.Request[K, A]
 	Stats      query.QueryStats
@@ -231,12 +231,12 @@ type EventBootstrapPoll struct{}
 type EventBootstrapStart[K kad.Key[K], A kad.Address[A]] struct {
 	ProtocolID        address.ProtocolID
 	Message           kad.Request[K, A]
-	KnownClosestNodes []kad.NodeID[K]
+	KnownClosestNodes []kad.NodeInfo[K, A]
 }
 
 // EventBootstrapMessageResponse notifies a bootstrap that a sent message has received a successful response.
 type EventBootstrapMessageResponse[K kad.Key[K], A kad.Address[A]] struct {
-	NodeID   kad.NodeID[K]      // the node the message was sent to
+	Node     kad.NodeInfo[K, A] // the node the message was sent to
 	Response kad.Response[K, A] // the message response sent by the node
 }
 

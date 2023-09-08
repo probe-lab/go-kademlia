@@ -135,7 +135,7 @@ func (p *Pool[K, A]) Advance(ctx context.Context, ev PoolEvent) PoolState {
 	case *EventPoolMessageResponse[K, A]:
 		if qry, ok := p.queryIndex[tev.QueryID]; ok {
 			state, terminal := p.advanceQuery(ctx, qry, &EventQueryMessageResponse[K, A]{
-				NodeID:   tev.NodeID,
+				Node:     tev.Node,
 				Response: tev.Response,
 			})
 			if terminal {
@@ -197,7 +197,7 @@ func (p *Pool[K, A]) advanceQuery(ctx context.Context, qry *Query[K, A], qev Que
 		return &StatePoolQueryMessage[K, A]{
 			QueryID:    st.QueryID,
 			Stats:      st.Stats,
-			NodeID:     st.NodeID,
+			Node:       st.Node,
 			ProtocolID: st.ProtocolID,
 			Message:    st.Message,
 		}, true
@@ -247,18 +247,18 @@ func (p *Pool[K, A]) removeQuery(queryID QueryID) {
 
 // addQuery adds a query to the pool, returning the new query id
 // TODO: remove target argument and use msg.Target
-func (p *Pool[K, A]) addQuery(ctx context.Context, queryID QueryID, target K, protocolID address.ProtocolID, msg kad.Request[K, A], knownClosestNodes []kad.NodeID[K]) error {
+func (p *Pool[K, A]) addQuery(ctx context.Context, queryID QueryID, target K, protocolID address.ProtocolID, msg kad.Request[K, A], knownClosestNodes []kad.NodeInfo[K, A]) error {
 	if _, exists := p.queryIndex[queryID]; exists {
 		return fmt.Errorf("query id already in use")
 	}
-	iter := NewClosestNodesIter(target)
+	iter := NewClosestNodesIter[K, A](target)
 
 	qryCfg := DefaultQueryConfig[K]()
 	qryCfg.Clock = p.cfg.Clock
 	qryCfg.Concurrency = p.cfg.QueryConcurrency
 	qryCfg.RequestTimeout = p.cfg.RequestTimeout
 
-	qry, err := NewQuery[K](p.self, queryID, protocolID, msg, iter, knownClosestNodes, qryCfg)
+	qry, err := NewQuery[K, A](p.self, queryID, protocolID, msg, iter, knownClosestNodes, qryCfg)
 	if err != nil {
 		return fmt.Errorf("new query: %w", err)
 	}
@@ -281,7 +281,7 @@ type StatePoolIdle struct{}
 // StatePoolQueryMessage indicates that a pool query is waiting to message a node.
 type StatePoolQueryMessage[K kad.Key[K], A kad.Address[A]] struct {
 	QueryID    QueryID
-	NodeID     kad.NodeID[K]
+	Node       kad.NodeInfo[K, A]
 	ProtocolID address.ProtocolID
 	Message    kad.Request[K, A]
 	Stats      QueryStats
@@ -322,11 +322,11 @@ type PoolEvent interface {
 
 // EventPoolAddQuery is an event that attempts to add a new query
 type EventPoolAddQuery[K kad.Key[K], A kad.Address[A]] struct {
-	QueryID           QueryID            // the id to use for the new query
-	Target            K                  // the target key for the query
-	ProtocolID        address.ProtocolID // the protocol that defines how the message should be interpreted
-	Message           kad.Request[K, A]  // the message the query should send to each node it traverses
-	KnownClosestNodes []kad.NodeID[K]    // an initial set of close nodes the query should use
+	QueryID           QueryID              // the id to use for the new query
+	Target            K                    // the target key for the query
+	ProtocolID        address.ProtocolID   // the protocol that defines how the message should be interpreted
+	Message           kad.Request[K, A]    // the message the query should send to each node it traverses
+	KnownClosestNodes []kad.NodeInfo[K, A] // an initial set of close nodes the query should use
 }
 
 // EventPoolStopQuery notifies a pool to stop a query.
@@ -337,7 +337,7 @@ type EventPoolStopQuery struct {
 // EventPoolMessageResponse notifies a pool that a query that a sent message has received a successful response.
 type EventPoolMessageResponse[K kad.Key[K], A kad.Address[A]] struct {
 	QueryID  QueryID            // the id of the query that sent the message
-	NodeID   kad.NodeID[K]      // the node the message was sent to
+	Node     kad.NodeInfo[K, A] // the node the message was sent to
 	Response kad.Response[K, A] // the message response sent by the node
 }
 
