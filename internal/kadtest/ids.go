@@ -73,6 +73,13 @@ type Info[K kad.Key[K], A kad.Address[A]] struct {
 
 var _ kad.NodeInfo[key.Key8, net.IP] = (*Info[key.Key8, net.IP])(nil)
 
+func NewEmptyInfo[K kad.Key[K], A kad.Address[A]](id *ID[K]) *Info[K, A] {
+	return &Info[K, A]{
+		id:    id,
+		addrs: []A{},
+	}
+}
+
 func NewInfo[K kad.Key[K], A kad.Address[A]](id *ID[K], addrs []A) *Info[K, A] {
 	return &Info[K, A]{
 		id:    id,

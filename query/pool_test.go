@@ -113,11 +113,13 @@ func TestPoolAddQueryStartsIfCapacity(t *testing.T) {
 
 	// first thing the new pool should do is start the query
 	state := p.Advance(ctx, &EventPoolAddQuery[key.Key8, kadtest.StrAddr]{
-		QueryID:           queryID,
-		Target:            target,
-		ProtocolID:        protocolID,
-		Message:           msg,
-		KnownClosestNodes: []kad.NodeID[key.Key8]{a},
+		QueryID:    queryID,
+		Target:     target,
+		ProtocolID: protocolID,
+		Message:    msg,
+		KnownClosestNodes: []kad.NodeInfo[key.Key8, kadtest.StrAddr]{
+			kadtest.NewEmptyInfo[key.Key8, kadtest.StrAddr](a),
+		},
 	})
 	require.IsType(t, &StatePoolQueryMessage[key.Key8, kadtest.StrAddr]{}, state)
 
@@ -128,7 +130,7 @@ func TestPoolAddQueryStartsIfCapacity(t *testing.T) {
 	require.Equal(t, queryID, st.QueryID)
 
 	// the query should attempt to contact the node it was given
-	require.Equal(t, a, st.NodeID)
+	require.Equal(t, a, st.Node.ID())
 
 	// with the correct protocol ID
 	require.Equal(t, protocolID, st.ProtocolID)
@@ -160,23 +162,25 @@ func TestPoolMessageResponse(t *testing.T) {
 
 	// first thing the new pool should do is start the query
 	state := p.Advance(ctx, &EventPoolAddQuery[key.Key8, kadtest.StrAddr]{
-		QueryID:           queryID,
-		Target:            target,
-		ProtocolID:        protocolID,
-		Message:           msg,
-		KnownClosestNodes: []kad.NodeID[key.Key8]{a},
+		QueryID:    queryID,
+		Target:     target,
+		ProtocolID: protocolID,
+		Message:    msg,
+		KnownClosestNodes: []kad.NodeInfo[key.Key8, kadtest.StrAddr]{
+			kadtest.NewEmptyInfo[key.Key8, kadtest.StrAddr](a),
+		},
 	})
 	require.IsType(t, &StatePoolQueryMessage[key.Key8, kadtest.StrAddr]{}, state)
 
 	// the query should attempt to contact the node it was given
 	st := state.(*StatePoolQueryMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, queryID, st.QueryID)
-	require.Equal(t, a, st.NodeID)
+	require.Equal(t, a, st.Node.ID())
 
 	// notify query that node was contacted successfully, but no closer nodes
 	state = p.Advance(ctx, &EventPoolMessageResponse[key.Key8, kadtest.StrAddr]{
 		QueryID: queryID,
-		NodeID:  a,
+		Node:    kadtest.NewEmptyInfo[key.Key8, kadtest.StrAddr](a),
 	})
 
 	// pool should respond that query has finished
@@ -212,74 +216,84 @@ func TestPoolPrefersRunningQueriesOverNewOnes(t *testing.T) {
 
 	// Add the first query
 	state := p.Advance(ctx, &EventPoolAddQuery[key.Key8, kadtest.StrAddr]{
-		QueryID:           queryID1,
-		Target:            target,
-		ProtocolID:        protocolID,
-		Message:           msg1,
-		KnownClosestNodes: []kad.NodeID[key.Key8]{a, b, c, d},
+		QueryID:    queryID1,
+		Target:     target,
+		ProtocolID: protocolID,
+		Message:    msg1,
+		KnownClosestNodes: []kad.NodeInfo[key.Key8, kadtest.StrAddr]{
+			kadtest.NewEmptyInfo[key.Key8, kadtest.StrAddr](a),
+			kadtest.NewEmptyInfo[key.Key8, kadtest.StrAddr](b),
+			kadtest.NewEmptyInfo[key.Key8, kadtest.StrAddr](c),
+			kadtest.NewEmptyInfo[key.Key8, kadtest.StrAddr](d),
+		},
 	})
 	require.IsType(t, &StatePoolQueryMessage[key.Key8, kadtest.StrAddr]{}, state)
 
 	// the first query should attempt to contact the node it was given
 	st := state.(*StatePoolQueryMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, queryID1, st.QueryID)
-	require.Equal(t, a, st.NodeID)
+	require.Equal(t, a, st.Node.ID())
 
 	msg2 := kadtest.NewRequest("2", target)
 	queryID2 := QueryID("2")
 
 	// Add the second query
 	state = p.Advance(ctx, &EventPoolAddQuery[key.Key8, kadtest.StrAddr]{
-		QueryID:           queryID2,
-		Target:            target,
-		ProtocolID:        protocolID,
-		Message:           msg2,
-		KnownClosestNodes: []kad.NodeID[key.Key8]{a, b, c, d},
+		QueryID:    queryID2,
+		Target:     target,
+		ProtocolID: protocolID,
+		Message:    msg2,
+		KnownClosestNodes: []kad.NodeInfo[key.Key8, kadtest.StrAddr]{
+			kadtest.NewEmptyInfo[key.Key8, kadtest.StrAddr](a),
+			kadtest.NewEmptyInfo[key.Key8, kadtest.StrAddr](b),
+			kadtest.NewEmptyInfo[key.Key8, kadtest.StrAddr](c),
+			kadtest.NewEmptyInfo[key.Key8, kadtest.StrAddr](d),
+		},
 	})
 
 	// the first query should continue its operation in preference to starting the new query
 	require.IsType(t, &StatePoolQueryMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StatePoolQueryMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, queryID1, st.QueryID)
-	require.Equal(t, b, st.NodeID)
+	require.Equal(t, b, st.Node.ID())
 
 	// advance the pool again, the first query should continue its operation in preference to starting the new query
 	state = p.Advance(ctx, &EventPoolPoll{})
 	require.IsType(t, &StatePoolQueryMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StatePoolQueryMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, queryID1, st.QueryID)
-	require.Equal(t, c, st.NodeID)
+	require.Equal(t, c, st.Node.ID())
 
 	// advance the pool again, the first query is at capacity so the second query can start
 	state = p.Advance(ctx, &EventPoolPoll{})
 	require.IsType(t, &StatePoolQueryMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StatePoolQueryMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, queryID2, st.QueryID)
-	require.Equal(t, a, st.NodeID)
+	require.Equal(t, a, st.Node.ID())
 
 	// notify first query that node was contacted successfully, but no closer nodes
 	state = p.Advance(ctx, &EventPoolMessageResponse[key.Key8, kadtest.StrAddr]{
 		QueryID: queryID1,
-		NodeID:  a,
+		Node:    kadtest.NewEmptyInfo[key.Key8, kadtest.StrAddr](a),
 	})
 
 	// first query starts a new message request
 	require.IsType(t, &StatePoolQueryMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StatePoolQueryMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, queryID1, st.QueryID)
-	require.Equal(t, d, st.NodeID)
+	require.Equal(t, d, st.Node.ID())
 
 	// notify first query that next node was contacted successfully, but no closer nodes
 	state = p.Advance(ctx, &EventPoolMessageResponse[key.Key8, kadtest.StrAddr]{
 		QueryID: queryID1,
-		NodeID:  b,
+		Node:    kadtest.NewEmptyInfo[key.Key8, kadtest.StrAddr](b),
 	})
 
 	// first query is out of nodes to try so second query can proceed
 	require.IsType(t, &StatePoolQueryMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StatePoolQueryMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, queryID2, st.QueryID)
-	require.Equal(t, b, st.NodeID)
+	require.Equal(t, b, st.Node.ID())
 }
 
 func TestPoolRespectsConcurrency(t *testing.T) {
@@ -304,47 +318,53 @@ func TestPoolRespectsConcurrency(t *testing.T) {
 
 	// Add the first query
 	state := p.Advance(ctx, &EventPoolAddQuery[key.Key8, kadtest.StrAddr]{
-		QueryID:           queryID1,
-		Target:            target,
-		ProtocolID:        protocolID,
-		Message:           msg1,
-		KnownClosestNodes: []kad.NodeID[key.Key8]{a},
+		QueryID:    queryID1,
+		Target:     target,
+		ProtocolID: protocolID,
+		Message:    msg1,
+		KnownClosestNodes: []kad.NodeInfo[key.Key8, kadtest.StrAddr]{
+			kadtest.NewEmptyInfo[key.Key8, kadtest.StrAddr](a),
+		},
 	})
 	require.IsType(t, &StatePoolQueryMessage[key.Key8, kadtest.StrAddr]{}, state)
 
 	// the first query should attempt to contact the node it was given
 	st := state.(*StatePoolQueryMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, queryID1, st.QueryID)
-	require.Equal(t, a, st.NodeID)
+	require.Equal(t, a, st.Node.ID())
 
 	msg2 := kadtest.NewRequest("2", target)
 	queryID2 := QueryID("2")
 
 	// Add the second query
 	state = p.Advance(ctx, &EventPoolAddQuery[key.Key8, kadtest.StrAddr]{
-		QueryID:           queryID2,
-		Target:            target,
-		ProtocolID:        protocolID,
-		Message:           msg2,
-		KnownClosestNodes: []kad.NodeID[key.Key8]{a},
+		QueryID:    queryID2,
+		Target:     target,
+		ProtocolID: protocolID,
+		Message:    msg2,
+		KnownClosestNodes: []kad.NodeInfo[key.Key8, kadtest.StrAddr]{
+			kadtest.NewEmptyInfo[key.Key8, kadtest.StrAddr](a),
+		},
 	})
 
 	// the second query should start since the first query has a request in flight
 	require.IsType(t, &StatePoolQueryMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StatePoolQueryMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, queryID2, st.QueryID)
-	require.Equal(t, a, st.NodeID)
+	require.Equal(t, a, st.Node.ID())
 
 	msg3 := kadtest.NewRequest("3", target)
 	queryID3 := QueryID("3")
 
 	// Add a third query
 	state = p.Advance(ctx, &EventPoolAddQuery[key.Key8, kadtest.StrAddr]{
-		QueryID:           queryID3,
-		Target:            target,
-		ProtocolID:        protocolID,
-		Message:           msg3,
-		KnownClosestNodes: []kad.NodeID[key.Key8]{a},
+		QueryID:    queryID3,
+		Target:     target,
+		ProtocolID: protocolID,
+		Message:    msg3,
+		KnownClosestNodes: []kad.NodeInfo[key.Key8, kadtest.StrAddr]{
+			kadtest.NewEmptyInfo[key.Key8, kadtest.StrAddr](a),
+		},
 	})
 
 	// the third query should wait since the pool has reached maximum concurrency
@@ -353,7 +373,7 @@ func TestPoolRespectsConcurrency(t *testing.T) {
 	// notify first query that next node was contacted successfully, but no closer nodes
 	state = p.Advance(ctx, &EventPoolMessageResponse[key.Key8, kadtest.StrAddr]{
 		QueryID: queryID1,
-		NodeID:  a,
+		Node:    kadtest.NewEmptyInfo[key.Key8, kadtest.StrAddr](a),
 	})
 
 	// first query is out of nodes so it has finished
@@ -366,5 +386,5 @@ func TestPoolRespectsConcurrency(t *testing.T) {
 	require.IsType(t, &StatePoolQueryMessage[key.Key8, kadtest.StrAddr]{}, state)
 	st = state.(*StatePoolQueryMessage[key.Key8, kadtest.StrAddr])
 	require.Equal(t, queryID3, st.QueryID)
-	require.Equal(t, a, st.NodeID)
+	require.Equal(t, a, st.Node.ID())
 }
