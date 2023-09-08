@@ -56,7 +56,7 @@ type RoutingTableCpl[K kad.Key[K], N kad.NodeID[K]] interface {
 // performed a suitable connectivity check, such as when the node responds to a query. The probe state machine treats
 // these events as if a successful response had been received from a check by advancing the time of the next check.
 type Probe[K kad.Key[K], N kad.NodeID[K]] struct {
-	rt RoutingTableCpl[K, kad.NodeID[K]]
+	rt RoutingTableCpl[K, N]
 
 	// nvl is a list of nodes with information about their connectivity checks
 	// TODO: this will be expanded with more general scoring information related to their utility
@@ -118,7 +118,7 @@ func DefaultProbeConfig() *ProbeConfig {
 	}
 }
 
-func NewProbe[K kad.Key[K], N kad.NodeID[K]](rt RoutingTableCpl[K, kad.NodeID[K]], cfg *ProbeConfig) (*Probe[K, N], error) {
+func NewProbe[K kad.Key[K], N kad.NodeID[K]](rt RoutingTableCpl[K, N], cfg *ProbeConfig) (*Probe[K, N], error) {
 	if cfg == nil {
 		cfg = DefaultProbeConfig()
 	} else if err := cfg.Validate(); err != nil {
