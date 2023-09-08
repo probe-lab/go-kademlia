@@ -14,19 +14,19 @@ import (
 	"github.com/plprobelab/go-kademlia/util"
 )
 
-type Bootstrap[K kad.Key[K], A kad.Address[A]] struct {
+type Bootstrap[K kad.Key[K], N kad.NodeID[K]] struct {
 	// self is the node id of the system the bootstrap is running on
-	self kad.NodeID[K]
+	self N
 
 	// qry is the query used by the bootstrap process
-	qry *query.Query[K, A]
+	qry *query.Query[K, N]
 
 	// cfg is a copy of the optional configuration supplied to the Bootstrap
-	cfg BootstrapConfig[K, A]
+	cfg BootstrapConfig[K, N]
 }
 
 // BootstrapConfig specifies optional configuration for a Bootstrap
-type BootstrapConfig[K kad.Key[K], A kad.Address[A]] struct {
+type BootstrapConfig[K kad.Key[K], N kad.NodeID[K]] struct {
 	Timeout            time.Duration // the time to wait before terminating a query that is not making progress
 	RequestConcurrency int           // the maximum number of concurrent requests that each query may have in flight
 	RequestTimeout     time.Duration // the timeout queries should use for contacting a single node
@@ -34,7 +34,7 @@ type BootstrapConfig[K kad.Key[K], A kad.Address[A]] struct {
 }
 
 // Validate checks the configuration options and returns an error if any have invalid values.
-func (cfg *BootstrapConfig[K, A]) Validate() error {
+func (cfg *BootstrapConfig[K, N]) Validate() error {
 	if cfg.Clock == nil {
 		return &kaderr.ConfigurationError{
 			Component: "BootstrapConfig",
@@ -68,8 +68,8 @@ func (cfg *BootstrapConfig[K, A]) Validate() error {
 
 // DefaultBootstrapConfig returns the default configuration options for a Bootstrap.
 // Options may be overridden before passing to NewBootstrap
-func DefaultBootstrapConfig[K kad.Key[K], A kad.Address[A]]() *BootstrapConfig[K, A] {
-	return &BootstrapConfig[K, A]{
+func DefaultBootstrapConfig[K kad.Key[K], N kad.NodeID[K]]() *BootstrapConfig[K, N] {
+	return &BootstrapConfig[K, N]{
 		Clock:              clock.New(), // use standard time
 		Timeout:            5 * time.Minute,
 		RequestConcurrency: 3,
@@ -77,29 +77,29 @@ func DefaultBootstrapConfig[K kad.Key[K], A kad.Address[A]]() *BootstrapConfig[K
 	}
 }
 
-func NewBootstrap[K kad.Key[K], A kad.Address[A]](self kad.NodeID[K], cfg *BootstrapConfig[K, A]) (*Bootstrap[K, A], error) {
+func NewBootstrap[K kad.Key[K], N kad.NodeID[K]](self N, cfg *BootstrapConfig[K, N]) (*Bootstrap[K, N], error) {
 	if cfg == nil {
-		cfg = DefaultBootstrapConfig[K, A]()
+		cfg = DefaultBootstrapConfig[K, N]()
 	} else if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
-	return &Bootstrap[K, A]{
+	return &Bootstrap[K, N]{
 		self: self,
 		cfg:  *cfg,
 	}, nil
 }
 
 // Advance advances the state of the bootstrap by attempting to advance its query if running.
-func (b *Bootstrap[K, A]) Advance(ctx context.Context, ev BootstrapEvent) BootstrapState {
+func (b *Bootstrap[K, N]) Advance(ctx context.Context, ev BootstrapEvent) BootstrapState {
 	ctx, span := util.StartSpan(ctx, "Bootstrap.Advance")
 	defer span.End()
 
 	switch tev := ev.(type) {
-	case *EventBootstrapStart[K, A]:
+	case *EventBootstrapStart[K, N]:
 
 		// TODO: ignore start event if query is already in progress
-		iter := query.NewClosestNodesIter(b.self.Key())
+		iter := query.NewClosestNodesIter[K, N](b.self.Key())
 
 		qryCfg := query.DefaultQueryConfig[K]()
 		qryCfg.Clock = b.cfg.Clock
@@ -108,7 +108,7 @@ func (b *Bootstrap[K, A]) Advance(ctx context.Context, ev BootstrapEvent) Bootst
 
 		queryID := query.QueryID("bootstrap")
 
-		qry, err := query.NewQuery[K](b.self, queryID, tev.ProtocolID, tev.Message, iter, tev.KnownClosestNodes, qryCfg)
+		qry, err := query.NewQuery[K, N](b.self, queryID, tev.ProtocolID, tev.Message, iter, tev.KnownClosestNodes, qryCfg)
 		if err != nil {
 			// TODO: don't panic
 			panic(err)
@@ -116,13 +116,13 @@ func (b *Bootstrap[K, A]) Advance(ctx context.Context, ev BootstrapEvent) Bootst
 		b.qry = qry
 		return b.advanceQuery(ctx, nil)
 
-	case *EventBootstrapMessageResponse[K, A]:
-		return b.advanceQuery(ctx, &query.EventQueryMessageResponse[K, A]{
+	case *EventBootstrapMessageResponse[K, N]:
+		return b.advanceQuery(ctx, &query.EventQueryMessageResponse[K, N]{
 			NodeID:   tev.NodeID,
 			Response: tev.Response,
 		})
-	case *EventBootstrapMessageFailure[K]:
-		return b.advanceQuery(ctx, &query.EventQueryMessageFailure[K]{
+	case *EventBootstrapMessageFailure[K, N]:
+		return b.advanceQuery(ctx, &query.EventQueryMessageFailure[K, N]{
 			NodeID: tev.NodeID,
 			Error:  tev.Error,
 		})
@@ -140,11 +140,11 @@ func (b *Bootstrap[K, A]) Advance(ctx context.Context, ev BootstrapEvent) Bootst
 	return &StateBootstrapIdle{}
 }
 
-func (b *Bootstrap[K, A]) advanceQuery(ctx context.Context, qev query.QueryEvent) BootstrapState {
+func (b *Bootstrap[K, N]) advanceQuery(ctx context.Context, qev query.QueryEvent) BootstrapState {
 	state := b.qry.Advance(ctx, qev)
 	switch st := state.(type) {
-	case *query.StateQueryWaitingMessage[K, A]:
-		return &StateBootstrapMessage[K, A]{
+	case *query.StateQueryWaitingMessage[K, N]:
+		return &StateBootstrapMessage[K, N]{
 			QueryID:    st.QueryID,
 			Stats:      st.Stats,
 			NodeID:     st.NodeID,
@@ -186,11 +186,11 @@ type BootstrapState interface {
 }
 
 // StateBootstrapMessage indicates that the bootstrap query is waiting to message a node.
-type StateBootstrapMessage[K kad.Key[K], A kad.Address[A]] struct {
+type StateBootstrapMessage[K kad.Key[K], N kad.NodeID[K]] struct {
 	QueryID    query.QueryID
-	NodeID     kad.NodeID[K]
+	NodeID     N
 	ProtocolID address.ProtocolID
-	Message    kad.Request[K, A]
+	Message    kad.Request[K, N]
 	Stats      query.QueryStats
 }
 
@@ -213,7 +213,7 @@ type StateBootstrapWaiting struct {
 }
 
 // bootstrapState() ensures that only Bootstrap states can be assigned to a BootstrapState.
-func (*StateBootstrapMessage[K, A]) bootstrapState() {}
+func (*StateBootstrapMessage[K, N]) bootstrapState() {}
 func (*StateBootstrapIdle) bootstrapState()          {}
 func (*StateBootstrapFinished) bootstrapState()      {}
 func (*StateBootstrapTimeout) bootstrapState()       {}
@@ -228,26 +228,26 @@ type BootstrapEvent interface {
 type EventBootstrapPoll struct{}
 
 // EventBootstrapStart is an event that attempts to start a new bootstrap
-type EventBootstrapStart[K kad.Key[K], A kad.Address[A]] struct {
+type EventBootstrapStart[K kad.Key[K], N kad.NodeID[K]] struct {
 	ProtocolID        address.ProtocolID
-	Message           kad.Request[K, A]
-	KnownClosestNodes []kad.NodeID[K]
+	Message           kad.Request[K, N]
+	KnownClosestNodes []N
 }
 
 // EventBootstrapMessageResponse notifies a bootstrap that a sent message has received a successful response.
-type EventBootstrapMessageResponse[K kad.Key[K], A kad.Address[A]] struct {
-	NodeID   kad.NodeID[K]      // the node the message was sent to
-	Response kad.Response[K, A] // the message response sent by the node
+type EventBootstrapMessageResponse[K kad.Key[K], N kad.NodeID[K]] struct {
+	NodeID   N                  // the node the message was sent to
+	Response kad.Response[K, N] // the message response sent by the node
 }
 
 // EventBootstrapMessageFailure notifiesa bootstrap that an attempt to send a message has failed.
-type EventBootstrapMessageFailure[K kad.Key[K]] struct {
-	NodeID kad.NodeID[K] // the node the message was sent to
-	Error  error         // the error that caused the failure, if any
+type EventBootstrapMessageFailure[K kad.Key[K], N kad.NodeID[K]] struct {
+	NodeID N     // the node the message was sent to
+	Error  error // the error that caused the failure, if any
 }
 
 // bootstrapEvent() ensures that only Bootstrap events can be assigned to the BootstrapEvent interface.
 func (*EventBootstrapPoll) bootstrapEvent()                  {}
-func (*EventBootstrapStart[K, A]) bootstrapEvent()           {}
-func (*EventBootstrapMessageResponse[K, A]) bootstrapEvent() {}
-func (*EventBootstrapMessageFailure[K]) bootstrapEvent()     {}
+func (*EventBootstrapStart[K, N]) bootstrapEvent()           {}
+func (*EventBootstrapMessageResponse[K, N]) bootstrapEvent() {}
+func (*EventBootstrapMessageFailure[K, N]) bootstrapEvent()  {}

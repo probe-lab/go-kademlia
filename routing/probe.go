@@ -55,12 +55,12 @@ type RoutingTableCpl[K kad.Key[K], N kad.NodeID[K]] interface {
 // The state machine accepts the [EventProbeNotifyConnectivity] event as a notification that an external system has
 // performed a suitable connectivity check, such as when the node responds to a query. The probe state machine treats
 // these events as if a successful response had been received from a check by advancing the time of the next check.
-type Probe[K kad.Key[K], A kad.Address[A]] struct {
+type Probe[K kad.Key[K], N kad.NodeID[K]] struct {
 	rt RoutingTableCpl[K, kad.NodeID[K]]
 
 	// nvl is a list of nodes with information about their connectivity checks
 	// TODO: this will be expanded with more general scoring information related to their utility
-	nvl *nodeValueList[K]
+	nvl *nodeValueList[K, N]
 
 	// cfg is a copy of the optional configuration supplied to the Probe
 	cfg ProbeConfig
@@ -118,22 +118,22 @@ func DefaultProbeConfig() *ProbeConfig {
 	}
 }
 
-func NewProbe[K kad.Key[K], A kad.Address[A]](rt RoutingTableCpl[K, kad.NodeID[K]], cfg *ProbeConfig) (*Probe[K, A], error) {
+func NewProbe[K kad.Key[K], N kad.NodeID[K]](rt RoutingTableCpl[K, kad.NodeID[K]], cfg *ProbeConfig) (*Probe[K, N], error) {
 	if cfg == nil {
 		cfg = DefaultProbeConfig()
 	} else if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
-	return &Probe[K, A]{
+	return &Probe[K, N]{
 		cfg: *cfg,
 		rt:  rt,
-		nvl: NewNodeValueList[K](),
+		nvl: NewNodeValueList[K, N](),
 	}, nil
 }
 
 // Advance advances the state of the probe state machine by attempting to advance its query if running.
-func (p *Probe[K, A]) Advance(ctx context.Context, ev ProbeEvent) ProbeState {
+func (p *Probe[K, N]) Advance(ctx context.Context, ev ProbeEvent) ProbeState {
 	_, span := util.StartSpan(ctx, "Probe.Advance")
 	defer span.End()
 
@@ -141,7 +141,7 @@ func (p *Probe[K, A]) Advance(ctx context.Context, ev ProbeEvent) ProbeState {
 	case *EventProbePoll:
 		// ignore, nothing to do
 		span.SetAttributes(attribute.String("event", "EventProbePoll"))
-	case *EventProbeAdd[K]:
+	case *EventProbeAdd[K, N]:
 		// check presence in routing table
 		span.SetAttributes(attribute.String("event", "EventProbeAdd"), attribute.String("nodeid", tev.NodeID.String()))
 		if _, found := p.rt.GetNode(tev.NodeID.Key()); !found {
@@ -151,19 +151,19 @@ func (p *Probe[K, A]) Advance(ctx context.Context, ev ProbeEvent) ProbeState {
 		}
 
 		// add a node to the value list
-		nv := &nodeValue[K]{
+		nv := &nodeValue[K, N]{
 			NodeID:       tev.NodeID,
 			NextCheckDue: p.cfg.Clock.Now().Add(p.cfg.CheckInterval),
 			Cpl:          p.rt.Cpl(tev.NodeID.Key()),
 		}
 		// TODO: if node was in ongoing list return a state that can signal the caller to cancel any prior outbound message
 		p.nvl.Put(nv)
-	case *EventProbeRemove[K]:
+	case *EventProbeRemove[K, N]:
 		span.SetAttributes(attribute.String("event", "EventProbeRemove"), attribute.String("nodeid", tev.NodeID.String()))
 		p.nvl.Remove(tev.NodeID)
-	case *EventProbeMessageResponse[K, A]:
-		span.SetAttributes(attribute.String("event", "EventProbeMessageResponse"), attribute.String("nodeid", tev.NodeInfo.ID().String()))
-		nv, found := p.nvl.Get(tev.NodeInfo.ID())
+	case *EventProbeMessageResponse[K, N]:
+		span.SetAttributes(attribute.String("event", "EventProbeMessageResponse"), attribute.String("nodeid", tev.NodeID.String()))
+		nv, found := p.nvl.Get(tev.NodeID)
 		if !found {
 			// ignore message for unknown node, which might have been removed
 			span.RecordError(errors.New("node not in node value list"))
@@ -175,14 +175,14 @@ func (p *Probe[K, A]) Advance(ctx context.Context, ev ProbeEvent) ProbeState {
 		// put into list, which will clear any ongoing check too
 		p.nvl.Put(nv)
 
-	case *EventProbeMessageFailure[K, A]:
+	case *EventProbeMessageFailure[K, N]:
 		// probe failed, so remove from routing table and from list
-		span.SetAttributes(attribute.String("event", "EventProbeMessageFailure"), attribute.String("nodeid", tev.NodeInfo.ID().String()))
+		span.SetAttributes(attribute.String("event", "EventProbeMessageFailure"), attribute.String("nodeid", tev.NodeID.String()))
 		span.RecordError(tev.Error)
-		p.rt.RemoveKey(tev.NodeInfo.ID().Key())
-		p.nvl.Remove(tev.NodeInfo.ID())
+		p.rt.RemoveKey(tev.NodeID.Key())
+		p.nvl.Remove(tev.NodeID)
 		return &StateProbeNodeFailure[K]{
-			NodeID: tev.NodeInfo.ID(),
+			NodeID: tev.NodeID,
 		}
 	case *EventProbeNotifyConnectivity[K]:
 		span.SetAttributes(attribute.String("event", "EventProbeNotifyConnectivity"), attribute.String("nodeid", tev.NodeID.String()))
@@ -233,7 +233,7 @@ func (p *Probe[K, A]) Advance(ctx context.Context, ev ProbeEvent) ProbeState {
 	p.nvl.MarkOngoing(next.NodeID, p.cfg.Clock.Now().Add(p.cfg.Timeout))
 
 	// Ask the node to find itself
-	return &StateProbeConnectivityCheck[K]{
+	return &StateProbeConnectivityCheck[K, N]{
 		NodeID: next.NodeID,
 	}
 }
@@ -245,8 +245,8 @@ type ProbeState interface {
 
 // StateProbeConnectivityCheck indicates that the probe subsystem is waiting to send a connectivity check to a node.
 // A find node message should be sent to the node, with the target being the node's key.
-type StateProbeConnectivityCheck[K kad.Key[K]] struct {
-	NodeID kad.NodeID[K] // the node to send the message to
+type StateProbeConnectivityCheck[K kad.Key[K], N kad.NodeID[K]] struct {
+	NodeID N // the node to send the message to
 }
 
 // StateProbeIdle indicates that the probe state machine is not running any checks.
@@ -266,11 +266,11 @@ type StateProbeNodeFailure[K kad.Key[K]] struct {
 }
 
 // probeState() ensures that only Probe states can be assigned to the ProbeState interface.
-func (*StateProbeConnectivityCheck[K]) probeState() {}
-func (*StateProbeIdle) probeState()                 {}
-func (*StateProbeWaitingAtCapacity) probeState()    {}
-func (*StateProbeWaitingWithCapacity) probeState()  {}
-func (*StateProbeNodeFailure[K]) probeState()       {}
+func (*StateProbeConnectivityCheck[K, N]) probeState() {}
+func (*StateProbeIdle) probeState()                    {}
+func (*StateProbeWaitingAtCapacity) probeState()       {}
+func (*StateProbeWaitingWithCapacity) probeState()     {}
+func (*StateProbeNodeFailure[K]) probeState()          {}
 
 // ProbeEvent is an event intended to advance the state of a probe.
 type ProbeEvent interface {
@@ -281,25 +281,25 @@ type ProbeEvent interface {
 type EventProbePoll struct{}
 
 // EventProbeAdd notifies a probe that a node should be added to its list of nodes.
-type EventProbeAdd[K kad.Key[K]] struct {
-	NodeID kad.NodeID[K] // the node to be probed
+type EventProbeAdd[K kad.Key[K], N kad.NodeID[K]] struct {
+	NodeID N // the node to be probed
 }
 
 // EventProbeRemove notifies a probe that a node should be removed from its list of nodes and the routing table.
-type EventProbeRemove[K kad.Key[K]] struct {
-	NodeID kad.NodeID[K] // the node to be removed
+type EventProbeRemove[K kad.Key[K], N kad.NodeID[K]] struct {
+	NodeID N // the node to be removed
 }
 
 // EventProbeMessageResponse notifies a probe that a sent message has received a successful response.
-type EventProbeMessageResponse[K kad.Key[K], A kad.Address[A]] struct {
-	NodeInfo kad.NodeInfo[K, A] // the node the message was sent to
-	Response kad.Response[K, A] // the message response sent by the node
+type EventProbeMessageResponse[K kad.Key[K], N kad.NodeID[K]] struct {
+	NodeID   N                  // the node the message was sent to
+	Response kad.Response[K, N] // the message response sent by the node
 }
 
 // EventProbeMessageFailure notifiesa probe that an attempt to send a message has failed.
-type EventProbeMessageFailure[K kad.Key[K], A kad.Address[A]] struct {
-	NodeInfo kad.NodeInfo[K, A] // the node the message was sent to
-	Error    error              // the error that caused the failure, if any
+type EventProbeMessageFailure[K kad.Key[K], N kad.NodeID[K]] struct {
+	NodeID N     // the node the message was sent to
+	Error  error // the error that caused the failure, if any
 }
 
 // EventProbeNotifyConnectivity notifies a probe that a node has confirmed connectivity from another source such as a query.
@@ -309,47 +309,47 @@ type EventProbeNotifyConnectivity[K kad.Key[K]] struct {
 
 // probeEvent() ensures that only Probe events can be assigned to the ProbeEvent interface.
 func (*EventProbePoll) probeEvent()                  {}
-func (*EventProbeAdd[K]) probeEvent()                {}
-func (*EventProbeRemove[K]) probeEvent()             {}
-func (*EventProbeMessageResponse[K, A]) probeEvent() {}
-func (*EventProbeMessageFailure[K, A]) probeEvent()  {}
+func (*EventProbeAdd[K, N]) probeEvent()             {}
+func (*EventProbeRemove[K, N]) probeEvent()          {}
+func (*EventProbeMessageResponse[K, N]) probeEvent() {}
+func (*EventProbeMessageFailure[K, N]) probeEvent()  {}
 func (*EventProbeNotifyConnectivity[K]) probeEvent() {}
 
-type nodeValue[K kad.Key[K]] struct {
-	NodeID        kad.NodeID[K]
+type nodeValue[K kad.Key[K], N kad.NodeID[K]] struct {
+	NodeID        N
 	Cpl           int // the longest common prefix length the node shares with the routing table's key
 	NextCheckDue  time.Time
 	CheckDeadline time.Time
 	Index         int // the index of the item in the ordering
 }
 
-type nodeValueEntry[K kad.Key[K]] struct {
-	nv    *nodeValue[K]
+type nodeValueEntry[K kad.Key[K], N kad.NodeID[K]] struct {
+	nv    *nodeValue[K, N]
 	index int // the index of the item in the ordering
 }
 
-type nodeValueList[K kad.Key[K]] struct {
-	nodes   map[string]*nodeValueEntry[K]
-	pending *nodeValuePendingList[K]
+type nodeValueList[K kad.Key[K], N kad.NodeID[K]] struct {
+	nodes   map[string]*nodeValueEntry[K, N]
+	pending *nodeValuePendingList[K, N]
 	// ongoing is a list of nodes with ongoing/in-progress probes, loosely ordered earliest to most recent
-	ongoing []kad.NodeID[K]
+	ongoing []N
 }
 
-func NewNodeValueList[K kad.Key[K]]() *nodeValueList[K] {
-	return &nodeValueList[K]{
-		nodes:   make(map[string]*nodeValueEntry[K]),
-		ongoing: make([]kad.NodeID[K], 0),
-		pending: new(nodeValuePendingList[K]),
+func NewNodeValueList[K kad.Key[K], N kad.NodeID[K]]() *nodeValueList[K, N] {
+	return &nodeValueList[K, N]{
+		nodes:   make(map[string]*nodeValueEntry[K, N]),
+		ongoing: make([]N, 0),
+		pending: new(nodeValuePendingList[K, N]),
 	}
 }
 
 // Put adds a node value to the list, replacing any existing value.
 // It is added to the pending list and removed from the ongoing list if it was already present there.
-func (l *nodeValueList[K]) Put(nv *nodeValue[K]) {
+func (l *nodeValueList[K, N]) Put(nv *nodeValue[K, N]) {
 	mk := key.HexString(nv.NodeID.Key())
 	nve, exists := l.nodes[mk]
 	if !exists {
-		nve = &nodeValueEntry[K]{
+		nve = &nodeValueEntry[K, N]{
 			nv: nv,
 		}
 	} else {
@@ -362,7 +362,7 @@ func (l *nodeValueList[K]) Put(nv *nodeValue[K]) {
 	l.removeFromOngoing(nv.NodeID)
 }
 
-func (l *nodeValueList[K]) Get(n kad.NodeID[K]) (*nodeValue[K], bool) {
+func (l *nodeValueList[K, N]) Get(n kad.NodeID[K]) (*nodeValue[K, N], bool) {
 	mk := key.HexString(n.Key())
 	nve, found := l.nodes[mk]
 	if !found {
@@ -371,21 +371,21 @@ func (l *nodeValueList[K]) Get(n kad.NodeID[K]) (*nodeValue[K], bool) {
 	return nve.nv, true
 }
 
-func (l *nodeValueList[K]) PendingCount() int {
+func (l *nodeValueList[K, N]) PendingCount() int {
 	return len(*l.pending)
 }
 
-func (l *nodeValueList[K]) OngoingCount() int {
+func (l *nodeValueList[K, N]) OngoingCount() int {
 	return len(l.ongoing)
 }
 
-func (l *nodeValueList[K]) NodeCount() int {
+func (l *nodeValueList[K, N]) NodeCount() int {
 	return len(l.nodes)
 }
 
 // Put removes a node value from the list, deleting its information.
 // It is removed from the pending list andongoing list if it was already present in either.
-func (l *nodeValueList[K]) Remove(n kad.NodeID[K]) {
+func (l *nodeValueList[K, N]) Remove(n kad.NodeID[K]) {
 	mk := key.HexString(n.Key())
 	nve, ok := l.nodes[mk]
 	if !ok {
@@ -400,7 +400,7 @@ func (l *nodeValueList[K]) Remove(n kad.NodeID[K]) {
 
 // FindCheckPastDeadline looks for the first node in the ongoing list whose deadline is
 // before the supplied timestamp.
-func (l *nodeValueList[K]) FindCheckPastDeadline(ts time.Time) (kad.NodeID[K], bool) {
+func (l *nodeValueList[K, N]) FindCheckPastDeadline(ts time.Time) (kad.NodeID[K], bool) {
 	// ongoing is in start time order, oldest first
 	for _, n := range l.ongoing {
 		mk := key.HexString(n.Key())
@@ -416,7 +416,7 @@ func (l *nodeValueList[K]) FindCheckPastDeadline(ts time.Time) (kad.NodeID[K], b
 	return nil, false
 }
 
-func (l *nodeValueList[K]) removeFromOngoing(n kad.NodeID[K]) {
+func (l *nodeValueList[K, N]) removeFromOngoing(n kad.NodeID[K]) {
 	// ongoing list is expected to be small, so linear search is ok
 	for i := range l.ongoing {
 		if key.Equal(n.Key(), l.ongoing[i].Key()) {
@@ -425,7 +425,7 @@ func (l *nodeValueList[K]) removeFromOngoing(n kad.NodeID[K]) {
 				l.ongoing[i], l.ongoing[len(l.ongoing)-1] = l.ongoing[len(l.ongoing)-1], l.ongoing[i]
 			}
 			// remove last entry
-			l.ongoing[len(l.ongoing)-1] = nil
+			l.ongoing[len(l.ongoing)-1] = *new(N)
 			l.ongoing = l.ongoing[:len(l.ongoing)-1]
 			return
 		}
@@ -434,7 +434,7 @@ func (l *nodeValueList[K]) removeFromOngoing(n kad.NodeID[K]) {
 
 // PeekNext returns the next node that is due a connectivity check without removing it
 // from the pending list.
-func (l *nodeValueList[K]) PeekNext(ts time.Time) (*nodeValue[K], bool) {
+func (l *nodeValueList[K, N]) PeekNext(ts time.Time) (*nodeValue[K, N], bool) {
 	if len(*l.pending) == 0 {
 		return nil, false
 	}
@@ -451,7 +451,7 @@ func (l *nodeValueList[K]) PeekNext(ts time.Time) (*nodeValue[K], bool) {
 
 // MarkOngoing marks a node as having an ongoing connectivity check.
 // It has no effect if the node is not already present in the list.
-func (l *nodeValueList[K]) MarkOngoing(n kad.NodeID[K], deadline time.Time) {
+func (l *nodeValueList[K, N]) MarkOngoing(n kad.NodeID[K], deadline time.Time) {
 	mk := key.HexString(n.Key())
 	nve, ok := l.nodes[mk]
 	if !ok {
@@ -464,10 +464,10 @@ func (l *nodeValueList[K]) MarkOngoing(n kad.NodeID[K], deadline time.Time) {
 }
 
 // nodeValuePendingList is a min-heap of NodeValue ordered by NextCheckDue
-type nodeValuePendingList[K kad.Key[K]] []*nodeValueEntry[K]
+type nodeValuePendingList[K kad.Key[K], N kad.NodeID[K]] []*nodeValueEntry[K, N]
 
-func (o nodeValuePendingList[K]) Len() int { return len(o) }
-func (o nodeValuePendingList[K]) Less(i, j int) bool {
+func (o nodeValuePendingList[K, N]) Len() int { return len(o) }
+func (o nodeValuePendingList[K, N]) Less(i, j int) bool {
 	// if due times are equal, then sort higher cpls first
 	if o[i].nv.NextCheckDue.Equal(o[j].nv.NextCheckDue) {
 		return o[i].nv.Cpl > o[j].nv.Cpl
@@ -476,20 +476,20 @@ func (o nodeValuePendingList[K]) Less(i, j int) bool {
 	return o[i].nv.NextCheckDue.Before(o[j].nv.NextCheckDue)
 }
 
-func (o nodeValuePendingList[K]) Swap(i, j int) {
+func (o nodeValuePendingList[K, N]) Swap(i, j int) {
 	o[i], o[j] = o[j], o[i]
 	o[i].index = i
 	o[j].index = j
 }
 
-func (o *nodeValuePendingList[K]) Push(x any) {
+func (o *nodeValuePendingList[K, N]) Push(x any) {
 	n := len(*o)
-	v := x.(*nodeValueEntry[K])
+	v := x.(*nodeValueEntry[K, N])
 	v.index = n
 	*o = append(*o, v)
 }
 
-func (o *nodeValuePendingList[K]) Pop() any {
+func (o *nodeValuePendingList[K, N]) Pop() any {
 	if len(*o) == 0 {
 		return nil
 	}
