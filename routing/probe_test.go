@@ -281,8 +281,8 @@ func TestProbeRemoveDeletesNodeValue(t *testing.T) {
 		NodeID: kadtest.NewID(key.Key8(4)),
 	})
 
-	// state should remain idle
-	require.IsType(t, &StateProbeIdle{}, state)
+	// state indicate that node failed
+	require.IsType(t, &StateProbeNodeFailure[key.Key8]{}, state)
 
 	// advance time by one revisit interval
 	clk.Add(cfg.CheckInterval)

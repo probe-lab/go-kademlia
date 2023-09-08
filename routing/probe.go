@@ -160,7 +160,11 @@ func (p *Probe[K, A]) Advance(ctx context.Context, ev ProbeEvent) ProbeState {
 		p.nvl.Put(nv)
 	case *EventProbeRemove[K]:
 		span.SetAttributes(attribute.String("event", "EventProbeRemove"), attribute.String("nodeid", tev.NodeID.String()))
+		p.rt.RemoveKey(tev.NodeID.Key())
 		p.nvl.Remove(tev.NodeID)
+		return &StateProbeNodeFailure[K]{
+			NodeID: tev.NodeID,
+		}
 	case *EventProbeMessageResponse[K, A]:
 		span.SetAttributes(attribute.String("event", "EventProbeMessageResponse"), attribute.String("nodeid", tev.NodeInfo.ID().String()))
 		nv, found := p.nvl.Get(tev.NodeInfo.ID())
