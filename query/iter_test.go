@@ -10,6 +10,11 @@ import (
 	"github.com/plprobelab/go-kademlia/key"
 )
 
+var (
+	_ NodeIter[key.Key8, kadtest.ID[key.Key8]] = (*ClosestNodesIter[key.Key8, kadtest.ID[key.Key8]])(nil)
+	_ NodeIter[key.Key8, kadtest.ID[key.Key8]] = (*SequentialIter[key.Key8, kadtest.ID[key.Key8]])(nil)
+)
+
 func TestClosestNodesIter(t *testing.T) {
 	target := key.Key8(0b00000001)
 	a := kadtest.NewID(key.Key8(0b00000100)) // 4
@@ -22,19 +27,19 @@ func TestClosestNodesIter(t *testing.T) {
 	require.True(t, target.Xor(b.Key()).Compare(target.Xor(c.Key())) == -1)
 	require.True(t, target.Xor(c.Key()).Compare(target.Xor(d.Key())) == -1)
 
-	iter := NewClosestNodesIter(target)
+	iter := NewClosestNodesIter[key.Key8, kadtest.ID[key.Key8]](target)
 
 	// add nodes in "random order"
 
-	iter.Add(&NodeStatus[key.Key8]{NodeID: b})
-	iter.Add(&NodeStatus[key.Key8]{NodeID: d})
-	iter.Add(&NodeStatus[key.Key8]{NodeID: a})
-	iter.Add(&NodeStatus[key.Key8]{NodeID: c})
+	iter.Add(&NodeStatus[key.Key8, kadtest.ID[key.Key8]]{NodeID: b})
+	iter.Add(&NodeStatus[key.Key8, kadtest.ID[key.Key8]]{NodeID: d})
+	iter.Add(&NodeStatus[key.Key8, kadtest.ID[key.Key8]]{NodeID: a})
+	iter.Add(&NodeStatus[key.Key8, kadtest.ID[key.Key8]]{NodeID: c})
 
 	// Each should iterate in order of distance from target
 
 	distances := make([]key.Key8, 0, 4)
-	iter.Each(context.Background(), func(ctx context.Context, ns *NodeStatus[key.Key8]) bool {
+	iter.Each(context.Background(), func(ctx context.Context, ns *NodeStatus[key.Key8, kadtest.ID[key.Key8]]) bool {
 		distances = append(distances, target.Xor(ns.NodeID.Key()))
 		return false
 	})
@@ -48,19 +53,19 @@ func TestSequentialIter(t *testing.T) {
 	c := kadtest.NewID(key.Key8(0b00010000)) // 16
 	d := kadtest.NewID(key.Key8(0b00100000)) // 32
 
-	iter := NewSequentialIter[key.Key8]()
+	iter := NewSequentialIter[key.Key8, kadtest.ID[key.Key8]]()
 
 	// add nodes in "random order"
 
-	iter.Add(&NodeStatus[key.Key8]{NodeID: b})
-	iter.Add(&NodeStatus[key.Key8]{NodeID: d})
-	iter.Add(&NodeStatus[key.Key8]{NodeID: a})
-	iter.Add(&NodeStatus[key.Key8]{NodeID: c})
+	iter.Add(&NodeStatus[key.Key8, kadtest.ID[key.Key8]]{NodeID: b})
+	iter.Add(&NodeStatus[key.Key8, kadtest.ID[key.Key8]]{NodeID: d})
+	iter.Add(&NodeStatus[key.Key8, kadtest.ID[key.Key8]]{NodeID: a})
+	iter.Add(&NodeStatus[key.Key8, kadtest.ID[key.Key8]]{NodeID: c})
 
 	// Each should iterate in order the nodes were added to the iiterator
 
 	order := make([]key.Key8, 0, 4)
-	iter.Each(context.Background(), func(ctx context.Context, ns *NodeStatus[key.Key8]) bool {
+	iter.Each(context.Background(), func(ctx context.Context, ns *NodeStatus[key.Key8, kadtest.ID[key.Key8]]) bool {
 		order = append(order, ns.NodeID.Key())
 		return false
 	})
