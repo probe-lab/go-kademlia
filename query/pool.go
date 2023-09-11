@@ -258,7 +258,7 @@ func (p *Pool[K, N]) addQuery(ctx context.Context, queryID QueryID, target K, pr
 	qryCfg.Concurrency = p.cfg.QueryConcurrency
 	qryCfg.RequestTimeout = p.cfg.RequestTimeout
 
-	qry, err := NewQuery[K](p.self, queryID, protocolID, msg, iter, knownClosestNodes, qryCfg)
+	qry, err := NewQuery[K, N](p.self, queryID, protocolID, msg, iter, knownClosestNodes, qryCfg)
 	if err != nil {
 		return fmt.Errorf("new query: %w", err)
 	}

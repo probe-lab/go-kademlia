@@ -181,7 +181,7 @@ func (p *Probe[K, N]) Advance(ctx context.Context, ev ProbeEvent) ProbeState {
 		span.RecordError(tev.Error)
 		p.rt.RemoveKey(tev.NodeID.Key())
 		p.nvl.Remove(tev.NodeID)
-		return &StateProbeNodeFailure[K]{
+		return &StateProbeNodeFailure[K, N]{
 			NodeID: tev.NodeID,
 		}
 	case *EventProbeNotifyConnectivity[K]:
@@ -213,7 +213,7 @@ func (p *Probe[K, N]) Advance(ctx context.Context, ev ProbeEvent) ProbeState {
 		// mark the node as failed since it timed out
 		p.rt.RemoveKey(candidate.Key())
 		p.nvl.Remove(candidate)
-		return &StateProbeNodeFailure[K]{
+		return &StateProbeNodeFailure[K, N]{
 			NodeID: candidate,
 		}
 
@@ -261,8 +261,8 @@ type StateProbeWaitingAtCapacity struct{}
 type StateProbeWaitingWithCapacity struct{}
 
 // StateProbeNodeFailure indicates a node has failed a connectivity check been removed from the routing table and the probe list
-type StateProbeNodeFailure[K kad.Key[K]] struct {
-	NodeID kad.NodeID[K]
+type StateProbeNodeFailure[K kad.Key[K], N kad.NodeID[K]] struct {
+	NodeID N
 }
 
 // probeState() ensures that only Probe states can be assigned to the ProbeState interface.
@@ -270,7 +270,7 @@ func (*StateProbeConnectivityCheck[K, N]) probeState() {}
 func (*StateProbeIdle) probeState()                    {}
 func (*StateProbeWaitingAtCapacity) probeState()       {}
 func (*StateProbeWaitingWithCapacity) probeState()     {}
-func (*StateProbeNodeFailure[K]) probeState()          {}
+func (*StateProbeNodeFailure[K, N]) probeState()       {}
 
 // ProbeEvent is an event intended to advance the state of a probe.
 type ProbeEvent interface {
@@ -400,7 +400,7 @@ func (l *nodeValueList[K, N]) Remove(n kad.NodeID[K]) {
 
 // FindCheckPastDeadline looks for the first node in the ongoing list whose deadline is
 // before the supplied timestamp.
-func (l *nodeValueList[K, N]) FindCheckPastDeadline(ts time.Time) (kad.NodeID[K], bool) {
+func (l *nodeValueList[K, N]) FindCheckPastDeadline(ts time.Time) (N, bool) {
 	// ongoing is in start time order, oldest first
 	for _, n := range l.ongoing {
 		mk := key.HexString(n.Key())
@@ -413,7 +413,7 @@ func (l *nodeValueList[K, N]) FindCheckPastDeadline(ts time.Time) (kad.NodeID[K]
 			return n, true
 		}
 	}
-	return nil, false
+	return *new(N), false
 }
 
 func (l *nodeValueList[K, N]) removeFromOngoing(n kad.NodeID[K]) {
