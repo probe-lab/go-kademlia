@@ -2,6 +2,8 @@ package triert
 
 import (
 	"fmt"
+	"sync"
+	"sync/atomic"
 
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
 	"github.com/plprobelab/go-kademlia/kad"
@@ -15,7 +17,8 @@ type TrieRT[K kad.Key[K], N kad.NodeID[K]] struct {
 	self      K
 	keyFilter KeyFilterFunc[K, N]
 
-	keys *trie.Trie[K, N]
+	mu   sync.Mutex   // held to synchronise mutations to the trie
+	trie atomic.Value // holds a *trie.Trie[K, N]
 }
 
 var _ kad.RoutingTable[key.Key256, kadtest.ID[key.Key256]] = (*TrieRT[key.Key256, kadtest.ID[key.Key256]])(nil)
@@ -25,8 +28,9 @@ var _ kad.RoutingTable[key.Key256, kadtest.ID[key.Key256]] = (*TrieRT[key.Key256
 func New[K kad.Key[K], N kad.NodeID[K]](self N, cfg *Config[K, N]) (*TrieRT[K, N], error) {
 	rt := &TrieRT[K, N]{
 		self: self.Key(),
-		keys: &trie.Trie[K, N]{},
 	}
+	rt.trie.Store(&trie.Trie[K, N]{})
+
 	if err := rt.apply(cfg); err != nil {
 		return nil, fmt.Errorf("apply config: %w", err)
 	}
@@ -55,18 +59,35 @@ func (rt *TrieRT[K, N]) AddNode(node N) bool {
 		return false
 	}
 
-	return rt.keys.Add(kk, node)
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	this := rt.trie.Load().(*trie.Trie[K, N])
+	next, _ := trie.Add(this, kk, node)
+	if next == this {
+		return false
+	}
+	rt.trie.Store(next)
+	return true
 }
 
 // RemoveKey tries to remove a node identified by its Kademlia key from the
 // routing table. It returns true if the key was found to be present in the table and was removed.
 func (rt *TrieRT[K, N]) RemoveKey(kk K) bool {
-	return rt.keys.Remove(kk)
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	this := rt.trie.Load().(*trie.Trie[K, N])
+	next, _ := trie.Remove(this, kk)
+	if next == this {
+		return false
+	}
+	rt.trie.Store(next)
+	return true
 }
 
 // NearestNodes returns the n closest nodes to a given key.
 func (rt *TrieRT[K, N]) NearestNodes(target K, n int) []N {
-	closestEntries := trie.Closest(rt.keys, target, n)
+	this := rt.trie.Load().(*trie.Trie[K, N])
+	closestEntries := trie.Closest(this, target, n)
 	if len(closestEntries) == 0 {
 		return []N{}
 	}
@@ -80,7 +101,8 @@ func (rt *TrieRT[K, N]) NearestNodes(target K, n int) []N {
 }
 
 func (rt *TrieRT[K, N]) GetNode(kk K) (N, bool) {
-	found, node := trie.Find(rt.keys, kk)
+	this := rt.trie.Load().(*trie.Trie[K, N])
+	found, node := trie.Find(this, kk)
 	if !found {
 		var zero N
 		return zero, false
@@ -90,7 +112,8 @@ func (rt *TrieRT[K, N]) GetNode(kk K) (N, bool) {
 
 // Size returns the number of peers contained in the table.
 func (rt *TrieRT[K, N]) Size() int {
-	return rt.keys.Size()
+	this := rt.trie.Load().(*trie.Trie[K, N])
+	return this.Size()
 }
 
 // Cpl returns the longest common prefix length the supplied key shares with the table's key.
@@ -100,7 +123,8 @@ func (rt *TrieRT[K, N]) Cpl(kk K) int {
 
 // CplSize returns the number of peers in the table whose longest common prefix with the table's key is of length cpl.
 func (rt *TrieRT[K, N]) CplSize(cpl int) int {
-	n, err := countCpl(rt.keys, rt.self, cpl, 0)
+	this := rt.trie.Load().(*trie.Trie[K, N])
+	n, err := countCpl(this, rt.self, cpl, 0)
 	if err != nil {
 		return 0
 	}

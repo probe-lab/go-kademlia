@@ -2,6 +2,8 @@ package simplert
 
 import (
 	"fmt"
+	"math/rand"
+	"sync"
 	"testing"
 
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -200,4 +202,41 @@ func TestNearestPeers(t *testing.T) {
 	rt2.buckets[0] = append(rt2.buckets[0], peerInfo[key.Key256, libp2p.PeerID]{peerIds[1], key1})
 	peers = rt2.NearestNodes(key0, 10)
 	require.Equal(t, peers[0], peers[1])
+}
+
+func TestTableConcurrentReadWrite(t *testing.T) {
+	nodes := make([]*kt.ID[key.Key32], 5000)
+	for i := range nodes {
+		nodes[i] = kt.NewID(kt.RandomKey())
+	}
+
+	rt := New[key.Key32](kt.NewID(key.Key32(0)), 2)
+
+	workers := 3
+	var wg sync.WaitGroup
+	wg.Add(workers)
+
+	// start workers to concurrently read and write the routing table
+	for i := 0; i < workers; i++ {
+		go func() {
+			defer wg.Done()
+			work := make([]*kt.ID[key.Key32], len(nodes))
+			copy(work, nodes)
+			rand.Shuffle(len(work), func(i, j int) { work[i], work[j] = work[j], work[i] })
+
+			for i := range work {
+				node := work[i]
+				_, found := rt.GetNode(node.Key())
+				if !found {
+					// add new peer
+					rt.AddNode(work[i])
+				} else {
+					// remove it
+					rt.RemoveKey(node.Key())
+				}
+
+			}
+		}()
+	}
+	wg.Wait()
 }

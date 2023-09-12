@@ -2,6 +2,7 @@ package triert
 
 import (
 	"math/rand"
+	"sync"
 	"testing"
 
 	"github.com/plprobelab/go-kademlia/internal/kadtest"
@@ -311,6 +312,46 @@ func TestKeyFilter(t *testing.T) {
 	got, found = rt.GetNode(key1)
 	require.True(t, found)
 	require.Equal(t, want, got)
+}
+
+func TestTableConcurrentReadWrite(t *testing.T) {
+	nodes := make([]*kadtest.ID[key.Key32], 5000)
+	for i := range nodes {
+		nodes[i] = kadtest.NewID(kadtest.RandomKey())
+	}
+
+	rt, err := New[key.Key32](kadtest.NewID(key0), nil)
+	if err != nil {
+		t.Fatalf("unexpected error creating table: %v", err)
+	}
+
+	workers := 3
+	var wg sync.WaitGroup
+	wg.Add(workers)
+
+	// start workers to concurrently read and write the routing table
+	for i := 0; i < workers; i++ {
+		go func() {
+			defer wg.Done()
+			work := make([]*kadtest.ID[key.Key32], len(nodes))
+			copy(work, nodes)
+			rand.Shuffle(len(work), func(i, j int) { work[i], work[j] = work[j], work[i] })
+
+			for i := range work {
+				node := work[i]
+				_, found := rt.GetNode(node.Key())
+				if !found {
+					// add new peer
+					rt.AddNode(work[i])
+				} else {
+					// remove it
+					rt.RemoveKey(node.Key())
+				}
+
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func BenchmarkBuildTable(b *testing.B) {
