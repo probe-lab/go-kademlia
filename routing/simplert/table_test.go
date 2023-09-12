@@ -9,7 +9,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/plprobelab/go-kademlia/libp2p"
 
-	"github.com/plprobelab/go-kademlia/internal/kadtest"
 	kt "github.com/plprobelab/go-kademlia/internal/kadtest"
 	"github.com/plprobelab/go-kademlia/key"
 	"github.com/stretchr/testify/require"
@@ -206,9 +205,9 @@ func TestNearestPeers(t *testing.T) {
 }
 
 func TestTableConcurrentReadWrite(t *testing.T) {
-	nodes := make([]*kadtest.ID[key.Key32], 5000)
+	nodes := make([]*kt.ID[key.Key32], 5000)
 	for i := range nodes {
-		nodes[i] = kadtest.NewID(kadtest.RandomKey())
+		nodes[i] = kt.NewID(kt.RandomKey())
 	}
 
 	rt := New[key.Key32](kt.NewID(key.Key32(0)), 2)
@@ -221,7 +220,7 @@ func TestTableConcurrentReadWrite(t *testing.T) {
 	for i := 0; i < workers; i++ {
 		go func() {
 			defer wg.Done()
-			work := make([]*kadtest.ID[key.Key32], len(nodes))
+			work := make([]*kt.ID[key.Key32], len(nodes))
 			copy(work, nodes)
 			rand.Shuffle(len(work), func(i, j int) { work[i], work[j] = work[j], work[i] })
 
