@@ -269,6 +269,51 @@ func TestImmutableRemove(t *testing.T) {
 	}
 }
 
+func TestImmutableRemoveWithShrink(t *testing.T) {
+	tr := New[key.Key32, string]()
+
+	tr.Add(key.Key32(7), "7")
+	tr.Add(key.Key32(6), "6")
+	tr.Add(key.Key32(5), "5")
+	tr.Add(key.Key32(4), "4")
+
+	t.Run("shrink keeps right data", func(t *testing.T) {
+		trNext, err := Remove(tr, key.Key32(6))
+		require.NoError(t, err)
+		require.Equal(t, 3, trNext.Size())
+
+		ok, v := Find(trNext, key.Key32(7))
+		require.True(t, ok)
+		require.Equal(t, "7", v)
+
+		ok, v = Find(trNext, key.Key32(5))
+		require.True(t, ok)
+		require.Equal(t, "5", v)
+
+		ok, v = Find(trNext, key.Key32(4))
+		require.True(t, ok)
+		require.Equal(t, "4", v)
+	})
+
+	t.Run("shrink keeps left data", func(t *testing.T) {
+		trNext, err := Remove(tr, key.Key32(7))
+		require.NoError(t, err)
+		require.Equal(t, 3, trNext.Size())
+
+		ok, v := Find(trNext, key.Key32(6))
+		require.True(t, ok)
+		require.Equal(t, "6", v)
+
+		ok, v = Find(trNext, key.Key32(5))
+		require.True(t, ok)
+		require.Equal(t, "5", v)
+
+		ok, v = Find(trNext, key.Key32(4))
+		require.True(t, ok)
+		require.Equal(t, "4", v)
+	})
+}
+
 func TestRemoveFromEmpty(t *testing.T) {
 	tr := New[key.Key32, any]()
 	removed := tr.Remove(sampleKeySet.Keys[0])
