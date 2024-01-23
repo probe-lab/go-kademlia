@@ -3,10 +3,10 @@ package sim
 import (
 	"context"
 
-	"github.com/plprobelab/go-kademlia/event"
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/network/endpoint"
+	"github.com/probe-lab/go-kademlia/event"
+	"github.com/probe-lab/go-kademlia/kad"
+	"github.com/probe-lab/go-kademlia/network/address"
+	"github.com/probe-lab/go-kademlia/network/endpoint"
 )
 
 type Router[K kad.Key[K], A kad.Address[A]] struct {

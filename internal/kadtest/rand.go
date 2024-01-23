@@ -4,7 +4,7 @@ import (
 	"math/rand"
 	"strconv"
 
-	"github.com/plprobelab/go-kademlia/key"
+	"github.com/probe-lab/go-kademlia/key"
 )
 
 var rng = rand.New(rand.NewSource(299792458))

@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/plprobelab/go-kademlia/event"
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/network/endpoint"
+	"github.com/probe-lab/go-kademlia/event"
+	"github.com/probe-lab/go-kademlia/kad"
+	"github.com/probe-lab/go-kademlia/network/address"
+	"github.com/probe-lab/go-kademlia/network/endpoint"
 )
 
 // Config is a structure containing all the options that can be used when

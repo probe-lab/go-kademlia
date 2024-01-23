@@ -1,4 +1,4 @@
-module github.com/plprobelab/go-kademlia
+module github.com/probe-lab/go-kademlia
 
 go 1.21
 

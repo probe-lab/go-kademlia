@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/network/address"
+	"github.com/probe-lab/go-kademlia/kad"
+	"github.com/probe-lab/go-kademlia/network/address"
 )
 
 // Connectedness signals the capacity for a connection with a given node.

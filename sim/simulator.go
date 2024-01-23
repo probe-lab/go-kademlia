@@ -6,8 +6,8 @@ import (
 
 	"github.com/benbjohnson/clock"
 
-	"github.com/plprobelab/go-kademlia/event"
-	"github.com/plprobelab/go-kademlia/util"
+	"github.com/probe-lab/go-kademlia/event"
+	"github.com/probe-lab/go-kademlia/util"
 )
 
 // Simulator is an interface for simulating a set of schedulers.

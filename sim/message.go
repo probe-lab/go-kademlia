@@ -1,7 +1,7 @@
 package sim
 
 import (
-	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/probe-lab/go-kademlia/kad"
 )
 
 // Message is a simple implementation of `Request` and `Response`.

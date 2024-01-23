@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/plprobelab/go-kademlia/event"
+	"github.com/probe-lab/go-kademlia/event"
 	"github.com/stretchr/testify/require"
 )
 
