@@ -9,15 +9,15 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 
-	"github.com/plprobelab/go-kademlia/event"
-	tutil "github.com/plprobelab/go-kademlia/examples/util"
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/libp2p"
-	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/query/simplequery"
-	"github.com/plprobelab/go-kademlia/routing/simplert"
-	"github.com/plprobelab/go-kademlia/util"
+	"github.com/probe-lab/go-kademlia/event"
+	tutil "github.com/probe-lab/go-kademlia/examples/util"
+	"github.com/probe-lab/go-kademlia/kad"
+	"github.com/probe-lab/go-kademlia/key"
+	"github.com/probe-lab/go-kademlia/libp2p"
+	"github.com/probe-lab/go-kademlia/network/address"
+	"github.com/probe-lab/go-kademlia/query/simplequery"
+	"github.com/probe-lab/go-kademlia/routing/simplert"
+	"github.com/probe-lab/go-kademlia/util"
 )
 
 var protocolID address.ProtocolID = "/ipfs/kad/1.0.0" // IPFS DHT network protocol ID

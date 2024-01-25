@@ -3,7 +3,7 @@ package query
 import (
 	"time"
 
-	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/probe-lab/go-kademlia/kad"
 )
 
 type NodeStatus[K kad.Key[K]] struct {

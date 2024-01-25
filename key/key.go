@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/probe-lab/go-kademlia/kad"
 )
 
 // ErrInvalidDataLength is the error returned when attempting to construct a key from binary data of the wrong length.

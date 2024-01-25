@@ -16,15 +16,15 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 
-	"github.com/plprobelab/go-kademlia/event"
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/libp2p"
-	sq "github.com/plprobelab/go-kademlia/query/simplequery"
-	"github.com/plprobelab/go-kademlia/routing/simplert"
-	"github.com/plprobelab/go-kademlia/server/basicserver"
-	"github.com/plprobelab/go-kademlia/sim"
-	"github.com/plprobelab/go-kademlia/util"
+	"github.com/probe-lab/go-kademlia/event"
+	"github.com/probe-lab/go-kademlia/kad"
+	"github.com/probe-lab/go-kademlia/key"
+	"github.com/probe-lab/go-kademlia/libp2p"
+	sq "github.com/probe-lab/go-kademlia/query/simplequery"
+	"github.com/probe-lab/go-kademlia/routing/simplert"
+	"github.com/probe-lab/go-kademlia/server/basicserver"
+	"github.com/probe-lab/go-kademlia/sim"
+	"github.com/probe-lab/go-kademlia/util"
 )
 
 const (

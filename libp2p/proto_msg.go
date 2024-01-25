@@ -3,7 +3,7 @@ package libp2p
 import (
 	"google.golang.org/protobuf/proto"
 
-	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/probe-lab/go-kademlia/kad"
 )
 
 type ProtoKadMessage interface {

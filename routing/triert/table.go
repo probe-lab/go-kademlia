@@ -5,10 +5,10 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/plprobelab/go-kademlia/internal/kadtest"
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/key/trie"
+	"github.com/probe-lab/go-kademlia/internal/kadtest"
+	"github.com/probe-lab/go-kademlia/kad"
+	"github.com/probe-lab/go-kademlia/key"
+	"github.com/probe-lab/go-kademlia/key/trie"
 )
 
 // TrieRT is a routing table backed by a XOR Trie which offers good scalablity and performance

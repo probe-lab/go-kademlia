@@ -4,8 +4,8 @@ import (
 	"crypto/sha256"
 	"net"
 
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
+	"github.com/probe-lab/go-kademlia/kad"
+	"github.com/probe-lab/go-kademlia/key"
 )
 
 // ID is a concrete implementation of the NodeID interface.

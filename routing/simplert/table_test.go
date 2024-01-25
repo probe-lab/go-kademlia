@@ -7,10 +7,10 @@ import (
 	"testing"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/plprobelab/go-kademlia/libp2p"
+	"github.com/probe-lab/go-kademlia/libp2p"
 
-	kt "github.com/plprobelab/go-kademlia/internal/kadtest"
-	"github.com/plprobelab/go-kademlia/key"
+	kt "github.com/probe-lab/go-kademlia/internal/kadtest"
+	"github.com/probe-lab/go-kademlia/key"
 	"github.com/stretchr/testify/require"
 )
 

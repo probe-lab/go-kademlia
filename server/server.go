@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 
-	"github.com/plprobelab/go-kademlia/kad"
+	"github.com/probe-lab/go-kademlia/kad"
 )
 
 // Server is the interface for handling requests from remote nodes.

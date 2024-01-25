@@ -8,17 +8,17 @@ import (
 
 	"github.com/benbjohnson/clock"
 
-	"github.com/plprobelab/go-kademlia/event"
-	"github.com/plprobelab/go-kademlia/internal/kadtest"
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/network/address"
-	"github.com/plprobelab/go-kademlia/network/endpoint"
-	sq "github.com/plprobelab/go-kademlia/query/simplequery"
-	"github.com/plprobelab/go-kademlia/routing/simplert"
-	"github.com/plprobelab/go-kademlia/server"
-	"github.com/plprobelab/go-kademlia/sim"
-	"github.com/plprobelab/go-kademlia/util"
+	"github.com/probe-lab/go-kademlia/event"
+	"github.com/probe-lab/go-kademlia/internal/kadtest"
+	"github.com/probe-lab/go-kademlia/kad"
+	"github.com/probe-lab/go-kademlia/key"
+	"github.com/probe-lab/go-kademlia/network/address"
+	"github.com/probe-lab/go-kademlia/network/endpoint"
+	sq "github.com/probe-lab/go-kademlia/query/simplequery"
+	"github.com/probe-lab/go-kademlia/routing/simplert"
+	"github.com/probe-lab/go-kademlia/server"
+	"github.com/probe-lab/go-kademlia/sim"
+	"github.com/probe-lab/go-kademlia/util"
 )
 
 const (

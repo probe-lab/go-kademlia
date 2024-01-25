@@ -7,10 +7,10 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/plprobelab/go-kademlia/kad"
-	"github.com/plprobelab/go-kademlia/key"
-	"github.com/plprobelab/go-kademlia/network/endpoint"
-	"github.com/plprobelab/go-kademlia/util"
+	"github.com/probe-lab/go-kademlia/kad"
+	"github.com/probe-lab/go-kademlia/key"
+	"github.com/probe-lab/go-kademlia/network/endpoint"
+	"github.com/probe-lab/go-kademlia/util"
 )
 
 type Server[K kad.Key[K], A kad.Address[A]] struct {
